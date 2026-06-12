@@ -3961,8 +3961,32 @@
       const group = $('editAddGroup')?.value||'Manicuria';
       if(!name||!price) return showToast('Completá nombre y precio.');
       const add = state.catalog.additionals.find(a=>a.id===id);
-      if(add){ add.name=name; add.price=price; add.duration=duration; add.group=group; }
-      closeDrawers();renderCatalog();updateServiceGroupFromCatalog();showToast('Adicional actualizado.');
+      if(!add) return;
+
+      const affectedAppts = state.appointments.filter(a=>a.isAdditional && a.variantId===id);
+      const priceChanged = price !== add.price;
+      const nameChanged = name !== add.name;
+      const durationChanged = duration !== add.duration;
+
+      if(affectedAppts.length && (priceChanged || nameChanged || durationChanged)){
+        const changes = [priceChanged && `precio $${add.price}→$${price}`, nameChanged && `nombre`, durationChanged && `duración`].filter(Boolean).join(', ');
+        const msg = `Este adicional aparece en ${affectedAppts.length} turno(s) agendado(s) (${changes}). ¿Actualizar los turnos existentes?`;
+        if(confirm(msg)){
+          affectedAppts.forEach(a=>{
+            if(priceChanged) a.price=price;
+            if(nameChanged) a.service=name;
+            if(durationChanged){ a.duration=duration; a.end=addMinutes(a.start,duration); }
+          });
+          showToast(`Adicional y ${affectedAppts.length} turno(s) actualizados.`);
+        } else {
+          showToast('Catálogo actualizado. Turnos existentes mantienen valores anteriores.');
+        }
+      } else {
+        showToast('Adicional actualizado.');
+      }
+
+      add.name=name; add.price=price; add.duration=duration; add.group=group;
+      closeDrawers(); saveState(); renderCatalog(); updateServiceGroupFromCatalog(); renderAgenda();
     }
 
     function updateProduct(id){
@@ -4270,7 +4294,7 @@
         seen.add(key);
         const related = reservationAppointments(a);
         const services = related.map(r=>r.service).join(' + ');
-        const total = related.reduce((sum,r)=>sum+Number(r.price||estimateAmount(r)||0),0);
+        const total = related.reduce((sum,r)=>sum+Number(currentApptPrice(r)||estimateAmount(r)||0),0);
         reservations.push({id:a.id,start:related[0]?.start||a.start,clientName:fullName(client(a.clientId)),services,total,count:related.length});
       });
       $('saleAppointmentSelect').innerHTML = reservations.map(r=>`<option value="${r.id}">${r.start} · ${r.clientName} · ${r.count>1?`[${r.count} servicios] `:''}${servicesShort(r.services)} · ${money(r.total)}</option>`).join('');
@@ -4312,8 +4336,7 @@
         const deposit = reservationDeposit(related);
         if($('reservationDeposit')) $('reservationDeposit').value = deposit;
         related.forEach(line=>{
-          const catalogPrice = getVariantFromId(line.variantId)?.variant.price;
-          addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:catalogPrice || line.price || estimateAmount(line)});
+          addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
           const lineAdds = additionals.filter(a=>a.memberId===line.memberId);
           if(lineAdds.length){
             const saleLineEl = $('saleLines').lastElementChild;
@@ -4351,6 +4374,17 @@
         }
       }
       return null;
+    }
+    function getAdditionalFromId(addId){
+      return state.catalog.additionals.find(a=>a.id===addId) || null;
+    }
+    function currentApptPrice(appt){
+      if(appt.isAdditional){
+        const add = getAdditionalFromId(appt.variantId);
+        return add ? add.price : appt.price;
+      }
+      const vi = getVariantFromId(appt.variantId);
+      return vi ? vi.variant.price : appt.price;
     }
     function methodChips(selected='Efectivo', prefix='primary'){
       return `<div class="method-chips" data-method-group="${prefix}">${paymentMethods.map(m=>`<button type="button" class="method-chip ${m===selected?'active':''}" data-method="${m}">${m}</button>`).join('')}</div>`;
@@ -4835,7 +4869,7 @@
       const isCombined = related.length > 1;
       const statuses=[{key:'confirmed',label:'Conf.'},{key:'in_progress',label:'En curso'},{key:'completed',label:'Fin.'},{key:'cancelled',label:'Canc.'},{key:'no_show',label:'No show'}];
       const statusHtml=`<div class="detail-section"><strong>Estado</strong><div class="status-chips">${statuses.map(s=>`<button class="small-btn ${a.status===s.key?'primary':''}" onclick="updateApptStatus('${a.id}','${s.key}')">${s.label}</button>`).join('')}</div></div>`;
-      const combinedHtml = isCombined ? `<div class="detail-section"><strong>Servicios del turno</strong>${related.map(r=>`<div class="mini-row"><strong>${r.start} - ${r.end}</strong><br><span>${r.service} · ${fullName(member(r.memberId))}${r.price?` · ${money(r.price)}`:''}</span></div>`).join('')}</div>` : '';
+      const combinedHtml = isCombined ? `<div class="detail-section"><strong>Servicios del turno</strong>${related.map(r=>`<div class="mini-row"><strong>${r.start} - ${r.end}</strong><br><span>${r.service} · ${fullName(member(r.memberId))}${currentApptPrice(r)?` · ${money(currentApptPrice(r))}`:''}</span></div>`).join('')}</div>` : '';
       const servicesList = isCombined ? related.map(r=>r.service).join(', ') : a.service;
       const depositAmt = appointmentDepositAmount(a);
       pop.innerHTML=`
@@ -4845,8 +4879,8 @@
         </div>
         <h3 style="margin:4px 0 2px;">${fullName(c)}</h3>
         <div class="meta" style="margin-bottom:8px;">${c.phone}</div>
-        ${isCombined?`<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service} · <span style="color:var(--text-muted)">${fullName(member(r.memberId))}</span></span><strong style="color:var(--text);font-size:13px;">${money(r.price||0)}</strong></div>`).join('')}<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 0;font-size:12px;"><span style="color:var(--text-muted);">Total</span><strong>${money(related.reduce((s,r)=>s+Number(r.price||0),0))}</strong></div></div>`:
-        `<div class="popover-service" style="margin-bottom:4px;">${a.service} · ${fullName(m)} · ${a.start}–${a.end}</div><div style="font-family:'Cormorant',serif;font-size:22px;font-weight:300;margin-bottom:8px;">${money(a.price||0)}</div>`}
+        ${isCombined?`<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service} · <span style="color:var(--text-muted)">${fullName(member(r.memberId))}</span></span><strong style="color:var(--text);font-size:13px;">${money(currentApptPrice(r)||0)}</strong></div>`).join('')}<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 0;font-size:12px;"><span style="color:var(--text-muted);">Total</span><strong>${money(related.reduce((s,r)=>s+Number(currentApptPrice(r)||0),0))}</strong></div></div>`:
+        `<div class="popover-service" style="margin-bottom:4px;">${a.service} · ${fullName(m)} · ${a.start}–${a.end}</div><div style="font-family:'Cormorant',serif;font-size:22px;font-weight:300;margin-bottom:8px;">${money(currentApptPrice(a)||0)}</div>`}
         ${depositAmt>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:0.5px solid var(--line);font-size:12px;"><span style="color:var(--accent-dark);">− Seña abonada</span><strong style="color:var(--accent-dark);">${money(depositAmt)} · ${a.depositMethod||'Transf'}</strong></div><div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 8px;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="font-weight:500;">Saldo</span><strong style="font-size:15px;">${money(Math.max(0,(a.price||0)-depositAmt))}</strong></div>`:''}
         ${statusHtml}
         ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${a.note||c.note}</span></div>`:''}
