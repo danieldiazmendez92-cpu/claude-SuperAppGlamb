@@ -945,10 +945,9 @@
     }
 
     .calendar-wrap {
-      overflow: auto;
-      height: calc(100vh - 182px);
-      min-height: 70vh;
-      max-height: none;
+      overflow-x: auto;
+      overflow-y: visible;
+      height: auto;
       background: var(--surface);
     }
 
@@ -2589,8 +2588,9 @@
       }
 
       .calendar-wrap {
-        height: calc(100vh - 230px);
-        min-height: 62vh;
+        height: auto;
+        overflow-x: auto;
+        overflow-y: visible;
       }
 
       .cash-pos-status,
@@ -3338,8 +3338,18 @@
           <input type="time" id="blockerStart" step="900" style="width:100%;">
         </div>
         <div class="field">
-          <label>Hora fin</label>
-          <input type="time" id="blockerEnd" step="900" style="width:100%;">
+          <label>Duración</label>
+          <select id="blockerDuration" style="width:100%;">
+            <option value="15">15 minutos</option>
+            <option value="30" selected>30 minutos</option>
+            <option value="45">45 minutos</option>
+            <option value="60">1 hora</option>
+            <option value="90">1 hora 30 min</option>
+            <option value="120">2 horas</option>
+            <option value="150">2 horas 30 min</option>
+            <option value="180">3 horas</option>
+            <option value="240">4 horas</option>
+          </select>
         </div>
       </div>
     </div>
@@ -4813,7 +4823,7 @@
         return Math.max(mins(a.start),mins(appt.start)) < Math.min(mins(a.end),mins(appt.end));
       });
     }
-    function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+document.getElementById('calendarWrap').scrollTop; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration),date:dateKey(state.agenda.currentDate)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); renderAgenda(); showToast('Turno movido.');}
+    function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+window.scrollY; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration),date:dateKey(state.agenda.currentDate)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); renderAgenda(); showToast('Turno movido.');}
     function resizeAppointment(id,delta){const a=state.appointments.find(x=>x.id===id); if(!a)return; const old=a.end; a.end=toTime(mins(a.end)+delta); if(mins(a.end)<=mins(a.start)+15 || overlaps(a,a.id)){a.end=old; showToast('No se puede ajustar duración.'); return;} renderAgenda(); showToast('Duración actualizada.');}
     function togglePaid(id){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.deposit = a.deposit==='paid'?'pending':'paid'; renderAgenda(); showToast(a.deposit==='paid'?'Pago/seña marcado OK.':'Pago/seña pendiente.');}
     function cancelAppointment(id,status='cancelado'){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.status=status; showToast(`Turno marcado como ${status}.`); openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();}
@@ -5626,11 +5636,16 @@
       const sel=$('blockerMember'); if(!sel)return;
       sel.innerHTML=state.collaborators.map(c=>`<option value="${c.id}">${fullName(c)}</option>`).join('');
     }
+    function snapDuration(durationMins){
+      const opts=[15,30,45,60,90,120,150,180,240];
+      return opts.reduce((a,b)=>Math.abs(b-durationMins)<Math.abs(a-durationMins)?b:a, 60);
+    }
     function openBlockerDrawer(blockerId){
       buildBlockerMemberSelect();
       $('blockerDrawerTitle').textContent = blockerId ? 'Editar bloqueo' : 'Nuevo bloqueo';
       $('blockerDeleteBtn').style.display = blockerId ? 'inline-flex' : 'none';
       $('blockerEditId').value = blockerId || '';
+      $('blockerPresets').querySelectorAll('[data-preset]').forEach(b=>b.classList.remove('active'));
       if(blockerId){
         const b=state.blockers.find(x=>x.id===blockerId);
         if(b){
@@ -5638,14 +5653,16 @@
           $('blockerLabel').value=b.label;
           $('blockerDate').value=b.date||'';
           $('blockerStart').value=b.start;
-          $('blockerEnd').value=b.end;
+          $('blockerDuration').value=String(snapDuration(mins(b.end)-mins(b.start)));
+          const preset=$('blockerPresets').querySelector(`[data-preset="${b.label}"]`);
+          if(preset) preset.classList.add('active');
         }
       } else {
         $('blockerMember').value=state.collaborators[0]?.id||'';
         $('blockerLabel').value='';
         $('blockerDate').value=dateKey(state.agenda.currentDate);
         $('blockerStart').value='13:00';
-        $('blockerEnd').value='14:00';
+        $('blockerDuration').value='60';
       }
       openDrawer('blockerDrawer');
     }
@@ -5660,9 +5677,10 @@
       const label=($('blockerLabel').value||'').trim();
       const date=$('blockerDate').value||'';
       const start=$('blockerStart').value;
-      const end=$('blockerEnd').value;
+      const duration=parseInt($('blockerDuration').value)||60;
+      const end=toTime(mins(start)+duration);
       if(!label){showToast('Escribí una etiqueta para el bloqueo.');return;}
-      if(!start||!end||mins(start)>=mins(end)){showToast('Verificá las horas: la hora fin debe ser mayor que la inicio.');return;}
+      if(!start){showToast('Seleccioná una hora de inicio.');return;}
       const editId=$('blockerEditId').value;
       if(editId){
         const b=state.blockers.find(x=>x.id===editId);
@@ -5747,7 +5765,7 @@
     setInterval(renderNowLine, 60000);
     loadState();
     state.appointments.forEach(a=>{ if(!a.date) a.date=dateKey(new Date()); });
-    buildCollaboratorForm();fillAppointmentOptions();renderAll();setTimeout(()=>{$('calendarWrap').scrollTop=topFor('12:00')},100);
+    buildCollaboratorForm();fillAppointmentOptions();renderAll();
     setInterval(saveState, 5000);
     window.addEventListener('beforeunload', saveState);
   
