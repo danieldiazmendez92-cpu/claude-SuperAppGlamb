@@ -4487,7 +4487,7 @@
     function refreshAgendaFilters(){
       const current = state.agenda.member;
       $('memberFilter').innerHTML = '<option value="Todos">Todos los profesionales</option>' + state.collaborators.filter(c=>c.can).map(c=>`<option value="${c.id}">${fullName(c)}</option>`).join('');
-      $('memberFilter').value = state.collaborators.some(c=>c.id===current) ? current : 'Todos';
+      $('memberFilter').value = state.collaborators.some(c=>c.id===current && c.can) ? current : 'Todos';
     }
     function populateGroupFilter(){
       const filter = $('groupFilter');
@@ -4888,11 +4888,14 @@
       };
       if(state.editingCollaboratorId){
         const idx = state.collaborators.findIndex(c=>c.id===state.editingCollaboratorId);
-        if(idx>=0) Object.assign(state.collaborators[idx], data);
+        if(idx<0) return showToast('Colaboradora no encontrada');
+        state.collaborators[idx] = {...state.collaborators[idx], ...data};
         state.editingCollaboratorId = null;
-        closeDrawers();showPage('team');renderAll();showToast('Colaboradora actualizada');
+        saveState();
+        closeDrawers();showPage('team');showToast('Colaboradora actualizada');
       } else {
         state.collaborators.push({id:'co'+Date.now(), ...data});
+        saveState();
         closeDrawers();showPage('team');showToast('Colaboradora creada y agenda actualizada');
       }
     };
