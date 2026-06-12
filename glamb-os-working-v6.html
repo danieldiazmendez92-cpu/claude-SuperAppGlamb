@@ -1160,48 +1160,51 @@
       border-left: 3px solid #C2935A;
     }
 
-    .appt-line1 {
+    /* ── Appointment block content – stacked layout ── */
+    .appt-time-row {
       display: flex;
       align-items: center;
-      gap: 5px;
-      font-size: 11px;
+      gap: 4px;
+      font-size: 10.5px;
       font-weight: 600;
       color: #1d2b36;
-      line-height: 1.35;
+      line-height: 1.2;
       white-space: nowrap;
       overflow: hidden;
-      min-width: 0;
+      flex-shrink: 0;
     }
 
-    .appt-line1 .appt-client-name {
+    .appt-client-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1d2b36;
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      white-space: nowrap;
-      min-width: 0;
-    }
-
-    .appt-line1 .appt-time-range {
-      flex: 0 0 auto;
-      font-weight: 600;
+      line-height: 1.25;
+      flex-shrink: 0;
     }
 
     .appt-service {
       display: block;
-      font-size: 10.5px;
+      font-size: 10px;
       font-weight: 400;
-      color: rgba(29,43,54,0.72);
-      line-height: 1.35;
+      color: rgba(29,43,54,0.68);
+      line-height: 1.25;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      flex-shrink: 0;
     }
 
     .appt-flags {
       display: flex;
+      flex-wrap: wrap;
       gap: 3px;
       overflow: hidden;
-      max-height: 18px;
-      margin-top: 3px;
+      max-height: 20px;
+      margin-top: 2px;
+      flex-shrink: 0;
     }
 
     .status-dot {
@@ -1301,18 +1304,36 @@
       position: fixed;
       display: none;
       width: 380px;
-      max-height: 90vh;
-      overflow-y: auto;
+      max-height: min(88vh, 560px);
       background: var(--surface);
       border: 0.5px solid var(--line);
       border-radius: 16px;
       box-shadow: var(--shadow-drawer);
       z-index: 20;
-      padding: 20px;
+      padding: 0;
+      flex-direction: column;
     }
 
     .detail-popover.open {
-      display: block;
+      display: flex;
+    }
+
+    .popover-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 18px 20px 12px;
+      min-height: 0;
+    }
+
+    .popover-footer {
+      flex-shrink: 0;
+      padding: 10px 16px 14px;
+      border-top: 0.5px solid var(--line);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      background: var(--surface);
+      border-radius: 0 0 16px 16px;
     }
 
     .detail-popover h3 {
@@ -4894,19 +4915,22 @@
       const c=client(a.clientId);
       const paid=a.deposit==='paid'?'paid':a.deposit==='pending'?'pending':'none';
       const depositAmount = appointmentDepositAmount(a);
-      const combinedCount = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId).length : 1;
+      const combinedCount = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId && !x.isAdditional).length : 1;
       const flags = [];
       if(a.isAdditional) flags.push('Adicional');
-      else if(combinedCount > 1) flags.push('Combinado');
+      else if(combinedCount > 1) flags.push(`${combinedCount} servicios`);
       if(depositAmount > 0 && !a.isAdditional) flags.push(`Seña ${money(depositAmount)}`);
-      else if(paid !== 'paid' && !a.isAdditional) flags.push('pago pendiente');
-      const flagsHtml = flags.length ? `<div class="appt-flags">${flags.map(f=>`<span class="mini-flag ${f==='Adicional'?'add-flag':''}">${f}</span>`).join('')}</div>` : '';
+      else if(paid === 'pending' && !a.isAdditional) flags.push('Sin seña');
       const blockH = heightFor(a.start, a.end);
-      const showService = blockH > 40;
-      const showFlags = blockH > 72 && flags.length;
-      const clientLabel = a.isAdditional ? '' : fullName(c);
-      const line1 = `<div class="appt-line1"><span class="status-dot ${a.status||'confirmed'}"></span><span class="appt-time-range">${a.start} – ${a.end}</span>${clientLabel?`<span class="appt-client-name">${clientLabel}</span>`:''}</div>`;
-      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${line1}${showService?`<div class="appt-service">${a.service}</div>`:''}${showFlags?flagsHtml:''}</div>`;
+      // Thresholds: each row ~16px, padding 10px top/bottom
+      const showClient  = blockH >= 30 && !a.isAdditional;
+      const showService = blockH >= 46;
+      const showFlags   = blockH >= 64 && flags.length;
+      const timeRow = `<div class="appt-time-row"><span class="status-dot ${a.status||'confirmed'}"></span>${a.start}–${a.end}</div>`;
+      const clientRow = showClient  ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
+      const serviceRow= showService ? `<div class="appt-service">${a.service}</div>` : '';
+      const flagsRow  = showFlags   ? `<div class="appt-flags">${flags.map(f=>`<span class="mini-flag ${f==='Adicional'?'add-flag':''}">${f}</span>`).join('')}</div>` : '';
+      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${timeRow}${clientRow}${serviceRow}${flagsRow}</div>`;
     }
     function renderNowLine() {
       const existing = document.getElementById('nowLine');
@@ -4975,26 +4999,32 @@
       const combinedHtml = isCombined ? `<div class="detail-section"><strong>Servicios del turno</strong>${related.map(r=>`<div class="mini-row"><strong>${r.start} - ${r.end}</strong><br><span>${r.service} · ${fullName(member(r.memberId))}${currentApptPrice(r)?` · ${money(currentApptPrice(r))}`:''}</span></div>`).join('')}</div>` : '';
       const servicesList = isCombined ? related.map(r=>r.service).join(', ') : a.service;
       const depositAmt = appointmentDepositAmount(a);
+      const totalCombined = related.reduce((s,r)=>s+Number(currentApptPrice(r)||0),0);
       pop.innerHTML=`
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px;">
-          <div class="eyebrow" style="margin:0;">${isCombined?'Turno combinado':'Turno'}</div>
-          <button onclick="closePopover()" style="background:var(--surface-2);border:0;border-radius:8px;width:28px;height:28px;font-size:16px;color:var(--text-muted);cursor:pointer;flex-shrink:0;">×</button>
+        <div class="popover-body">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;">
+            <div class="eyebrow" style="margin:0;">${isCombined?'Turno combinado':'Turno'}</div>
+            <button onclick="closePopover()" style="background:var(--surface-2);border:0;border-radius:8px;width:28px;height:28px;font-size:16px;color:var(--text-muted);cursor:pointer;flex-shrink:0;">×</button>
+          </div>
+          <h3 style="margin:2px 0 1px;">${fullName(c)}</h3>
+          <div class="meta" style="margin-bottom:10px;">${c.phone}</div>
+          ${isCombined
+            ? `<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service}<br><span style="color:var(--text-muted);font-size:11px;">${fullName(member(r.memberId))} · ${r.start}–${r.end}</span></span><strong style="color:var(--text);font-size:13px;margin-left:8px;flex-shrink:0;">${money(currentApptPrice(r)||0)}</strong></div>`).join('')}<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 0;font-size:12px;"><span style="color:var(--text-muted);">Total</span><strong>${money(totalCombined)}</strong></div></div>`
+            : `<div class="popover-service" style="margin-bottom:4px;">${a.service} · ${fullName(m)} · ${a.start}–${a.end}</div><div style="font-family:'Cormorant',serif;font-size:22px;font-weight:300;margin-bottom:8px;">${money(currentApptPrice(a)||0)}</div>`}
+          ${depositAmt>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:0.5px solid var(--line);font-size:12px;"><span style="color:var(--accent-dark);">− Seña abonada</span><strong style="color:var(--accent-dark);">${money(depositAmt)} · ${a.depositMethod||'Transf'}</strong></div><div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 8px;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="font-weight:500;">Saldo</span><strong style="font-size:15px;">${money(Math.max(0,totalCombined-depositAmt))}</strong></div>`:''}
+          ${statusHtml}
+          ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${a.note||c.note}</span></div>`:''}
         </div>
-        <h3 style="margin:4px 0 2px;">${fullName(c)}</h3>
-        <div class="meta" style="margin-bottom:8px;">${c.phone}</div>
-        ${isCombined?`<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service} · <span style="color:var(--text-muted)">${fullName(member(r.memberId))}</span></span><strong style="color:var(--text);font-size:13px;">${money(currentApptPrice(r)||0)}</strong></div>`).join('')}<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 0;font-size:12px;"><span style="color:var(--text-muted);">Total</span><strong>${money(related.reduce((s,r)=>s+Number(currentApptPrice(r)||0),0))}</strong></div></div>`:
-        `<div class="popover-service" style="margin-bottom:4px;">${a.service} · ${fullName(m)} · ${a.start}–${a.end}</div><div style="font-family:'Cormorant',serif;font-size:22px;font-weight:300;margin-bottom:8px;">${money(currentApptPrice(a)||0)}</div>`}
-        ${depositAmt>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:0.5px solid var(--line);font-size:12px;"><span style="color:var(--accent-dark);">− Seña abonada</span><strong style="color:var(--accent-dark);">${money(depositAmt)} · ${a.depositMethod||'Transf'}</strong></div><div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 8px;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="font-weight:500;">Saldo</span><strong style="font-size:15px;">${money(Math.max(0,(a.price||0)-depositAmt))}</strong></div>`:''}
-        ${statusHtml}
-        ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${a.note||c.note}</span></div>`:''}
-        <div class="detail-actions" style="margin-top:12px;">
+        <div class="popover-footer">
           <button class="small-btn primary" onclick="chargeFromAppointment('${a.id}')">Cobrar visita</button>
           <button class="small-btn" onclick="editAppointment('${a.id}');closePopover()">Editar turno</button>
           <button class="small-btn ${a.deposit==='paid'?'primary':''}" onclick="togglePaid('${a.id}')">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
           <button class="small-btn" onclick="cancelAppointment('${a.id}','cancelled')">Cancelar</button>
         </div>`;
       const r=e.currentTarget.getBoundingClientRect?e.currentTarget.getBoundingClientRect():{right:300,top:120};
-      const popW=400, popH=420;
+      const popW=380;
+      pop.style.left='-9999px'; pop.style.top='-9999px'; pop.classList.add('open');
+      const popH = Math.min(pop.offsetHeight, window.innerHeight*0.88);
       let left = r.right+12;
       if(left + popW > window.innerWidth-16) left = r.left - popW - 12;
       left = Math.max(16, left);
@@ -5003,7 +5033,6 @@
       top = Math.max(16, top);
       pop.style.left=left+'px';
       pop.style.top=top+'px';
-      pop.classList.add('open');
     }
 
     function closePopover(){
