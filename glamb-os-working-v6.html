@@ -917,13 +917,25 @@
       position: absolute;
       left: 0;
       right: 0;
-      background: repeating-linear-gradient(
-        135deg,
-        rgba(0,0,0,0.022) 0 4px,
-        transparent 4px 8px
-      );
+      background:
+        repeating-linear-gradient(
+          135deg,
+          rgba(0,0,0,0.07) 0 5px,
+          transparent 5px 10px
+        ),
+        rgba(0,0,0,0.045);
       pointer-events: none;
       z-index: 1;
+    }
+
+    .col-unavailable.full-day {
+      background:
+        repeating-linear-gradient(
+          135deg,
+          rgba(0,0,0,0.05) 0 5px,
+          transparent 5px 10px
+        ),
+        rgba(0,0,0,0.075);
     }
 
     .calendar-wrap {
@@ -4630,13 +4642,19 @@
       const totalH=(gridEnd-gridStart)*pxPerMin;
       // Full day off
       if(workDays.length && !workDays.includes(todayName)){
-        return `<div class="col-unavailable" style="top:0;height:${totalH}px;background:rgba(0,0,0,0.04)"></div>`;
+        return `<div class="col-unavailable full-day" style="top:0;height:${totalH}px"></div>`;
       }
-      // Hours outside shift
-      if(!m.hours) return '';
-      const parts=m.hours.split(' - ');
-      if(parts.length<2) return '';
-      const wStart=parts[0].trim(), wEnd=parts[1].trim();
+      // Hours outside shift: per-day schedule takes priority over global hours
+      const daySched = m.schedule && m.schedule[todayName];
+      let wStart, wEnd;
+      if(daySched && daySched.start && daySched.end){
+        wStart = daySched.start; wEnd = daySched.end;
+      } else {
+        if(!m.hours) return '';
+        const parts=m.hours.split(' - ');
+        if(parts.length<2) return '';
+        wStart=parts[0].trim(); wEnd=parts[1].trim();
+      }
       const wStartM=mins(wStart), wEndM=mins(wEnd);
       let html='';
       if(wStartM>gridStart) html+=`<div class="col-unavailable" style="top:0;height:${(wStartM-gridStart)*pxPerMin}px"></div>`;
@@ -4914,17 +4932,20 @@
           chip.classList.add('selected');
         }
       });
-      // Pre-fill availability
+      // Pre-fill availability: per-day schedule when available, fallback to global hours
       const enabledDays = new Set((c.days || '').split(',').map(d=>d.trim()).filter(Boolean));
-      const [startH, endH] = (c.hours || '10:00 - 19:00').split(' - ');
+      const hoursParts = (c.hours || '').split(' - ');
+      const fallbackStart = hoursParts.length===2 ? hoursParts[0].trim() : '10:00';
+      const fallbackEnd = hoursParts.length===2 ? hoursParts[1].trim() : '19:00';
       document.querySelectorAll('.availability-row').forEach(row => {
         const day = row.dataset.day;
         const cb = row.querySelector('.availability-enabled');
         const startI = row.querySelector('.availability-start');
         const endI = row.querySelector('.availability-end');
+        const daySched = c.schedule && c.schedule[day];
         if(cb) cb.checked = enabledDays.has(day);
-        if(startI && startH) startI.value = startH.trim();
-        if(endI && endH) endI.value = endH.trim();
+        if(startI) startI.value = daySched?.start || fallbackStart;
+        if(endI) endI.value = daySched?.end || fallbackEnd;
       });
       // Update drawer header
       const header = document.querySelector('#collaboratorDrawer .eyebrow');
@@ -4979,6 +5000,9 @@
       const groupNames = groupIds.map(id=>state.catalog.groups.find(g=>g.id===id)?.name||'');
       const serviceNames = selectedChips.map(x=>x.textContent.trim());
       const av=availability();
+      const schedule={};
+      av.forEach(x=>{ schedule[x.day]={start:x.start,end:x.end}; });
+      const sameHours = av.length && av.every(x=>x.start===av[0].start && x.end===av[0].end);
       const data = {
         first,last,
         phone:$('coPhone').value.trim(),
@@ -4990,7 +5014,8 @@
         groups:groupNames,
         groupIds:groupIds,
         days:av.map(x=>x.day).join(', '),
-        hours:av.length?`${av[0].start} - ${av[0].end}`:'Sin horario'
+        hours:av.length?(sameHours?`${av[0].start} - ${av[0].end}`:'Horario variable'):'Sin horario',
+        schedule
       };
       if(state.editingCollaboratorId){
         const idx = state.collaborators.findIndex(c=>c.id===state.editingCollaboratorId);
