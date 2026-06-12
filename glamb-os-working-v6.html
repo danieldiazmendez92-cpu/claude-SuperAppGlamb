@@ -3907,8 +3907,8 @@
     }
     function renderCashKpis(){
       const confirmed = state.salesTickets.filter(t=>t.status==='confirmed');
-      const ingresos = state.payments.filter(p=>p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
-      const transferTotal = state.payments.filter(p=>p.type==='service' && p.method==='Transf').reduce((s,p)=>s+Number(p.amount||0),0);
+      const ingresos = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      const transferTotal = state.payments.filter(p=>p.type==='service'&&!p.voided&&p.method==='Transf').reduce((s,p)=>s+Number(p.amount||0),0);
       const expenses = (state.cashSession.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
       const cashExpected = cashExpectedAmount();
       const pending = state.pendingCharges.filter(p=>p.status==='pending').length;
@@ -3932,7 +3932,7 @@
     }
     function isCashAdmin(){ return state.cashMode === 'admin'; }
     function cashExpectedAmount(){
-      const cashIn = state.payments.filter(p=>p.method==='Efectivo').reduce((sum,p)=>sum+Number(p.amount||0),0);
+      const cashIn = state.payments.filter(p=>p.method==='Efectivo'&&!p.voided).reduce((sum,p)=>sum+Number(p.amount||0),0);
       const withdrawals = (state.cashSession.withdrawals||[]).reduce((sum,w)=>sum+Number(w.amount||0),0);
       const cashExpenses = (state.cashSession.expenses||[]).filter(e=>e.method==='Efectivo').reduce((sum,e)=>sum+Number(e.amount||0),0);
       return Number(state.cashSession.openingAmount||0) + cashIn - withdrawals - cashExpenses;
@@ -3945,7 +3945,7 @@
         $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja cerrada</strong><span>Para registrar ventas del día, primero abrí caja con monto inicial obligatorio.</span><div style="margin-top:8px"><button class="small-btn primary" onclick="openCashSession()">Abrir caja</button></div></div>`;
         return;
       }
-      const cashSales = state.payments.filter(p=>p.method==='Efectivo').reduce((s,p)=>s+Number(p.amount||0),0);
+      const cashSales = state.payments.filter(p=>p.method==='Efectivo'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
       const withdrawals = session.withdrawals.reduce((s,w)=>s+Number(w.amount||0),0);
       const expected = Number(session.openingAmount||0) + cashSales - withdrawals;
       $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja abierta</strong><span>Apertura: ${money(session.openingAmount)} · Efectivo esperado ahora: ${money(expected)} · Abrió: ${session.openedBy||'Admin caja'}</span></div>`;
@@ -4319,7 +4319,21 @@
       const lines = collectSaleLines();
       if(!clientName || !lines.length) return showToast('Cliente y servicio son obligatorios.');
       const deposit = Number($('reservationDeposit')?.value||0);
-      lines.forEach(l=>state.pendingCharges.unshift({id:'pending'+Date.now()+Math.random(),clientId:state.saleSource==='new'?null:state.saleClient.clientId,clientNameSnapshot:clientName,status:'pending',...l,depositAmount:deposit,createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),serviceOf:fullName(member(l.collaboratorId)),createdAt:new Date().toISOString()}));
+      const sourceApptId = state.saleSource==='appointment' ? (state.saleAppointmentId||null) : null;
+      const sourceAppt = sourceApptId ? state.appointments.find(a=>a.id===sourceApptId) : null;
+      lines.forEach(l=>state.pendingCharges.unshift({
+        id:'pending'+Date.now()+Math.random(),
+        clientId:state.saleSource==='new'?null:state.saleClient.clientId,
+        clientNameSnapshot:clientName,
+        status:'pending',
+        ...l,
+        depositAmount:deposit,
+        appointmentId:sourceApptId,
+        reservationId:reservationKey(sourceAppt)||null,
+        createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),
+        serviceOf:fullName(member(l.collaboratorId)),
+        createdAt:new Date().toISOString()
+      }));
       resetSaleForm(); renderAll(); setCashTab('pending'); showToast('Guardado como pendiente');
     }
     function resetSaleForm(){
@@ -4362,11 +4376,11 @@
       // Panel resumen financiero
       if($('cashDailySummary')){
         const session = state.cashSession;
-        const cashIn = state.payments.filter(p=>p.method==='Efectivo' && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
-        const transferIn = state.payments.filter(p=>p.method==='Transf' && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
-        const debitIn = state.payments.filter(p=>p.method==='Débito' && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
-        const creditIn = state.payments.filter(p=>p.method==='Crédito' && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
-        const totalIn = state.payments.filter(p=>p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
+        const cashIn = state.payments.filter(p=>p.method==='Efectivo'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const transferIn = state.payments.filter(p=>p.method==='Transf'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const debitIn = state.payments.filter(p=>p.method==='Débito'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const creditIn = state.payments.filter(p=>p.method==='Crédito'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const totalIn = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
         const withdrawalsTotal = (session.withdrawals||[]).reduce((s,w)=>s+Number(w.amount||0),0);
         const expensesTotal = (session.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
         const cashExpected = cashExpectedAmount();
@@ -4386,10 +4400,10 @@
           </div>`;
       }
       // Movimientos
-      $('cashMovements').innerHTML = state.payments.length ? state.payments.map(p=>`<div class="mini-row"><strong>${money(p.amount)} · ${p.method}</strong><span>${p.ticketId||'Movimiento'} · ${p.type==='deposit_applied'?'anticipo aplicado':p.type==='service'?'cobro de servicio':p.type}</span></div>`).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Los cobros del día aparecerán acá.</span></div>';
+      $('cashMovements').innerHTML = state.payments.filter(p=>!p.voided).length ? state.payments.filter(p=>!p.voided).map(p=>`<div class="mini-row"><strong>${money(p.amount)} · ${p.method}</strong><span>${p.ticketId||'Movimiento'} · ${p.type==='deposit_applied'?'anticipo aplicado':p.type==='service'?'cobro de servicio':p.type}</span></div>`).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Los cobros del día aparecerán acá.</span></div>';
       // Por medio
       $('cashByMethod').innerHTML = paymentMethods.map(m=>{
-        const total = state.payments.filter(p=>p.method===m && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
+        const total = state.payments.filter(p=>p.method===m&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
         return total > 0 ? `<div class="mini-row"><strong>${m}</strong><span>${money(total)}</span></div>` : '';
       }).join('') || '<div class="mini-row"><strong>Sin cobros</strong><span>—</span></div>';
       // Retiros
@@ -4407,7 +4421,7 @@
         return `<div class="mini-row"><strong>${t.clientNameSnapshot} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${t.createdBy||'—'} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" onclick="voidTicket('${t.id}')">Anular ticket</button></div></div>`;
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
-    function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); const reason = prompt('Motivo de anulación'); if(reason===null)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); renderAll(); showToast('Ticket anulado');}
+    function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); const reason = prompt('Motivo de anulación'); if(reason===null)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); renderAll(); showToast('Ticket anulado');}
     function cashClose(){
       if(!isCashAdmin()) return showToast('Solo admin caja puede cerrar caja.');
       if(!state.cashSession.isOpen) return showToast('La caja no está abierta.');
@@ -4593,7 +4607,7 @@
         return Math.max(mins(a.start),mins(appt.start)) < Math.min(mins(a.end),mins(appt.end));
       });
     }
-    function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+document.getElementById('calendarWrap').scrollTop; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); renderAgenda(); showToast('Turno movido.');}
+    function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+document.getElementById('calendarWrap').scrollTop; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration),date:dateKey(state.agenda.currentDate)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); renderAgenda(); showToast('Turno movido.');}
     function resizeAppointment(id,delta){const a=state.appointments.find(x=>x.id===id); if(!a)return; const old=a.end; a.end=toTime(mins(a.end)+delta); if(mins(a.end)<=mins(a.start)+15 || overlaps(a,a.id)){a.end=old; showToast('No se puede ajustar duración.'); return;} renderAgenda(); showToast('Duración actualizada.');}
     function togglePaid(id){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.deposit = a.deposit==='paid'?'pending':'paid'; renderAgenda(); showToast(a.deposit==='paid'?'Pago/seña marcado OK.':'Pago/seña pendiente.');}
     function cancelAppointment(id,status='cancelado'){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.status=status; showToast(`Turno marcado como ${status}.`); openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();}
