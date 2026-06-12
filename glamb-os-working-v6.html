@@ -3852,12 +3852,6 @@
       if(service && service.toLowerCase().includes('kapping')) return 36000;
       return 28000;
     }
-    const saleAddons = [
-      {id:'retiro', name:'Retiro', price:6000},
-      {id:'reparacion', name:'Reparación', price:5000},
-      {id:'diseno', name:'Diseño premium', price:9000},
-      {id:'tratamiento', name:'Tratamiento', price:8000}
-    ];
     const paymentMethods = ['Efectivo','Transf','MP','Débito','Crédito'];
     state.saleClient = {clientId:null, clientName:''};
     state.appointmentClient = {clientId:null, clientName:''};
@@ -4170,7 +4164,7 @@
             <input class="sale-tip" type="number" value="${prefill.tipAmount||0}" placeholder="Propina">
             <input class="sale-reference" type="text" value="${prefill.reference||''}" placeholder="Referencia">
           </div>
-          <div class="addon-row">${saleAddons.map(a=>`<span class="select-chip sale-addon" data-price="${a.price}" data-addon-id="${a.id}">${a.name} · ${money(a.price)}</span>`).join('')}</div>
+          <div class="addon-row">${state.catalog.additionals.map(a=>`<span class="select-chip sale-addon" data-price="${a.price}" data-addon-id="${a.id}">${a.name} · ${money(a.price)}</span>`).join('')}</div>
         </div>
       </div>`;
       $('saleLines').insertAdjacentHTML('beforeend', html);
@@ -4636,8 +4630,10 @@
       if($('apDepositMethod')) $('apDepositMethod').value = a.depositMethod || 'Transferencia';
       if($('apNote')) $('apNote').value = a.note || '';
       const related = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId).sort((x,y)=>x.start.localeCompare(y.start)) : [a];
+      const mainLines = related.filter(r=>!r.isAdditional);
+      const additionalIds = related.filter(r=>r.isAdditional).map(r=>r.variantId).filter(Boolean);
       $('appointmentServiceLines').innerHTML='';
-      related.forEach(r=>{
+      mainLines.forEach(r=>{
         addAppointmentServiceLine({
           service: r.service,
           variantId: r.variantId,
@@ -4647,11 +4643,9 @@
           duration: r.duration || 60,
           price: r.price,
           finalPrice: r.price,
-          group: r.group,
-          isAdditional: r.isAdditional
+          group: r.group
         });
       });
-      const additionalIds = related.filter(r=>r.isAdditional).map(r=>r.variantId).filter(Boolean);
       if(additionalIds.length){
         setTimeout(()=>{
           document.querySelectorAll('[data-appt-line]').forEach(line=>{
@@ -4802,7 +4796,7 @@
       const services = getCatalogServices(firstGroup.id);
       const firstSvc = services[0] || {id:'',name:'',groupName:''};
       const variants = getCatalogVariants(firstSvc.id);
-      const firstVar = prefill.variantId ? variants.find(v=>v.id===prefill.variantId) : (variants[0]||{name:'',price:0,duration:60});
+      const firstVar = (prefill.variantId ? variants.find(v=>v.id===prefill.variantId) : null) || variants[0] || {id:'',name:'',price:0,duration:60};
 
       let defaultStart = prefill.start || '16:00';
       if(!prefill.start){
