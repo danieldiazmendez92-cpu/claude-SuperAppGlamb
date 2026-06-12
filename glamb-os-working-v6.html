@@ -1160,6 +1160,114 @@
       border-left: 3px solid #C2935A;
     }
 
+    /* ── Wizard 3 pasos (caja register) ── */
+    .wiz-stepper {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 24px;
+      padding: 18px 20px;
+      background: var(--surface);
+      border: .5px solid var(--line);
+      border-radius: 16px;
+    }
+    .wiz-step {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 13px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .wiz-step .wiz-n {
+      width: 32px;
+      height: 32px;
+      border-radius: 99px;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border: .5px solid var(--line-strong);
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .wiz-step.done .wiz-n { background: #E8F5E9; color: #1B5E20; border-color: #A5D6A7; }
+    .wiz-step.now { color: var(--text); font-weight: 600; }
+    .wiz-step.now .wiz-n { background: var(--black); color: #F6F6F4; border-color: var(--black); }
+    .wiz-step-line { flex: 1; height: 1px; background: var(--line-strong); margin: 0 16px; min-width: 24px; }
+    .wiz-panel { display: none; }
+    .wiz-panel.active { display: block; }
+    .wiz-grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
+    .wiz-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; gap: 10px; }
+    .wiz-nav .right { margin-left: auto; }
+    /* Step 1 client option cards */
+    .wiz-source-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 20px; }
+    .wiz-source-card {
+      border: .5px solid var(--line-strong);
+      border-radius: 16px;
+      padding: 18px;
+      cursor: pointer;
+      background: var(--surface);
+      transition: border-color .12s;
+    }
+    .wiz-source-card:hover { border-color: var(--black); }
+    .wiz-source-card.active { border: 1.5px solid var(--black); background: var(--surface-2); }
+    .wiz-source-card .icon { font-size: 22px; margin-bottom: 8px; }
+    .wiz-source-card .ttl { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+    .wiz-source-card .sub { font-size: 11px; color: var(--text-muted); line-height: 1.4; }
+    /* Step 3 payment option cards */
+    .wiz-pay-options { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+    .wiz-pay-option {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: .5px solid var(--line-strong);
+      border-radius: 14px;
+      padding: 16px 18px;
+      cursor: pointer;
+      background: var(--surface);
+    }
+    .wiz-pay-option:hover { border-color: var(--black); }
+    .wiz-pay-option.active { border: 1.5px solid var(--black); background: var(--surface-2); }
+    .wiz-pay-option .ttl { font-size: 13px; font-weight: 500; }
+    .wiz-pay-option .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .wiz-pay-option .radio { width: 18px; height: 18px; border-radius: 99px; border: 1.5px solid var(--line-strong); flex-shrink: 0; }
+    .wiz-pay-option.active .radio { background: var(--black); border-color: var(--black); }
+    /* Paper ticket */
+    .paper-ticket {
+      position: sticky;
+      top: 20px;
+      background: #fff;
+      border: .5px solid var(--line);
+      border-radius: 4px 4px 16px 16px;
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+    .paper-ticket::before {
+      content: "";
+      display: block;
+      height: 10px;
+      background: repeating-linear-gradient(90deg, var(--surface-2) 0 10px, #fff 10px 20px);
+    }
+    .paper-ticket-head {
+      padding: 14px 18px 10px;
+      border-bottom: .5px dashed var(--line-strong);
+      text-align: center;
+    }
+    .paper-ticket-head h3 {
+      font-family: 'Cormorant', serif;
+      font-size: 20px;
+      font-weight: 300;
+      letter-spacing: .06em;
+      margin-bottom: 2px;
+    }
+    .paper-ticket-body { padding: 12px 18px; }
+    .t-line { display: flex; justify-content: space-between; font-size: 12.5px; padding: 7px 0; border-bottom: .5px solid var(--line); }
+    .t-sub { display: flex; justify-content: space-between; font-size: 12px; padding: 5px 0; color: var(--text-muted); }
+    .t-total { display: flex; justify-content: space-between; align-items: center; padding: 12px 0 4px; border-top: .5px solid var(--line-strong); margin-top: 4px; }
+    .paper-ticket-foot { padding: 0 18px 18px; border-top: .5px dashed var(--line-strong); padding-top: 12px; }
+
     /* ── Appointment block content – stacked layout ── */
     .appt-time-row {
       display: flex;
@@ -2882,102 +2990,169 @@
           <button class="chip" data-cash-tab="tickets">Tickets del día</button>
         </div>
         <section class="cash-section active" id="cash-register">
-          <div class="layout-2">
-            <div>
-              <section class="card">
-                <h2 class="section-title">Origen de venta</h2>
-                <div class="source-chips" id="saleSourceChips">
-                  <button class="chip active" data-sale-source="appointment">Turno en agenda</button>
-                  <button class="chip" data-sale-source="existing">Cliente existente sin turno</button>
-                  <button class="chip" data-sale-source="new">Cliente nuevo</button>
-                </div>
-                <div class="sale-source-panel" id="saleAppointmentPanel">
-                  <label>Turno de agenda</label>
-                  <select id="saleAppointmentSelect"></select>
-                </div>
-                <div class="sale-source-panel" id="saleExistingPanel" style="display:none;">
-                  <label>Buscar cliente</label>
-                  <div class="client-autocomplete">
-                    <input id="saleClientInput" placeholder="Escribir nombre, WhatsApp o email" autocomplete="off">
-                    <div class="autocomplete-list" id="saleClientSuggestions"></div>
-                  </div>
-                </div>
-                <div class="sale-source-panel" id="saleNewPanel" style="display:none;">
-                  <div class="source-helper">Se abrirá el formulario de nuevo cliente. Al guardarlo, volverás a Caja con el cliente seleccionado para registrar la venta.</div>
-                </div>
-              </section>
-              <section class="card" style="margin-top:16px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
-                  <h2 class="section-title" style="margin:0;">Servicios realizados</h2>
-                  <button class="small-btn primary" id="addSaleLineBtn">Agregar servicio</button>
-                </div>
-                <div id="reservationBanner" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--accent-bg);border-radius:10px;border:0.5px solid #e0cfc0;font-size:12px;color:var(--accent-dark);"></div>
-                <div id="saleLines"></div>
-                <div style="margin-top:10px;">
-                  <button class="small-btn" id="toggleSaleNoteBtn">+ nota interna</button>
-                </div>
-                <div class="sale-note-box" id="saleNoteBox" style="display:none;margin-top:12px;">
-                  <textarea id="saleNote" placeholder="Alergia, acuerdo especial, situación ocurrida..."></textarea>
-                </div>
-              </section>
+          <!-- Stepper -->
+          <div class="wiz-stepper">
+            <div class="wiz-step now" id="wizStepTab1" onclick="wizGoTo(1)"><span class="wiz-n" id="wizN1">1</span>Cliente</div>
+            <div class="wiz-step-line"></div>
+            <div class="wiz-step" id="wizStepTab2" onclick="wizGoTo(2)"><span class="wiz-n" id="wizN2">2</span>Servicios</div>
+            <div class="wiz-step-line"></div>
+            <div class="wiz-step" id="wizStepTab3" onclick="wizGoTo(3)"><span class="wiz-n" id="wizN3">3</span>Cobro</div>
+          </div>
+
+          <!-- PASO 1: Cliente -->
+          <div class="wiz-panel active" id="wizPanel1">
+            <div class="wiz-source-grid" id="saleSourceChips">
+              <div class="wiz-source-card active" data-sale-source="appointment">
+                <div class="icon">📅</div>
+                <div class="ttl">Turno en agenda</div>
+                <div class="sub">Seleccioná un turno ya agendado para hoy</div>
+              </div>
+              <div class="wiz-source-card" data-sale-source="existing">
+                <div class="icon">👤</div>
+                <div class="ttl">Cliente existente</div>
+                <div class="sub">Buscar por nombre, teléfono o email</div>
+              </div>
+              <div class="wiz-source-card" data-sale-source="new">
+                <div class="icon">✨</div>
+                <div class="ttl">Cliente nuevo</div>
+                <div class="sub">Crear ficha y volver a caja</div>
+              </div>
             </div>
-            <aside class="card">
-              <h2 class="section-title">Cobro de visita</h2>
+            <section class="card">
+              <div id="saleAppointmentPanel">
+                <label style="font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);">Turno de agenda</label>
+                <select id="saleAppointmentSelect" style="width:100%;margin-top:6px;"></select>
+              </div>
+              <div id="saleExistingPanel" style="display:none;">
+                <label style="font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);">Buscar cliente</label>
+                <div class="client-autocomplete" style="margin-top:6px;">
+                  <input id="saleClientInput" placeholder="Escribir nombre, WhatsApp o email" autocomplete="off">
+                  <div class="autocomplete-list" id="saleClientSuggestions"></div>
+                </div>
+              </div>
+              <div id="saleNewPanel" style="display:none;">
+                <div class="source-helper">Se abrirá el formulario de nuevo cliente. Al guardarlo, volverás a Caja con el cliente seleccionado.</div>
+              </div>
+            </section>
+            <div class="wiz-nav">
+              <div></div>
+              <button class="btn primary wiz-nav right" onclick="wizGoTo(2)">Continuar a servicios →</button>
+            </div>
+          </div>
 
-              <!-- Desglose total visita -->
-              <div style="margin-bottom:14px;">
-                <div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:0.5px solid var(--line);">
-                  <span style="color:var(--text-muted);font-size:12px;">Total visita</span><strong id="summaryGross" style="font-family:'Cormorant',serif;font-size:20px;font-weight:300;">$0</strong>
-                </div>
-                <div id="depositRow" style="display:none;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:0.5px solid var(--line);">
-                  <span style="color:var(--accent-dark);font-size:12px;">− Seña abonada</span><strong id="summaryDeposits" style="font-family:'Cormorant',serif;font-size:20px;font-weight:300;color:var(--accent-dark);">$0</strong>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 0;">
-                  <span style="font-size:13px;font-weight:500;">Saldo a cobrar hoy</span><strong id="summaryDue" style="font-family:'Cormorant',serif;font-size:28px;font-weight:300;">$0</strong>
+          <!-- PASOS 2 y 3: grid con ticket a la derecha -->
+          <div class="wiz-grid" id="wizMainGrid" style="display:none;">
+            <div>
+              <!-- PASO 2: Servicios -->
+              <div class="wiz-panel" id="wizPanel2">
+                <section class="card">
+                  <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
+                    <h2 class="section-title" style="margin:0;">Servicios realizados</h2>
+                    <button class="small-btn primary" id="addSaleLineBtn">＋ Agregar servicio</button>
+                  </div>
+                  <div id="reservationBanner" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--accent-bg);border-radius:10px;border:0.5px solid #e0cfc0;font-size:12px;color:var(--accent-dark);"></div>
+                  <div id="saleLines"></div>
+                  <div style="margin-top:10px;">
+                    <button class="small-btn" id="toggleSaleNoteBtn">+ nota interna</button>
+                  </div>
+                  <div class="sale-note-box" id="saleNoteBox" style="display:none;margin-top:12px;">
+                    <textarea id="saleNote" placeholder="Alergia, acuerdo especial, situación ocurrida..."></textarea>
+                  </div>
+                </section>
+                <div class="wiz-nav">
+                  <button class="btn" onclick="wizGoTo(1)">← Cambiar cliente</button>
+                  <button class="btn primary" onclick="wizGoTo(3)">Continuar a cobro →</button>
                 </div>
               </div>
 
-              <!-- Seña (colapsada si es 0) -->
-              <div style="margin-bottom:14px;padding:10px 12px;background:var(--surface-2);border-radius:10px;">
-                <div class="inline-field">
-                  <label>Seña ya abonada (se descuenta del saldo)</label>
-                  <input id="reservationDeposit" type="number" value="0" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
-                </div>
-              </div>
+              <!-- PASO 3: Cobro -->
+              <div class="wiz-panel" id="wizPanel3">
+                <section class="card">
+                  <h2 class="section-title" style="margin-bottom:14px;">¿Cómo paga?</h2>
+                  <div class="wiz-pay-options">
+                    <div class="wiz-pay-option active" id="wizPayFull" onclick="wizSetPayMode('full')">
+                      <div><div class="ttl">💵 Paga todo hoy</div><div class="sub">Cobra el saldo completo: <strong id="wizPayFullAmt">$0</strong></div></div>
+                      <div class="radio"></div>
+                    </div>
+                    <div class="wiz-pay-option" id="wizPayPartial" onclick="wizSetPayMode('partial')">
+                      <div><div class="ttl">➗ Pago parcial</div><div class="sub">Cobra una parte y guarda el saldo como pendiente</div></div>
+                      <div class="radio"></div>
+                    </div>
+                    <div class="wiz-pay-option" id="wizPayPending" onclick="wizSetPayMode('pending')">
+                      <div><div class="ttl">📋 Todo pendiente</div><div class="sub">Guardar la venta para cobrar otro día</div></div>
+                      <div class="radio"></div>
+                    </div>
+                  </div>
 
-              <!-- Forma de pago -->
-              <div style="margin-bottom:10px;">
-                <div class="inline-field" style="margin-bottom:8px;"><label>Forma de pago</label></div>
-                <div class="method-chips" id="checkoutMethodPrimary" data-method-group="checkout-primary"></div>
-                <div class="inline-field" style="margin-top:10px;">
-                  <label>Monto que paga hoy</label>
-                  <input id="checkoutPaymentPrimary" type="number" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
-                </div>
-                <div style="margin-top:8px;">
-                  <button type="button" class="link-btn" id="checkoutMixedToggle">+ segundo pago</button>
-                </div>
-                <div id="checkoutMixedRow" style="display:none;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--line);">
-                  <div class="inline-field" style="margin-bottom:8px;"><label>Segundo medio</label></div>
-                  <div class="method-chips" id="checkoutMethodSecondary" data-method-group="checkout-secondary"></div>
-                  <div class="inline-field" style="margin-top:10px;">
-                    <label>Segundo monto</label>
-                    <input id="checkoutPaymentSecondary" type="number" min="0" value="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                  <!-- Seña -->
+                  <div style="margin-bottom:14px;padding:10px 12px;background:var(--surface-2);border-radius:10px;">
+                    <div class="inline-field">
+                      <label>Seña ya abonada (se descuenta del saldo)</label>
+                      <input id="reservationDeposit" type="number" value="0" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                    </div>
+                  </div>
+
+                  <!-- Forma de pago -->
+                  <div style="margin-bottom:10px;">
+                    <div class="inline-field" style="margin-bottom:8px;"><label>Forma de pago</label></div>
+                    <div class="method-chips" id="checkoutMethodPrimary" data-method-group="checkout-primary"></div>
+                    <div class="inline-field" style="margin-top:10px;">
+                      <label>Monto que paga hoy</label>
+                      <input id="checkoutPaymentPrimary" type="number" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                    </div>
+                    <div style="margin-top:8px;">
+                      <button type="button" class="link-btn" id="checkoutMixedToggle">+ segundo pago</button>
+                    </div>
+                    <div id="checkoutMixedRow" style="display:none;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--line);">
+                      <div class="inline-field" style="margin-bottom:8px;"><label>Segundo medio</label></div>
+                      <div class="method-chips" id="checkoutMethodSecondary" data-method-group="checkout-secondary"></div>
+                      <div class="inline-field" style="margin-top:10px;">
+                        <label>Segundo monto</label>
+                        <input id="checkoutPaymentSecondary" type="number" min="0" value="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                      </div>
+                    </div>
+                  </div>
+
+                  <div id="partialPaymentNotice" style="display:none;margin-top:8px;padding:10px 12px;background:#fff7e8;border:0.5px solid #edd7a7;border-radius:10px;font-size:12px;color:#8a5a14;">
+                    La diferencia quedará como <strong>saldo pendiente</strong>. Pendiente: <strong id="partialBalance">$0</strong>
+                  </div>
+                  <div class="summary-warning" id="summaryWarning" style="margin-top:8px;">El monto ingresado supera el saldo a cobrar.</div>
+                </section>
+                <div class="wiz-nav">
+                  <button class="btn" onclick="wizGoTo(2)">← Servicios</button>
+                  <div style="display:flex;gap:8px;">
+                    <button class="btn" id="savePendingSaleBtn">Guardar pendiente</button>
+                    <button class="btn primary" id="registerSaleBtn" style="padding:11px 28px;">Confirmar venta →</button>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <!-- Saldo pendiente aviso -->
-              <div id="partialPaymentNotice" style="display:none;margin-top:8px;padding:10px 12px;background:#fff7e8;border:0.5px solid #edd7a7;border-radius:10px;font-size:12px;color:#8a5a14;">
-                La diferencia quedará como <strong>saldo pendiente</strong> asociado a esta visita.
-                Pendiente: <strong id="partialBalance">$0</strong>
+            <!-- Ticket de papel (sticky derecha) -->
+            <div>
+              <div class="paper-ticket">
+                <div class="paper-ticket-head">
+                  <h3>GLAMB</h3>
+                  <div id="wizTicketDate" style="font-size:10px;color:var(--text-soft);margin-bottom:4px;">—</div>
+                  <div id="wizTicketClient" style="font-size:14px;font-weight:600;">—</div>
+                </div>
+                <div class="paper-ticket-body">
+                  <div id="wizTicketLines"><div style="font-size:12px;color:var(--text-soft);text-align:center;padding:10px 0;">Sin servicios aún</div></div>
+                  <div class="t-sub" id="wizDepositRow" style="display:none;color:#8a6d1b;"><span>− Seña abonada</span><span id="wizDepositAmt">$0</span></div>
+                  <div class="t-total">
+                    <span style="font-size:11px;font-weight:600;letter-spacing:.06em;">SALDO A COBRAR</span>
+                    <span style="font-family:'Cormorant',serif;font-size:26px;font-weight:300;" id="summaryDue">$0</span>
+                  </div>
+                  <!-- ocultos pero necesarios para updateSaleSummary -->
+                  <span id="summaryGross" style="display:none;"></span>
+                  <span id="summaryDeposits" style="display:none;"></span>
+                  <div id="depositRow" style="display:none;"></div>
+                </div>
+                <div class="paper-ticket-foot">
+                  <div style="text-align:center;font-size:10px;color:var(--text-soft);" id="wizTicketMeta">—</div>
+                </div>
               </div>
-              <div class="summary-warning" id="summaryWarning" style="margin-top:8px;">El monto ingresado supera el saldo a cobrar.</div>
-
-              <div class="detail-actions" style="flex-direction:column;gap:8px;margin-top:14px;">
-                <button class="btn primary" id="registerSaleBtn">Registrar venta</button>
-                <button class="small-btn" id="savePendingSaleBtn">Guardar como pendiente</button>
-              </div>
-            </aside>
+            </div>
           </div>
         </section>
         <section class="cash-section" id="cash-pending">
@@ -4627,6 +4802,7 @@
       if($('summaryWarning')) $('summaryWarning').classList.toggle('show', overpaid);
       if($('partialPaymentNotice')) $('partialPaymentNotice').style.display = partial ? 'block' : 'none';
       if($('partialBalance')) $('partialBalance').textContent = money(Math.max(0, balance));
+      if(typeof wizRenderTicket==='function') wizRenderTicket();
     }
     function saleClientName(){
       if(state.saleSource === 'appointment') return (state.saleClient.clientName || '').trim();
@@ -4694,6 +4870,7 @@
       if(state.saleSource === 'appointment' && state.saleAppointmentId) selectSaleAppointment(state.saleAppointmentId);
       else addSaleLine();
       updateSaleSummary();
+      wizGoTo(1);
     }
     function injectPending(id){
       const p = state.pendingCharges.find(x=>x.id===id); if(!p) return;
@@ -5805,6 +5982,69 @@
       label.textContent = `${Math.round((width / 140) * 100)}%`;
     }
 
+    // ── Wizard de caja ──────────────────────────────────────────────
+    let wizPayMode = 'full';
+    function wizGoTo(step){
+      state.wiz = state.wiz || {};
+      state.wiz.step = step;
+      [1,2,3].forEach(n=>{
+        const tab = $('wizStepTab'+n), panel = $('wizPanel'+n), ni = $('wizN'+n);
+        if(!tab||!panel||!ni) return;
+        tab.classList.toggle('now', n===step);
+        tab.classList.toggle('done', n<step);
+        tab.classList.remove(...['now','done'].filter(c=>!(n===step&&c==='now')&&!(n<step&&c==='done')));
+        tab.className = 'wiz-step' + (n===step?' now':'') + (n<step?' done':'');
+        ni.textContent = n<step ? '✓' : String(n);
+        panel.classList.toggle('active', n===step);
+      });
+      const main = $('wizMainGrid');
+      if(main) main.style.display = step > 1 ? 'grid' : 'none';
+      const p1 = $('wizPanel1');
+      if(p1) p1.style.display = step === 1 ? 'block' : 'none';
+      if(step===3){
+        const t = saleTotals();
+        $('wizPayFullAmt').textContent = money(t.due);
+        if(wizPayMode==='full' && $('checkoutPaymentPrimary')) $('checkoutPaymentPrimary').value = t.due||'';
+      }
+      wizRenderTicket();
+    }
+    function wizSetPayMode(mode){
+      wizPayMode = mode;
+      ['full','partial','pending'].forEach(m=>{
+        const el=$('wizPay'+m[0].toUpperCase()+m.slice(1));
+        if(el) el.classList.toggle('active', m===mode);
+      });
+      const t = saleTotals();
+      if(mode==='full' && $('checkoutPaymentPrimary')){ $('checkoutPaymentPrimary').value=t.due||''; }
+      if(mode==='pending' && $('checkoutPaymentPrimary')){ $('checkoutPaymentPrimary').value='0'; }
+      updateSaleSummary();
+    }
+    function wizRenderTicket(){
+      const clientName = saleClientName() || (state.saleClient.clientName) || '—';
+      if($('wizTicketClient')) $('wizTicketClient').textContent = clientName;
+      const now = new Date();
+      if($('wizTicketDate')) $('wizTicketDate').textContent = now.toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'short'});
+      const lines = Array.from(document.querySelectorAll('[data-sale-line]'));
+      const linesHtml = lines.map(line=>{
+        const colId = line.querySelector('.sale-collaborator')?.value;
+        const colName = colId ? (member(colId)?.first || '') : '';
+        const svcSel = line.querySelector('.sale-service');
+        const svcTxt = svcSel?.options[svcSel.selectedIndex]?.text || '';
+        const price = Number(line.querySelector('.sale-final')?.value||0);
+        const addons = Array.from(line.querySelectorAll('.sale-addon.selected'));
+        const addonsAmt = addons.reduce((s,a)=>s+Number(a.dataset.price||0),0);
+        if(!svcTxt||svcTxt==='—') return '';
+        return `<div class="t-line"><span style="font-size:12px;">${svcTxt}<span style="display:block;font-size:10px;color:var(--text-soft);">${colName}${addons.length?` · ${addons.length} adicional(es)`:''}</span></span><span style="font-weight:500;">${money(price+addonsAmt)}</span></div>`;
+      }).filter(Boolean).join('');
+      if($('wizTicketLines')) $('wizTicketLines').innerHTML = linesHtml || '<div style="font-size:12px;color:var(--text-soft);text-align:center;padding:10px 0;">Sin servicios aún</div>';
+      const t = saleTotals();
+      const dep = t.depositApplied;
+      if($('wizDepositRow')) $('wizDepositRow').style.display = dep>0?'flex':'none';
+      if($('wizDepositAmt')) $('wizDepositAmt').textContent = money(dep);
+      const colName = state.cashMode==='admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId));
+      if($('wizTicketMeta')) $('wizTicketMeta').textContent = `Atendió: ${colName}`;
+    }
+
     function renderAll(){renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
@@ -5929,7 +6169,7 @@
       if($('reservationDeposit')) $('reservationDeposit').oninput=updateSaleSummary;
     }
     initCheckoutPayment();
-    document.querySelectorAll('[data-sale-source]').forEach(b=>b.onclick=()=>setSaleSource(b.dataset.saleSource));
+    document.querySelectorAll('[data-sale-source]').forEach(b=>b.onclick=()=>{setSaleSource(b.dataset.saleSource); document.querySelectorAll('.wiz-source-card').forEach(c=>c.classList.toggle('active',c.dataset.saleSource===b.dataset.saleSource));});
     initSaleClientAutocomplete();
     if($('saleAppointmentSelect')) $('saleAppointmentSelect').onchange=()=>selectSaleAppointment($('saleAppointmentSelect').value);
     if($('prevDay')) $('prevDay').onclick = () => { state.agenda.currentDate.setDate(state.agenda.currentDate.getDate() - 1); updateDateTitle(); renderAgenda(); };
