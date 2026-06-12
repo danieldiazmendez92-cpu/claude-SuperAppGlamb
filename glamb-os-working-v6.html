@@ -2615,6 +2615,7 @@
           <div class="top-actions">
             <button class="btn" id="cashOpenBtn">Abrir caja</button>
             <button class="btn" id="cashWithdrawalBtn">Registrar retiro</button>
+            <button class="btn" id="cashExpenseBtn">Registrar gasto</button>
             <button class="btn" id="cashCloseBtn">Cerrar caja</button>
             <button class="btn primary" id="newSaleBtn">Nueva venta</button>
           </div>
@@ -2720,9 +2721,14 @@
           <section class="card"><h2 class="section-title">Pendientes de cobro</h2><div id="pendingChargesList"></div></section>
         </section>
         <section class="cash-section" id="cash-daily">
+          <div class="dark-panel" id="cashDailySummary" style="margin-bottom:16px;"></div>
           <div class="layout-2">
-            <section class="card"><h2 class="section-title">Movimientos</h2><div id="cashMovements"></div></section>
-            <aside class="card"><h2 class="section-title">Totales por medio</h2><div id="cashByMethod"></div><h2 class="section-title" style="margin-top:18px;">Retiros</h2><div id="cashWithdrawals"></div></aside>
+            <section class="card"><h2 class="section-title">Movimientos del día</h2><div id="cashMovements"></div></section>
+            <aside>
+              <section class="card" style="margin-bottom:16px;"><h2 class="section-title">Por medio de pago</h2><div id="cashByMethod"></div></section>
+              <section class="card" style="margin-bottom:16px;"><h2 class="section-title">Retiros</h2><div id="cashWithdrawals"></div></section>
+              <section class="card"><h2 class="section-title">Gastos</h2><div id="cashExpenses"></div></section>
+            </aside>
           </div>
         </section>
         <section class="cash-section" id="cash-tickets">
@@ -3011,6 +3017,25 @@
       </section>
     </div>
     <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmWithdrawalBtn">Registrar retiro</button></footer>
+  </aside>
+
+  <aside class="drawer" id="cashExpenseDrawer">
+    <header class="drawer-header">
+      <div><div class="eyebrow">Caja</div><h2 class="drawer-title">Registrar gasto</h2><p class="drawer-subtitle">Insumos, limpieza, servicios, compras u otros egresos del día.</p></div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <section class="form-card">
+        <h3>Datos del gasto</h3>
+        <div class="form-grid">
+          <div class="field"><label>Monto</label><input id="expenseAmount" type="number" value="0" min="0"></div>
+          <div class="field"><label>Categoría</label><select id="expenseCategory"><option>Insumos</option><option>Limpieza</option><option>Servicios (luz, agua, etc.)</option><option>Comida / delivery</option><option>Compras varias</option><option>Otro</option></select></div>
+          <div class="field"><label>Medio de pago</label><select id="expenseMethod"><option>Efectivo</option><option>Transf</option><option>Débito</option><option>Crédito</option></select></div>
+          <div class="field full"><label>Descripción</label><textarea id="expenseNote" placeholder="Detalle del gasto"></textarea></div>
+        </div>
+      </section>
+    </div>
+    <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmExpenseBtn">Registrar gasto</button></footer>
   </aside>
 
   <aside class="drawer" id="cashCloseDrawer">
@@ -3750,7 +3775,7 @@
     state.cashMode = 'admin';
     state.cashCurrentCollaboratorId = 'co1';
     state.cashClosings = [];
-    state.cashSession = {isOpen:false, openingAmount:0, openedBy:null, openedAt:null, closedAt:null, countedCash:null, withdrawals:[]};
+    state.cashSession = {isOpen:false, openingAmount:0, openedBy:null, openedAt:null, closedAt:null, countedCash:null, withdrawals:[], expenses:[]};
     state.afterClientCreate = null;
     state.saleSource = 'appointment';
     state.saleAppointmentId = null;
@@ -3769,16 +3794,16 @@
     }
     function renderCashKpis(){
       const confirmed = state.salesTickets.filter(t=>t.status==='confirmed');
-      const services = confirmed.reduce((s,t)=>s+t.servicesTotal,0);
-      const tips = confirmed.reduce((s,t)=>s+t.tipsTotal,0);
-      const collected = state.payments.filter(p=>p.type!=='refund' && p.type!=='deposit_applied').reduce((s,p)=>s+Number(p.amount||0),0);
-      const cash = state.payments.filter(p=>p.method==='Efectivo').reduce((s,p)=>s+Number(p.amount||0),0);
+      const ingresos = state.payments.filter(p=>p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
+      const transferTotal = state.payments.filter(p=>p.type==='service' && p.method==='Transf').reduce((s,p)=>s+Number(p.amount||0),0);
+      const expenses = (state.cashSession.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
+      const cashExpected = cashExpectedAmount();
       const pending = state.pendingCharges.filter(p=>p.status==='pending').length;
       const items = [
-        ['Servicios', money(services), 'tickets confirmados'],
-        ['Propinas', money(tips), 'separadas'],
-        ['Cobrado', money(collected), 'medios de pago'],
-        ['Efectivo', money(cash), 'esperado'],
+        ['Ingresó hoy', money(ingresos), 'cobrado en el día'],
+        ['En efectivo', money(cashExpected), 'esperado en caja'],
+        ['Por transferencia', money(transferTotal), 'acreditado'],
+        ['Gastos', money(expenses), 'egresos del día'],
         ['Pendientes', pending, 'por cobrar']
       ];
       $('cashKpis').innerHTML = items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
@@ -3794,9 +3819,10 @@
     }
     function isCashAdmin(){ return state.cashMode === 'admin'; }
     function cashExpectedAmount(){
-      const cashSales = state.payments.filter(p=>p.method==='Efectivo').reduce((sum,p)=>sum+Number(p.amount||0),0);
-      const withdrawals = state.cashSession.withdrawals.reduce((sum,w)=>sum+Number(w.amount||0),0);
-      return Number(state.cashSession.openingAmount||0) + cashSales - withdrawals;
+      const cashIn = state.payments.filter(p=>p.method==='Efectivo').reduce((sum,p)=>sum+Number(p.amount||0),0);
+      const withdrawals = (state.cashSession.withdrawals||[]).reduce((sum,w)=>sum+Number(w.amount||0),0);
+      const cashExpenses = (state.cashSession.expenses||[]).filter(e=>e.method==='Efectivo').reduce((sum,e)=>sum+Number(e.amount||0),0);
+      return Number(state.cashSession.openingAmount||0) + cashIn - withdrawals - cashExpenses;
     }
 
     function renderCashStatus(){
@@ -3845,6 +3871,30 @@
       showToast('Retiro registrado');
     }
 
+    function registerExpense(){
+      if(!isCashAdmin()) return showToast('Solo admin caja puede registrar gastos.');
+      if(!state.cashSession.isOpen) return showToast('Primero abrí caja.');
+      if($('expenseAmount')) $('expenseAmount').value = 0;
+      if($('expenseNote')) $('expenseNote').value = '';
+      openDrawer('cashExpenseDrawer');
+    }
+    function confirmExpense(){
+      const amount = Number($('expenseAmount')?.value || 0);
+      if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
+      if(!state.cashSession.expenses) state.cashSession.expenses = [];
+      state.cashSession.expenses.push({
+        id:'exp'+Date.now(),
+        amount,
+        category: $('expenseCategory')?.value || 'Otro',
+        method: $('expenseMethod')?.value || 'Efectivo',
+        note: $('expenseNote')?.value || '',
+        createdAt: new Date().toISOString(),
+        createdBy: state.cashMode === 'admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId))
+      });
+      closeDrawers();
+      renderAll();
+      showToast('Gasto registrado');
+    }
     function setCashTab(tab){
       state.cashTab = tab;
       document.querySelectorAll('[data-cash-tab]').forEach(b=>b.classList.toggle('active', b.dataset.cashTab===tab));
@@ -4132,10 +4182,43 @@
     function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
     function renderCashDaily(){
       if(!$('cashMovements')) return;
-      $('cashMovements').innerHTML = state.payments.length ? state.payments.map(p=>`<div class="mini-row"><strong>${money(p.amount)} · ${p.method}</strong><span>${p.ticketId||p.appointmentId||'Movimiento'} · ${p.type==='deposit_applied'?'anticipo aplicado':p.type}</span></div>`).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Todavía no se registraron cobros.</span></div>';
-      const methods = paymentMethods;
-      $('cashByMethod').innerHTML = methods.map(m=>{const total=state.payments.filter(p=>p.method===m).reduce((s,p)=>s+Number(p.amount||0),0);return `<div class="mini-row"><strong>${m}</strong><span>${money(total)}</span></div>`}).join('');
-      if($('cashWithdrawals')) $('cashWithdrawals').innerHTML = state.cashSession.withdrawals.length ? state.cashSession.withdrawals.map(w=>`<div class="mini-row"><strong>${money(w.amount)} · ${w.reason}</strong><span>${new Date(w.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · ${w.createdBy}</span></div>`).join('') : '<div class="mini-row"><strong>Sin retiros</strong><span>Propinas, gastos, compras o depósito aparecerán acá.</span></div>';
+      // Panel resumen financiero
+      if($('cashDailySummary')){
+        const session = state.cashSession;
+        const cashIn = state.payments.filter(p=>p.method==='Efectivo' && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
+        const transferIn = state.payments.filter(p=>p.method==='Transf' && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
+        const debitIn = state.payments.filter(p=>p.method==='Débito' && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
+        const creditIn = state.payments.filter(p=>p.method==='Crédito' && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
+        const totalIn = state.payments.filter(p=>p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
+        const withdrawalsTotal = (session.withdrawals||[]).reduce((s,w)=>s+Number(w.amount||0),0);
+        const expensesTotal = (session.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
+        const cashExpected = cashExpectedAmount();
+        $('cashDailySummary').innerHTML = `
+          <div class="eyebrow" style="color:#cbb8a6;margin-bottom:8px;">Resumen del día</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:16px;">
+            <div><div style="color:#cbb8a6;font-size:11px;margin-bottom:4px;">INGRESÓ HOY</div><div style="font-family:'Cormorant',serif;font-size:32px;color:#f5ede4;">${money(totalIn)}</div></div>
+            <div><div style="color:#cbb8a6;font-size:11px;margin-bottom:4px;">EFECTIVO ESPERADO</div><div style="font-family:'Cormorant',serif;font-size:32px;color:#f5ede4;">${money(cashExpected)}</div></div>
+            <div><div style="color:#cbb8a6;font-size:11px;margin-bottom:4px;">GASTOS + RETIROS</div><div style="font-family:'Cormorant',serif;font-size:32px;color:#f5ede4;">${money(expensesTotal+withdrawalsTotal)}</div></div>
+          </div>
+          <div style="border-top:0.5px solid rgba(245,237,228,0.14);padding-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Apertura</span><br><strong style="color:#f5ede4;">${money(session.openingAmount||0)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Efectivo cobrado</span><br><strong style="color:#f5ede4;">${money(cashIn)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Transferencia</span><br><strong style="color:#f5ede4;">${money(transferIn)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Débito</span><br><strong style="color:#f5ede4;">${money(debitIn)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Crédito</span><br><strong style="color:#f5ede4;">${money(creditIn)}</strong></div>
+          </div>`;
+      }
+      // Movimientos
+      $('cashMovements').innerHTML = state.payments.length ? state.payments.map(p=>`<div class="mini-row"><strong>${money(p.amount)} · ${p.method}</strong><span>${p.ticketId||'Movimiento'} · ${p.type==='deposit_applied'?'anticipo aplicado':p.type==='service'?'cobro de servicio':p.type}</span></div>`).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Los cobros del día aparecerán acá.</span></div>';
+      // Por medio
+      $('cashByMethod').innerHTML = paymentMethods.map(m=>{
+        const total = state.payments.filter(p=>p.method===m && p.type==='service').reduce((s,p)=>s+Number(p.amount||0),0);
+        return total > 0 ? `<div class="mini-row"><strong>${m}</strong><span>${money(total)}</span></div>` : '';
+      }).join('') || '<div class="mini-row"><strong>Sin cobros</strong><span>—</span></div>';
+      // Retiros
+      if($('cashWithdrawals')) $('cashWithdrawals').innerHTML = (state.cashSession.withdrawals||[]).length ? state.cashSession.withdrawals.map(w=>`<div class="mini-row"><strong>${money(w.amount)} · ${w.reason}</strong><span>${new Date(w.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · ${w.createdBy}</span></div>`).join('') : '<div class="mini-row"><strong>Sin retiros</strong><span>—</span></div>';
+      // Gastos
+      if($('cashExpenses')) $('cashExpenses').innerHTML = (state.cashSession.expenses||[]).length ? state.cashSession.expenses.map(e=>`<div class="mini-row"><strong>${money(e.amount)} · ${e.category}</strong><span>${e.method} · ${e.note||'—'} · ${new Date(e.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span></div>`).join('') : '<div class="mini-row"><strong>Sin gastos</strong><span>—</span></div>';
     }
     function renderTickets(){
       if(!$('ticketsList')) return;
@@ -4957,9 +5040,11 @@
     if($('closeDayBtn')) $('closeDayBtn').onclick=closeDay;
     if($('cashOpenBtn')) $('cashOpenBtn').onclick=openCashSession;
     if($('cashWithdrawalBtn')) $('cashWithdrawalBtn').onclick=registerWithdrawal;
+    if($('cashExpenseBtn')) $('cashExpenseBtn').onclick=registerExpense;
     if($('cashCloseBtn')) $('cashCloseBtn').onclick=cashClose;
     if($('confirmCashOpenBtn')) $('confirmCashOpenBtn').onclick=confirmCashOpen;
     if($('confirmWithdrawalBtn')) $('confirmWithdrawalBtn').onclick=confirmWithdrawal;
+    if($('confirmExpenseBtn')) $('confirmExpenseBtn').onclick=confirmExpense;
     if($('confirmCashCloseBtn')) $('confirmCashCloseBtn').onclick=confirmCashClose;
     if($('cashUserMode')) $('cashUserMode').onchange=()=>{state.cashMode=$('cashUserMode').value; renderAll(); showToast(state.cashMode==='admin'?'Modo Admin caja':'Modo Colaboradora');};
     if($('cashCurrentCollaborator')) $('cashCurrentCollaborator').onchange=()=>{state.cashCurrentCollaboratorId=$('cashCurrentCollaborator').value; renderAll();};
