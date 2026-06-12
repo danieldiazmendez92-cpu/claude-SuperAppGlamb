@@ -13,14 +13,15 @@ No debe sentirse como un sistema administrativo genérico. Debe sentirse como un
 | Etapa | Prototipo HTML funcional |
 | Archivo de trabajo | `glamb-os-working-v6.html` |
 | Branch | `claude/stoic-allen-o372la` |
-| Último commit | `99ab01e` |
+| Último commit | `3fdbddf` |
+| Líneas aprox. | ~6200 |
 | Publicación futura | Firebase Studio (después de estabilizar flujos) |
 
 ---
 
 ## Arquitectura
 
-Single-file HTML (~5400 líneas) con CSS y JS embebidos. Sin framework, sin build step. Estado persistido en `localStorage`.
+Single-file HTML (~6200 líneas) con CSS y JS embebidos. Sin framework, sin build step. Estado persistido en `localStorage`.
 
 ---
 
@@ -28,13 +29,12 @@ Single-file HTML (~5400 líneas) con CSS y JS embebidos. Sin framework, sin buil
 
 | Módulo | Estado |
 |--------|--------|
-| Centro de Mando | ✅ KPIs + alertas Katy |
-| Clientes / CRM | ✅ Perfil, historial, preferencias, edición |
+| Centro de Mando | ✅ KPIs + alertas automáticas |
+| Clientes / CRM | ✅ Perfil, historial, insights automáticos, tags predictivos |
 | Equipo & Accesos | ✅ Colaboradoras + disponibilidad por día + edición |
 | Catálogo | ✅ Grupos → Servicios → Variantes + Adicionales |
-| Agenda desktop | ✅ Grilla por profesional, drag & drop, combinados, horarios visibles |
-| Agenda móvil | ✅ Vista panorámica (archivo separado) |
-| Ventas & Caja | ✅ POS + centro financiero diario |
+| Agenda | ✅ Grilla por profesional, drag & drop, bloques de horario, popover con acciones |
+| Ventas & Caja | ✅ Wizard 3 pasos + centro financiero diario |
 
 ---
 
@@ -52,8 +52,6 @@ Border:      #E3E3DF
 
 Tipografía: **Cormorant** (títulos) + **DM Sans** (UI)
 
-Inspiración visual agenda: **Fresha** — bloques limpios con jerarquía hora/cliente/servicio.
-
 ---
 
 ## Flujos principales implementados
@@ -62,9 +60,10 @@ Inspiración visual agenda: **Fresha** — bloques limpios con jerarquía hora/c
 Una reserva con `bookingId` puede tener N servicios y N adicionales.
 Al cobrar desde Agenda → Caja, se precargan todas las líneas + adicionales + seña en un único ticket.
 
-### Seña → Cobro parcial
-La seña se registra al crear el turno o desde Caja (tipo `deposit_received`).
-Al registrar la venta: `Total − Seña = Saldo a cobrar hoy`.
+### Seña → Cobro
+La seña se registra contra el **cliente** (sin requerir turno previo).
+`clientAvailableDeposit(clientId)` calcula el saldo disponible = recibido − aplicado.
+Al abrir una venta para ese cliente, la seña se pre-rellena automáticamente.
 Si se paga menos del saldo, se auto-crea un `pendingCharge` por el resto.
 
 ### Centro financiero diario
@@ -73,38 +72,29 @@ KPIs: ingresó hoy, efectivo esperado, gastos+retiros, desglose por método.
 
 ---
 
-## Cambios clave de la sesión actual
+## Funcionalidades destacadas
 
-### Edición de colaboradoras
-- Drawer de edición pre-carga todos los datos: nombre, tipo, chips de servicios, horario por día
-- Chips de servicio se pre-seleccionan aunque el colaborador tenga datos legacy (solo `groups` por nombre)
-- `saveCollaborator` guarda `schedule: {Día: {start, end}}` para cada día marcado
-- `refreshAgendaFilters` verifica `c.can` al restaurar el filtro — evita agenda vacía al cambiar el estado
+### CRM con insights automáticos
+`clientInsights(clientId)` calcula en tiempo real:
+- Ticket promedio, frecuencia de visita, días desde última visita, gasto total
+- Tags predictivos: **Riesgo de abandono** (>45 días sin visita), **Frecuente** (<21 días), **Alto valor** (gasto alto)
 
-### Horario visible en agenda
-- Cada columna muestra sombreado rayado diagonal para horas fuera del turno de la colaboradora
-- Si el día no es laboral para esa profesional, la columna entera aparece sombreada
-- Usa `m.schedule[día]` para el horario del día exacto, con fallback a `m.hours`
+### Wizard 3 pasos en Caja
+El módulo de registro de ventas usa un wizard guiado:
+1. **Cliente** — tarjetas grandes: turno en agenda / cliente existente / cliente nuevo
+2. **Servicios** — líneas de venta + nota interna
+3. **Cobro** — opciones de pago (paga todo / parcial / pendiente) + métodos
 
-### Rediseño visual de agenda (inspirado en Fresha)
-- Headers con avatar circular + nombre centrado debajo
-- Bloques de turno: `hora – cliente` arriba (bold), servicio abajo (regular)
-- Colores pasteles por grupo con borde izquierdo de 3px
-- Huecos invisibles hasta hover (muestra `+` al pasar el mouse)
-- Bloqueos con rayado diagonal
-- Línea de "ahora" roja con punto circular y etiqueta de hora
+Paper ticket sticky en pasos 2 y 3 que se actualiza en tiempo real.
 
-### Navegación de fecha
-- Clic sobre la fecha del toolbar (`vie 12 jun`) abre el selector de fecha nativo del OS
-- Permite saltar a cualquier fecha sin navegar día por día
+### Bloques de horario en Agenda
+Las colaboradoras pueden tener bloqueos de tiempo (almuerzo, descanso, etc.):
+- Recurrentes (sin fecha) o de un día específico
+- Se crean/editan/eliminan desde la agenda
+- Se muestran con fondo rayado diagonal y etiqueta
 
-### Correcciones de bugs
-- `voidTicket` ahora marca todos los pagos del ticket como `p.voided=true` → KPIs no los cuentan
-- `savePendingSale` vincula el turno de origen (`appointmentId`, `reservationId`)
-- `dropAppointment` actualiza `a.date` al soltar en la grilla
-- Popover de turno muestra el monto correcto (precio + desglose seña/saldo)
-- Edición de clientes: drawer precargado, guardado con `editingClientId`
-- Cascade select de servicios restaura variante, duración y precio al editar
+### Propagación de cambios en Catálogo
+Al editar precio o nombre de un adicional, el sistema detecta los turnos afectados y ofrece actualizar el precio en agenda y caja.
 
 ---
 
@@ -114,30 +104,46 @@ KPIs: ingresó hoy, efectivo esperado, gastos+retiros, desglose por método.
 // Colaboradora
 {
   id, first, last, phone, email, type, can,
-  groups: ['Manicuria'],       // nombres (display)
-  groupIds: ['cat123'],        // IDs del catálogo
+  groups: ['Manicuria'],
+  groupIds: ['cat123'],
   serviceIds: ['svc1','svc2'],
-  days: 'Lunes, Martes, ...',  // días laborables
-  hours: '10:00 - 19:00',      // horario global (display en equipo)
-  schedule: {                  // horario por día (agenda)
-    'Lunes': { start: '10:00', end: '19:00' },
-    'Martes': { start: '12:00', end: '20:00' }
+  days: 'Lunes, Martes, ...',
+  hours: '10:00 - 19:00',
+  schedule: {
+    'Lunes': { start: '10:00', end: '19:00' }
   }
 }
 
 // Turno
 {
-  id, bookingId, date,        // date = 'YYYY-MM-DD'
+  id, bookingId, date,
   memberId, clientId,
   group, service, variantId, serviceId,
-  start, end,                 // 'HH:MM'
-  status, deposit, depositAmount, depositMethod,
+  start, end,
+  status, deposit, bookingDepositAmount,
   price, isAdditional, note
+}
+
+// Bloqueo de horario
+{
+  id, memberId, start, end, label,
+  date   // opcional — si está ausente es recurrente
 }
 
 // Pago
 {
-  id, ticketId, type, method, amount, date, voided
+  id, ticketId, clientId,
+  type,   // 'deposit_received' | 'deposit_applied' | 'service'
+  method, amount,
+  reference, note, createdAt
+}
+
+// Ticket de venta
+{
+  id, clientId, appointmentId, origin, status,
+  lines, servicesTotal, tipsTotal, grossTotal,
+  depositAppliedTotal, totalDueToday, pendingBalance,
+  createdBy, createdAt
 }
 ```
 
@@ -148,8 +154,8 @@ KPIs: ingresó hoy, efectivo esperado, gastos+retiros, desglose por método.
 1. **Todo cambio va a `glamb-os-working-v6.html`**
 2. `glamb-os-stable.html` no se modifica sin aprobación explícita
 3. Los commits deben tener autor `Claude <noreply@anthropic.com>` — el stop-hook lo verifica
-4. Ver `glamb-project-current-state.md` para contexto adicional
-5. Push siempre a `claude/stoic-allen-o372la` vía PAT
+4. Push siempre a `claude/stoic-allen-o372la` vía PAT
+5. Antes de cada commit: `git config user.email noreply@anthropic.com && git config user.name Claude`
 
 ---
 
@@ -157,11 +163,6 @@ KPIs: ingresó hoy, efectivo esperado, gastos+retiros, desglose por método.
 
 | Archivo | Descripción |
 |---------|-------------|
-| `glamb-os-working-v6.html` | **Archivo de trabajo activo** (~5400 líneas) |
-| `glamb-os-stable.html` | Copia inicial estable (no modificar) |
-| `glamb-project-current-state.md` | Estado detallado del proyecto |
-| `glamb-change-control.md` | Reglas de control de cambios |
-| `glamb-protected-features.md` | Funcionalidades protegidas |
-| `glamb-qa-checklist.md` | Checklist de QA |
-| `glamb-visual-agent.md` | Guía de identidad visual |
-| `glamb-functional-audit-agent.md` | Guía de auditoría funcional |
+| `glamb-os-working-v6.html` | **Archivo de trabajo activo** (~6200 líneas) |
+| `glamb-os-stable.html` | Copia estable (sincronizar manualmente) |
+| `caja-mockups.html` | 4 mockups de diseño del módulo Caja (referencia) |
