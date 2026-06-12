@@ -9,21 +9,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@0,300;0,400;1,300&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #faf6f1;
-      --surface: #fffdf9;
-      --surface-2: #f5ede4;
-      --text: #1a1410;
-      --text-muted: #8a7e74;
-      --text-soft: #b8a99a;
-      --line: #e8e0d6;
-      --line-strong: #c8bdb2;
-      --accent: #c4956a;
-      --accent-dark: #7a5c48;
-      --accent-bg: #f5ede4;
-      --black: #1a1410;
-      --shadow-card: 0 2px 12px rgba(60,40,20,0.06);
-      --shadow-drawer: 0 8px 48px rgba(60,40,20,0.14);
-      --radius-card: 16px;
+      --bg: #F6F6F4;
+      --surface: #FBFBFA;
+      --surface-2: #EFEFEC;
+      --text: #0E0E0D;
+      --text-muted: #666662;
+      --text-soft: #94948E;
+      --line: #E3E3DF;
+      --line-strong: #CECEC8;
+      --accent: #0E0E0D;
+      --accent-dark: #1F1F1D;
+      --accent-bg: #EFEFEC;
+      --black: #0E0E0D;
+      --shadow-card: 0 1px 6px rgba(14,14,13,0.06);
+      --shadow-drawer: 0 8px 40px rgba(14,14,13,0.13);
+      --radius-card: 20px;
       --radius-pill: 999px;
       --hour-height: 67.2px;
       --slot-height: 33.6px;
@@ -44,6 +44,7 @@
       color: var(--text);
       font-family: 'DM Sans', sans-serif;
       font-weight: 300;
+      -webkit-font-smoothing: antialiased;
     }
 
     button,
@@ -76,17 +77,18 @@
 
     .app {
       display: grid;
-      grid-template-columns: 236px 1fr;
+      grid-template-columns: 220px 1fr;
       min-height: 100vh;
     }
 
     .sidebar {
       background: var(--surface);
       border-right: 0.5px solid var(--line);
-      padding: 24px 16px;
+      padding: 20px 12px;
       position: sticky;
       top: 0;
       height: 100vh;
+      overflow: hidden;
     }
 
     .brand {
@@ -97,29 +99,29 @@
     }
 
     .mark {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       display: grid;
       place-items: center;
       font-family: 'Cormorant', serif;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 300;
     }
 
     .brand-name {
       display: block;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
-      letter-spacing: 0.01em;
+      letter-spacing: 0.04em;
     }
 
     .brand-subtitle {
       display: block;
       margin-top: 2px;
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-muted);
     }
 
@@ -134,14 +136,15 @@
       border: 0;
       width: 100%;
       text-align: left;
-      padding: 10px 12px;
-      border-radius: 12px;
+      padding: 9px 10px;
+      border-radius: 10px;
       color: var(--text-muted);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 300;
       display: flex;
-      gap: 10px;
+      gap: 9px;
       align-items: center;
+      letter-spacing: 0.01em;
     }
 
     .nav button.active,
@@ -150,15 +153,16 @@
       color: var(--text);
     }
 
+
     .side-note {
       position: absolute;
-      left: 16px;
-      right: 16px;
+      left: 12px;
+      right: 12px;
       bottom: 20px;
       background: var(--black);
-      color: #f5ede4;
-      border-radius: var(--radius-card);
-      padding: 16px;
+      color: #F6F6F4;
+      border-radius: 14px;
+      padding: 14px;
     }
 
     .side-note strong {
@@ -175,7 +179,7 @@
     }
 
     main {
-      padding: 28px;
+      padding: 32px 36px;
       min-width: 0;
     }
 
@@ -198,26 +202,26 @@
     .eyebrow {
       font-size: 10px;
       line-height: 1;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: var(--text-muted);
+      color: var(--text-soft);
       margin-bottom: 8px;
-      font-weight: 300;
+      font-weight: 400;
     }
 
     h1 {
       margin: 0;
-      font-size: 38px;
-      line-height: 0.96;
-      letter-spacing: -0.03em;
+      font-size: 42px;
+      line-height: 0.94;
+      letter-spacing: -0.04em;
     }
 
     .subtitle {
       margin: 10px 0 0;
-      max-width: 720px;
-      color: var(--text-muted);
+      max-width: 640px;
+      color: var(--text-soft);
       font-size: 13px;
-      line-height: 1.6;
+      line-height: 1.65;
     }
 
     .top-actions {
@@ -265,14 +269,15 @@
       color: var(--text);
       border: 0.5px solid var(--line-strong);
       padding: 9px 18px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 400;
       min-height: 36px;
+      letter-spacing: 0.02em;
     }
 
     .btn.primary {
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       border: 0;
     }
 
@@ -280,6 +285,12 @@
       background: var(--accent);
       color: #fff;
       border: 0;
+    }
+
+    .btn.danger {
+      background: #FDE8E8;
+      color: #B91C1C;
+      border-color: #FCA5A5;
     }
 
     .small-btn {
@@ -324,12 +335,12 @@
 
     .grid {
       display: grid;
-      gap: 16px;
+      gap: 14px;
     }
 
     .kpis {
       grid-template-columns: repeat(5, minmax(0, 1fr));
-      margin-bottom: 18px;
+      margin-bottom: 20px;
     }
 
     .card {
@@ -337,19 +348,20 @@
       border: 0.5px solid var(--line);
       border-radius: var(--radius-card);
       box-shadow: var(--shadow-card);
-      padding: 18px;
+      padding: 20px 22px;
     }
 
     .kpi-value {
-      font-size: 32px;
-      line-height: 0.95;
+      font-size: 34px;
+      line-height: 0.92;
+      letter-spacing: -0.02em;
     }
 
     .kpi-label {
-      margin-top: 7px;
-      font-size: 11px;
+      margin-top: 8px;
+      font-size: 10px;
       color: var(--text-muted);
-      letter-spacing: 0.08em;
+      letter-spacing: 0.10em;
       text-transform: uppercase;
     }
 
@@ -367,16 +379,17 @@
     .layout-2 {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 360px;
-      gap: 16px;
+      gap: 20px;
       align-items: start;
     }
 
     .section-title {
-      margin: 0 0 14px;
+      margin: 0 0 16px;
       font-family: 'Cormorant', serif;
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 300;
       color: var(--text);
+      letter-spacing: -0.02em;
     }
 
     .mini-row {
@@ -404,9 +417,9 @@
 
     .dark-panel {
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       border-radius: var(--radius-card);
-      padding: 20px;
+      padding: 24px 26px;
     }
 
     .dark-panel h2 {
@@ -426,22 +439,23 @@
       align-items: center;
       border-radius: var(--radius-pill);
       padding: 3px 9px;
-      background: var(--accent-bg);
-      color: var(--accent-dark);
-      border: 0.5px solid #e0cfc0;
-      font-size: 11px;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border: 0.5px solid var(--line);
+      font-size: 10px;
       line-height: 1.3;
+      letter-spacing: 0.04em;
     }
 
     .tag.neutral {
-      background: #f0ece8;
-      color: #5c5248;
-      border-color: #e0d8d0;
+      background: var(--surface-2);
+      color: var(--text-soft);
+      border-color: var(--line);
     }
 
     .tag.dark {
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       border-color: var(--black);
     }
 
@@ -449,6 +463,28 @@
       background: rgba(245, 237, 228, 0.12);
       color: #f5ede4;
       border-color: rgba(245, 237, 228, 0.18);
+    }
+
+    /* Tags predictivos (insights automáticos) */
+    .tag.risk {
+      background: #FDE8E8;
+      color: #B91C1C;
+      border-color: #FCA5A5;
+      font-weight: 500;
+    }
+
+    .tag.good {
+      background: #E8F5E9;
+      color: #1B5E20;
+      border-color: #A5D6A7;
+      font-weight: 500;
+    }
+
+    .tag.gold {
+      background: #FBF3E0;
+      color: #8A6D1B;
+      border-color: #E8D49A;
+      font-weight: 500;
     }
 
     .tags {
@@ -480,16 +516,17 @@
 
     .chip {
       border-radius: var(--radius-pill);
-      padding: 6px 11px;
+      padding: 6px 12px;
       border: 0.5px solid var(--line);
       background: var(--surface);
       color: var(--text-muted);
       font-size: 11px;
+      letter-spacing: 0.02em;
     }
 
     .chip.active {
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       border-color: var(--black);
     }
 
@@ -504,7 +541,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      padding: 14px;
+      padding: 16px 18px;
       background: var(--surface);
       border: 0.5px solid var(--line);
       border-radius: var(--radius-card);
@@ -520,12 +557,12 @@
     }
 
     .avatar {
-      width: 44px;
-      height: 44px;
+      width: 42px;
+      height: 42px;
       flex: 0 0 auto;
       border-radius: 12px;
-      background: var(--accent-bg);
-      color: var(--accent-dark);
+      background: var(--surface-2);
+      color: var(--text-muted);
       display: grid;
       place-items: center;
       font-family: 'Cormorant', serif;
@@ -880,9 +917,9 @@
     /* Agenda */
     .agenda-shell {
       background: var(--surface);
-      border: 0.5px solid rgba(216,204,190,0.72);
-      border-radius: 14px;
-      box-shadow: 0 16px 42px rgba(30,25,21,0.06);
+      border: 0.5px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(14,14,13,0.06);
       flex: 1 1 auto;
       min-height: 70vh;
       overflow: hidden;
@@ -900,13 +937,39 @@
       min-width: 140px;
       text-align: center;
       color: var(--text);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .col-unavailable {
+      position: absolute;
+      left: 0;
+      right: 0;
+      background:
+        repeating-linear-gradient(
+          135deg,
+          rgba(0,0,0,0.07) 0 5px,
+          transparent 5px 10px
+        ),
+        rgba(0,0,0,0.045);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .col-unavailable.full-day {
+      background:
+        repeating-linear-gradient(
+          135deg,
+          rgba(0,0,0,0.05) 0 5px,
+          transparent 5px 10px
+        ),
+        rgba(0,0,0,0.075);
     }
 
     .calendar-wrap {
-      overflow: auto;
-      height: calc(100vh - 182px);
-      min-height: 70vh;
-      max-height: none;
+      overflow-x: auto;
+      overflow-y: visible;
+      height: auto;
       background: var(--surface);
     }
 
@@ -925,7 +988,7 @@
     }
 
     .corner-cell {
-      min-height: 58px;
+      min-height: 76px;
       border-right: 0.5px solid var(--line);
       background: var(--surface-2);
       position: sticky;
@@ -934,29 +997,64 @@
     }
 
     .member-head {
-      min-height: 58px;
-      padding: 10px 12px;
+      min-height: 76px;
+      padding: 10px 8px 8px;
       border-right: 0.5px solid var(--line);
-      border-radius: 12px 12px 0 0;
-      background: var(--surface-2);
-      display: grid;
-      align-content: center;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      text-align: center;
+      min-width: 0;
     }
 
     .member-avatar {
-      display: none;
-    }
-
-    .member-head strong {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      background: var(--surface-2);
+      border: 1.5px solid var(--line-strong);
       font-size: 12px;
-      font-weight: 500;
+      font-weight: 600;
+      letter-spacing: 0.04em;
       color: var(--text);
     }
 
+    .member-copy {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .member-head strong {
+      display: block;
+      max-width: 100%;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .member-head span {
-      margin-top: 3px;
-      font-size: 10px;
+      display: block;
+      max-width: 100%;
+      margin-top: 1px;
+      font-size: 9px;
       color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .calendar-body {
@@ -1012,19 +1110,25 @@
 
     .appointment-block {
       position: absolute;
-      left: 6px;
-      right: 6px;
+      left: 3px;
+      right: 3px;
       border: 0;
-      border-radius: 0 8px 8px 0;
-      padding: 7px 8px;
+      border-radius: 8px;
+      padding: 4px 8px 3px 9px;
       overflow: hidden;
       cursor: pointer;
-      box-shadow: none;
+      box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.04);
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      transition: box-shadow 0.12s ease, filter 0.12s ease;
     }
 
     .appointment-block:hover,
     .appointment-block.selected {
-      outline: 0.5px solid var(--line-strong);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      filter: brightness(0.985);
+      z-index: 3;
     }
     .appointment-block.additional {
       opacity: 0.65;
@@ -1037,50 +1141,70 @@
     }
 
     .appointment-block.manicuria {
-      background: #f5ede4;
-      border-left: 2px solid var(--accent);
+      background: #DCEDF7;
+      border-left: 3px solid #5A93B8;
     }
 
     .appointment-block.eyes {
-      background: #edf4f8;
-      border-left: 2px solid #7aadca;
+      background: #E6E3F4;
+      border-left: 3px solid #8278C2;
     }
 
     .appointment-block.depi {
-      background: #edf2ed;
-      border-left: 2px solid #8aad8a;
+      background: #DFF0E2;
+      border-left: 3px solid #5FA873;
     }
 
     .appointment-block.extra {
-      background: #f0ece8;
-      border-left: 2px solid #b0a090;
+      background: #F7EBDD;
+      border-left: 3px solid #C2935A;
+    }
+
+    /* ── Appointment block content – stacked layout ── */
+    .appt-time-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10.5px;
+      font-weight: 600;
+      color: #1d2b36;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .appt-client-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: #1d2b36;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.25;
+      flex-shrink: 0;
     }
 
     .appt-service {
+      display: block;
+      font-size: 10px;
+      font-weight: 400;
+      color: rgba(29,43,54,0.68);
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      flex-shrink: 0;
+    }
+
+    .appt-flags {
       display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--text);
-      white-space: nowrap;
+      flex-wrap: wrap;
+      gap: 3px;
       overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .appt-client {
+      max-height: 20px;
       margin-top: 2px;
-      font-size: 10px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .appt-time {
-      margin-top: 2px;
-      font-size: 10px;
-      color: var(--text-muted);
+      flex-shrink: 0;
     }
 
     .status-dot {
@@ -1105,54 +1229,111 @@
 
     .mini-flag {
       display: inline-flex;
-      margin-top: 5px;
-      padding: 2px 6px;
+      align-items: center;
+      padding: 1px 6px;
       border-radius: var(--radius-pill);
-      background: rgba(255,255,255,0.45);
+      background: rgba(255,255,255,0.65);
       font-size: 9px;
-      color: var(--accent-dark);
+      font-weight: 500;
+      color: rgba(29,43,54,0.75);
+      white-space: nowrap;
     }
 
     .blocker {
       position: absolute;
-      left: 0;
-      right: 0;
-      padding: 6px 8px;
-      background: rgba(184,169,154,0.18);
+      left: 3px;
+      right: 3px;
+      padding: 5px 9px;
+      border-radius: 8px;
+      background: repeating-linear-gradient(135deg, #ECEAE6 0 7px, #E2DFDA 7px 14px);
       color: var(--text-muted);
-      font-size: 11px;
-      border-top: 0.5px solid var(--line);
-      border-bottom: 0.5px solid var(--line);
+      font-size: 10.5px;
+      font-weight: 500;
+      overflow: hidden;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
     }
+    .blocker:hover { outline: 2px solid #b0a89a; }
+    .blocker-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .blocker-del {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: #a09488;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 1px;
+      border-radius: 4px;
+      display: none;
+    }
+    .blocker:hover .blocker-del { display: block; }
+    .blocker-del:hover { background: rgba(0,0,0,0.1); color: #c0392b; }
 
     .empty-slot {
       position: absolute;
-      left: 7px;
-      right: 7px;
-      border: 0.5px dashed var(--line-strong);
+      left: 3px;
+      right: 3px;
+      border: none;
       border-radius: 8px;
-      padding: 7px 8px;
-      color: var(--text-muted);
-      font-size: 11px;
+      padding: 0;
+      color: transparent;
+      font-size: 0;
       cursor: pointer;
+      transition: background 0.12s ease;
+    }
+
+    .empty-slot:hover {
+      background: rgba(0,0,0,0.035);
+    }
+
+    .empty-slot:hover::after {
+      content: '+';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 16px;
+      font-weight: 300;
+      color: var(--text-muted);
     }
 
     .detail-popover {
       position: fixed;
       display: none;
       width: 380px;
-      max-height: 90vh;
-      overflow-y: auto;
+      max-height: min(88vh, 560px);
       background: var(--surface);
       border: 0.5px solid var(--line);
       border-radius: 16px;
       box-shadow: var(--shadow-drawer);
       z-index: 20;
-      padding: 20px;
+      padding: 0;
+      flex-direction: column;
     }
 
     .detail-popover.open {
-      display: block;
+      display: flex;
+    }
+
+    .popover-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 18px 20px 12px;
+      min-height: 0;
+    }
+
+    .popover-footer {
+      flex-shrink: 0;
+      padding: 10px 16px 14px;
+      border-top: 0.5px solid var(--line);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      background: var(--surface);
+      border-radius: 0 0 16px 16px;
     }
 
     .detail-popover h3 {
@@ -1232,26 +1413,71 @@
       -ms-overflow-style: none;
     }
 
+    /* ── Premium input hover ── */
+    input, select, textarea { transition: border-color 0.15s ease; }
+    input:hover:not(:focus), select:hover:not(:focus) { border-color: var(--line-strong); }
+
+    /* ── Popover premium ── */
+    .detail-popover { border-radius: 20px; padding: 18px 20px; }
+
+    /* ── Agenda filters toggle ── */
+    #agendaFiltersToggle.active { background: var(--black); color: #F6F6F4; border-color: var(--black); }
+
+    /* ── Toolbar filters row ── */
+    .toolbar-row + .toolbar-row { flex-wrap: wrap; gap: 6px; }
+
+    /* ── Sale line rounded ── */
+    .sale-line { border-radius: 14px; padding: 14px; }
+
+    /* ── Danger buttons: neutral red (no terracota) ── */
+    .tiny-btn.danger:hover { background: #FDE8E8; color: #B91C1C; }
+    .small-btn.danger { background: #FDE8E8; color: #B91C1C; border-color: #FCA5A5; }
+    .small-btn.danger:hover { background: #FECACA; }
+    .icon-btn.danger:hover { background: #FDE8E8; color: #B91C1C; }
+
+    /* ── Side note: B&W text (no terracota) ── */
+    .side-note span { color: rgba(246,246,244,0.55) !important; }
+
+    /* ── Cash KPI cards: aligned to B&W system ── */
+    .cash-pos-kpis .card { background: var(--surface) !important; border-color: var(--line) !important; }
+
+    /* ── Appointment block: service line height ── */
+    .appointment-block .appt-service { line-height: 1.35; }
+
     .now-line {
       position: absolute;
       left: 72px;
       right: 0;
-      height: 1px;
-      background: var(--accent);
+      height: 2px;
+      background: #E04F3F;
       z-index: 4;
       pointer-events: none;
+    }
+
+    .now-line::before {
+      content: '';
+      position: absolute;
+      left: -4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #E04F3F;
     }
 
     .now-label {
       position: absolute;
       left: 8px;
       transform: translateY(-50%);
-      padding: 3px 7px;
+      padding: 3px 8px;
       border-radius: var(--radius-pill);
-      background: var(--accent);
+      background: #E04F3F;
       color: #fff;
       font-size: 10px;
-      z-index: 6;
+      font-weight: 600;
+      z-index: 7;
+      box-shadow: 0 1px 4px rgba(224,79,63,0.4);
     }
 
     .agenda-list-view {
@@ -1353,10 +1579,10 @@
     }
 
     #page-cash {
-      --pos-ink: #201c19;
-      --pos-panel: #fffaf5;
-      --pos-muted: #8b7a6d;
-      --pos-line: rgba(216,204,190,0.82);
+      --pos-ink: #0E0E0D;
+      --pos-panel: #FBFBFA;
+      --pos-muted: #666662;
+      --pos-line: rgba(227,227,223,0.9);
     }
 
     .cash-pos-topbar {
@@ -1512,9 +1738,9 @@
     }
 
     .cash-pos-checkout {
-      background: #201c19;
-      color: #fffaf5;
-      border-color: #201c19;
+      background: #0E0E0D;
+      color: #FBFBFA;
+      border-color: #0E0E0D;
     }
 
     .cash-pos-checkout .sale-summary > div {
@@ -1706,6 +1932,20 @@
       margin-bottom: 8px;
     }
 
+    .sale-extras-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .sale-extras-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
     .sale-line-title,
     .payment-line-title {
       font-family: 'Cormorant', serif;
@@ -1759,7 +1999,7 @@
 
     .sale-summary strong {
       font-family: 'Cormorant', serif;
-      font-size: 24px;
+      font-size: 26px;
       font-weight: 300;
       color: var(--text);
     }
@@ -2405,8 +2645,9 @@
       }
 
       .calendar-wrap {
-        height: calc(100vh - 230px);
-        min-height: 62vh;
+        height: auto;
+        overflow-x: auto;
+        overflow-y: visible;
       }
 
       .cash-pos-status,
@@ -2540,12 +2781,16 @@
               <button class="btn" id="todayBtn">Hoy</button>
               <div class="date-control">
                 <button class="icon-btn" id="prevDay">‹</button>
-                <div class="date-title" id="dateTitle">sáb 6 jun</div>
+                <div style="position:relative;display:inline-flex;align-items:center;">
+                  <div class="date-title" id="dateTitle" title="Ir a una fecha">sáb 6 jun</div>
+                  <input type="date" id="agendaDatePicker" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border:none;padding:0;">
+                </div>
                 <button class="icon-btn" id="nextDay">›</button>
               </div>
               <button class="btn primary toolbar-spacer" data-open-appointment>+ Nuevo turno</button>
+              <button class="small-btn" id="agendaFiltersToggle" onclick="toggleAgendaFilters()" title="Filtros de agenda">⚙ Filtros</button>
             </div>
-            <div class="toolbar-row">
+            <div class="toolbar-row" id="agendaFiltersRow" style="display:none;">
               <select class="select-like" id="memberFilter"><option value="Todos">Todos los profesionales</option></select>
               <select class="select-like" id="groupFilter" onchange="onGroupFilterChange()">
                 <option value="Todos">Todos los grupos</option>
@@ -2566,7 +2811,7 @@
                 <span class="agenda-zoom-label" id="agendaZoomLabel">100%</span>
                 <button class="small-btn" id="agendaZoomIn" type="button">+</button>
               </div>
-              <button class="small-btn" id="toggleBlockers">Bloqueos</button>
+              <button class="small-btn" id="toggleBlockers">Bloqueos</button><button class="small-btn primary" id="addBlockerBtn" title="Agregar bloqueo de tiempo">＋ Bloqueo</button>
               <button class="small-btn" id="waitlistBtn">Lista de espera</button>
               <button class="small-btn" id="closeDayBtn">Cerrar día</button>
               <select class="select-like" id="roleView">
@@ -2614,7 +2859,9 @@
           </div>
           <div class="top-actions">
             <button class="btn" id="cashOpenBtn">Abrir caja</button>
+            <button class="btn" id="cashDepositBtn">Registrar seña</button>
             <button class="btn" id="cashWithdrawalBtn">Registrar retiro</button>
+            <button class="btn" id="cashExpenseBtn">Registrar gasto</button>
             <button class="btn" id="cashCloseBtn">Cerrar caja</button>
             <button class="btn primary" id="newSaleBtn">Nueva venta</button>
           </div>
@@ -2664,9 +2911,9 @@
                   <h2 class="section-title" style="margin:0;">Servicios realizados</h2>
                   <button class="small-btn primary" id="addSaleLineBtn">Agregar servicio</button>
                 </div>
+                <div id="reservationBanner" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--accent-bg);border-radius:10px;border:0.5px solid #e0cfc0;font-size:12px;color:var(--accent-dark);"></div>
                 <div id="saleLines"></div>
-                <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-                  <button class="small-btn" id="savePendingSaleBtn">Guardar como pendiente</button>
+                <div style="margin-top:10px;">
                   <button class="small-btn" id="toggleSaleNoteBtn">+ nota interna</button>
                 </div>
                 <div class="sale-note-box" id="saleNoteBox" style="display:none;margin-top:12px;">
@@ -2675,18 +2922,60 @@
               </section>
             </div>
             <aside class="card">
-              <h2 class="section-title">Resumen</h2>
-              <div class="sale-summary simple">
-                <div><span>Servicios</span><strong id="summaryServices">$0</strong></div>
-                <div><span>Propinas</span><strong id="summaryTips">$0</strong></div>
-                <div><span>Anticipo aplicado</span><strong id="summaryDeposits">$0</strong></div>
-                <div class="summary-total"><span>Saldo a cobrar hoy</span><strong id="summaryDue">$0</strong></div>
-                <div><span>Pagos cargados</span><strong id="summaryPayments">$0</strong></div>
-                <div><span>Diferencia</span><strong id="summaryDiff">$0</strong></div>
+              <h2 class="section-title">Cobro de visita</h2>
+
+              <!-- Desglose total visita -->
+              <div style="margin-bottom:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:0.5px solid var(--line);">
+                  <span style="color:var(--text-muted);font-size:12px;">Total visita</span><strong id="summaryGross" style="font-family:'Cormorant',serif;font-size:20px;font-weight:300;">$0</strong>
+                </div>
+                <div id="depositRow" style="display:none;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:0.5px solid var(--line);">
+                  <span style="color:var(--accent-dark);font-size:12px;">− Seña abonada</span><strong id="summaryDeposits" style="font-family:'Cormorant',serif;font-size:20px;font-weight:300;color:var(--accent-dark);">$0</strong>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 0;">
+                  <span style="font-size:13px;font-weight:500;">Saldo a cobrar hoy</span><strong id="summaryDue" style="font-family:'Cormorant',serif;font-size:28px;font-weight:300;">$0</strong>
+                </div>
               </div>
-              <div class="summary-warning" id="summaryWarning">Hay diferencias entre el total a cobrar y los pagos cargados.</div>
-              <div class="detail-actions">
+
+              <!-- Seña (colapsada si es 0) -->
+              <div style="margin-bottom:14px;padding:10px 12px;background:var(--surface-2);border-radius:10px;">
+                <div class="inline-field">
+                  <label>Seña ya abonada (se descuenta del saldo)</label>
+                  <input id="reservationDeposit" type="number" value="0" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                </div>
+              </div>
+
+              <!-- Forma de pago -->
+              <div style="margin-bottom:10px;">
+                <div class="inline-field" style="margin-bottom:8px;"><label>Forma de pago</label></div>
+                <div class="method-chips" id="checkoutMethodPrimary" data-method-group="checkout-primary"></div>
+                <div class="inline-field" style="margin-top:10px;">
+                  <label>Monto que paga hoy</label>
+                  <input id="checkoutPaymentPrimary" type="number" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                </div>
+                <div style="margin-top:8px;">
+                  <button type="button" class="link-btn" id="checkoutMixedToggle">+ segundo pago</button>
+                </div>
+                <div id="checkoutMixedRow" style="display:none;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--line);">
+                  <div class="inline-field" style="margin-bottom:8px;"><label>Segundo medio</label></div>
+                  <div class="method-chips" id="checkoutMethodSecondary" data-method-group="checkout-secondary"></div>
+                  <div class="inline-field" style="margin-top:10px;">
+                    <label>Segundo monto</label>
+                    <input id="checkoutPaymentSecondary" type="number" min="0" value="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Saldo pendiente aviso -->
+              <div id="partialPaymentNotice" style="display:none;margin-top:8px;padding:10px 12px;background:#fff7e8;border:0.5px solid #edd7a7;border-radius:10px;font-size:12px;color:#8a5a14;">
+                La diferencia quedará como <strong>saldo pendiente</strong> asociado a esta visita.
+                Pendiente: <strong id="partialBalance">$0</strong>
+              </div>
+              <div class="summary-warning" id="summaryWarning" style="margin-top:8px;">El monto ingresado supera el saldo a cobrar.</div>
+
+              <div class="detail-actions" style="flex-direction:column;gap:8px;margin-top:14px;">
                 <button class="btn primary" id="registerSaleBtn">Registrar venta</button>
+                <button class="small-btn" id="savePendingSaleBtn">Guardar como pendiente</button>
               </div>
             </aside>
           </div>
@@ -2695,9 +2984,14 @@
           <section class="card"><h2 class="section-title">Pendientes de cobro</h2><div id="pendingChargesList"></div></section>
         </section>
         <section class="cash-section" id="cash-daily">
+          <div class="dark-panel" id="cashDailySummary" style="margin-bottom:16px;"></div>
           <div class="layout-2">
-            <section class="card"><h2 class="section-title">Movimientos</h2><div id="cashMovements"></div></section>
-            <aside class="card"><h2 class="section-title">Totales por medio</h2><div id="cashByMethod"></div><h2 class="section-title" style="margin-top:18px;">Retiros</h2><div id="cashWithdrawals"></div></aside>
+            <section class="card"><h2 class="section-title">Movimientos del día</h2><div id="cashMovements"></div></section>
+            <aside>
+              <section class="card" style="margin-bottom:16px;"><h2 class="section-title">Por medio de pago</h2><div id="cashByMethod"></div></section>
+              <section class="card" style="margin-bottom:16px;"><h2 class="section-title">Retiros</h2><div id="cashWithdrawals"></div></section>
+              <section class="card"><h2 class="section-title">Gastos</h2><div id="cashExpenses"></div></section>
+            </aside>
           </div>
         </section>
         <section class="cash-section" id="cash-tickets">
@@ -2832,10 +3126,19 @@
       <section class="profile-section">
         <h3>Métricas</h3>
         <div class="metric-row">
-          <div class="metric-card"><strong>$32.000</strong><span>Ticket</span></div>
-          <div class="metric-card"><strong>28 días</strong><span>Frecuencia</span></div>
-          <div class="metric-card"><strong>18 días</strong><span>Última</span></div>
+          <div class="metric-card"><strong id="profileMetricTicket">—</strong><span>Ticket prom.</span></div>
+          <div class="metric-card"><strong id="profileMetricFreq">—</strong><span>Frecuencia</span></div>
+          <div class="metric-card"><strong id="profileMetricLast">—</strong><span>Última visita</span></div>
         </div>
+        <div class="metric-row" style="margin-top:8px;">
+          <div class="metric-card"><strong id="profileMetricVisits">—</strong><span>Visitas</span></div>
+          <div class="metric-card"><strong id="profileMetricSpent">—</strong><span>Total histórico</span></div>
+        </div>
+      </section>
+      <section class="profile-section">
+        <h3>Insights automáticos</h3>
+        <div class="tags" id="profileInsightTags" style="margin-bottom:8px;"></div>
+        <div class="key-note" id="profileInsightText">—</div>
       </section>
       <section class="profile-section">
         <h3>Preferencias</h3>
@@ -2853,6 +3156,7 @@
     <footer class="drawer-footer">
       <button class="btn primary" id="profileCreateAppointment">Crear turno</button>
       <button class="btn accent" id="profileMessage">Enviar mensaje</button>
+      <button class="btn" id="profileEditClient">Editar datos</button>
       <button class="btn" id="profileVip">Marcar VIP</button>
     </footer>
   </aside>
@@ -2988,6 +3292,45 @@
     <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmWithdrawalBtn">Registrar retiro</button></footer>
   </aside>
 
+  <aside class="drawer" id="cashDepositDrawer">
+    <header class="drawer-header">
+      <div><div class="eyebrow">Caja</div><h2 class="drawer-title">Registrar seña</h2><p class="drawer-subtitle">Anticipo recibido para una reserva futura. Se aplica automáticamente al cobrar.</p></div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <section class="form-card">
+        <h3>Datos de la seña</h3>
+        <div class="form-grid">
+          <div class="field full"><label>Turno / reserva</label><select id="depositAppointmentSelect"></select></div>
+          <div class="field"><label>Monto</label><input id="depositAmount2" type="number" value="0" min="0"></div>
+          <div class="field"><label>Medio de pago</label><select id="depositMethod2"><option>Transferencia</option><option>Efectivo</option><option>Mercado Pago</option><option>Débito</option><option>Crédito</option></select></div>
+          <div class="field full"><label>Nota</label><textarea id="depositNote2" placeholder="Referencia, aclaración opcional"></textarea></div>
+        </div>
+        <div class="mini-row" style="margin-top:12px;"><strong id="depositAppointmentPreview" style="font-size:13px;">—</strong><span>Seña actual: <span id="depositCurrentAmount">$0</span></span></div>
+      </section>
+    </div>
+    <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmDepositBtn">Registrar seña</button></footer>
+  </aside>
+
+  <aside class="drawer" id="cashExpenseDrawer">
+    <header class="drawer-header">
+      <div><div class="eyebrow">Caja</div><h2 class="drawer-title">Registrar gasto</h2><p class="drawer-subtitle">Insumos, limpieza, servicios, compras u otros egresos del día.</p></div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <section class="form-card">
+        <h3>Datos del gasto</h3>
+        <div class="form-grid">
+          <div class="field"><label>Monto</label><input id="expenseAmount" type="number" value="0" min="0"></div>
+          <div class="field"><label>Categoría</label><select id="expenseCategory"><option>Insumos</option><option>Limpieza</option><option>Servicios (luz, agua, etc.)</option><option>Comida / delivery</option><option>Compras varias</option><option>Otro</option></select></div>
+          <div class="field"><label>Medio de pago</label><select id="expenseMethod"><option>Efectivo</option><option>Transf</option><option>Débito</option><option>Crédito</option></select></div>
+          <div class="field full"><label>Descripción</label><textarea id="expenseNote" placeholder="Detalle del gasto"></textarea></div>
+        </div>
+      </section>
+    </div>
+    <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmExpenseBtn">Registrar gasto</button></footer>
+  </aside>
+
   <aside class="drawer" id="cashCloseDrawer">
     <header class="drawer-header">
       <div><div class="eyebrow">Cierre de caja</div><h2 class="drawer-title">Cerrar caja</h2><p class="drawer-subtitle">Compará efectivo esperado contra efectivo contado.</p></div>
@@ -3020,6 +3363,67 @@
       <div class="footer-actions">
         <button class="btn" data-close>Cancelar</button>
         <button class="btn primary" id="catalogSaveBtn">Guardar</button>
+      </div>
+    </footer>
+  </aside>
+
+  <!-- Blocker Drawer -->
+  <aside class="drawer" id="blockerDrawer">
+    <header class="drawer-header">
+      <div>
+        <div class="eyebrow">Agenda</div>
+        <h2 class="drawer-title" id="blockerDrawerTitle">Nuevo bloqueo</h2>
+        <p class="drawer-subtitle">Bloquea tiempo de una colaboradora: comida, descanso, reunión, formación, etc.</p>
+      </div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <input type="hidden" id="blockerEditId">
+      <div class="form-grid">
+        <div class="field">
+          <label>Colaboradora</label>
+          <select id="blockerMember"></select>
+        </div>
+        <div class="field">
+          <label>Etiqueta</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;" id="blockerPresets">
+            <button type="button" class="chip" data-preset="Comida">🍽 Comida</button>
+            <button type="button" class="chip" data-preset="Descanso">☕ Descanso</button>
+            <button type="button" class="chip" data-preset="Reunión">📋 Reunión</button>
+            <button type="button" class="chip" data-preset="Formación">📚 Formación</button>
+            <button type="button" class="chip" data-preset="No disponible">🚫 No disponible</button>
+          </div>
+          <input type="text" id="blockerLabel" placeholder="O escribí una etiqueta personalizada…" style="width:100%;">
+        </div>
+        <div class="field">
+          <label>Fecha <span style="font-weight:400;color:var(--text-muted)">(vacío = todos los días)</span></label>
+          <input type="date" id="blockerDate" style="width:100%;">
+        </div>
+        <div class="field">
+          <label>Hora inicio</label>
+          <input type="time" id="blockerStart" step="900" style="width:100%;">
+        </div>
+        <div class="field">
+          <label>Duración</label>
+          <select id="blockerDuration" style="width:100%;">
+            <option value="15">15 minutos</option>
+            <option value="30" selected>30 minutos</option>
+            <option value="45">45 minutos</option>
+            <option value="60">1 hora</option>
+            <option value="90">1 hora 30 min</option>
+            <option value="120">2 horas</option>
+            <option value="150">2 horas 30 min</option>
+            <option value="180">3 horas</option>
+            <option value="240">4 horas</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <footer class="drawer-footer">
+      <div class="footer-actions">
+        <button class="btn" data-close>Cancelar</button>
+        <button class="btn danger" id="blockerDeleteBtn" style="display:none;">Eliminar</button>
+        <button class="btn primary" id="blockerSaveBtn">Guardar bloqueo</button>
       </div>
     </footer>
   </aside>
@@ -3169,7 +3573,21 @@
     function showPage(page){state.page=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('page-'+page).classList.add('active');document.querySelectorAll('.nav button,.mobile-module-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
     document.querySelectorAll('.nav button,.mobile-module-nav button,[data-go]').forEach(b=>b.onclick=()=>showPage(b.dataset.page||b.dataset.go));
     function openDrawer(id){$(id).classList.add('open');$('overlay').classList.add('open')} function closeDrawers(){document.querySelectorAll('.drawer').forEach(d=>d.classList.remove('open'));$('overlay').classList.remove('open')}
-    document.querySelectorAll('[data-open-client]').forEach(b=>b.onclick=()=>openDrawer('clientDrawer')); document.querySelectorAll('[data-open-collaborator]').forEach(b=>b.onclick=()=>openDrawer('collaboratorDrawer')); document.querySelectorAll('[data-open-appointment]').forEach(b=>b.onclick=()=>{fillAppointmentOptions();openDrawer('appointmentDrawer')});
+    document.querySelectorAll('[data-open-client]').forEach(b=>b.onclick=()=>openClientDrawerNew());
+    document.querySelectorAll('[data-open-collaborator]').forEach(b=>b.onclick=()=>{
+      state.editingCollaboratorId = null;
+      buildCollaboratorForm();
+      $('coFirst').value=''; $('coLast').value=''; $('coPhone').value=''; $('coEmail').value=''; $('coType').value='professional'; $('coCan').value='yes';
+      const header = document.querySelector('#collaboratorDrawer .eyebrow');
+      const title = document.querySelector('#collaboratorDrawer .drawer-title');
+      const saveBtn = $('saveCollaborator');
+      if(header) header.textContent = 'Nueva colaboradora';
+      if(title) title.textContent = 'Cargar colaboradora';
+      if(saveBtn) saveBtn.textContent = 'Guardar';
+      updatePreviews();
+      openDrawer('collaboratorDrawer');
+    });
+    document.querySelectorAll('[data-open-appointment]').forEach(b=>b.onclick=()=>{fillAppointmentOptions();openDrawer('appointmentDrawer')});
     document.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeDrawers); $('overlay').onclick=closeDrawers;
 
     function activeAppointments(){ return state.appointments.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)); }
@@ -3201,10 +3619,62 @@
     }
     function clientCode(c){ return c.code || `GL-${String(state.clients.indexOf(c)+1).padStart(6,'0')}`; }
     function nextClientCode(){ return `GL-${String(state.clients.length+1).padStart(6,'0')}`; }
+
+    // ── Insights comerciales automáticos por cliente ──────────────────
+    function clientVisitDays(clientId){
+      const days = new Set();
+      state.salesTickets.forEach(t=>{
+        if(t.clientId===clientId && t.status!=='voided' && t.createdAt) days.add(t.createdAt.slice(0,10));
+      });
+      const today = dateKey(new Date());
+      state.appointments.forEach(a=>{
+        if(a.clientId===clientId && !['cancelled','cancelado','voided'].includes(a.status) && a.date && a.date<=today) days.add(a.date);
+      });
+      return [...days].sort();
+    }
+    function clientInsights(clientId){
+      const days = clientVisitDays(clientId);
+      const visits = days.length;
+      const tickets = state.salesTickets.filter(t=>t.clientId===clientId && t.status!=='voided');
+      const totalSpent = tickets.reduce((s,t)=>s+Number(t.grossTotal||0),0);
+      const avgTicket = tickets.length ? Math.round(totalSpent/tickets.length) : 0;
+      const msDay = 86400000;
+      let frequency = null;
+      if(visits>=2){
+        const gaps = [];
+        for(let i=1;i<days.length;i++) gaps.push((new Date(days[i])-new Date(days[i-1]))/msDay);
+        frequency = Math.round(gaps.reduce((a,b)=>a+b,0)/gaps.length);
+      }
+      const daysSinceLast = visits ? Math.round((new Date(dateKey(new Date()))-new Date(days[days.length-1]))/msDay) : null;
+      const allTickets = state.salesTickets.filter(t=>t.status!=='voided');
+      const salonAvg = allTickets.length ? allTickets.reduce((s,t)=>s+Number(t.grossTotal||0),0)/allTickets.length : 0;
+      const tags = [];
+      if(visits===0) tags.push({label:'Sin historial',cls:'neutral'});
+      else if(visits===1) tags.push({label:'Nueva',cls:'neutral'});
+      if(visits>0){
+        const threshold = frequency ? Math.max(30, frequency*1.8) : 60;
+        if(daysSinceLast>threshold) tags.push({label:'Riesgo de abandono',cls:'risk'});
+      }
+      if(frequency!==null && frequency<=21 && visits>=3) tags.push({label:'Frecuente',cls:'good'});
+      if(avgTicket>0 && salonAvg>0 && avgTicket>=salonAvg*1.4) tags.push({label:'Alto valor',cls:'gold'});
+      return {visits,totalSpent,avgTicket,frequency,daysSinceLast,tags};
+    }
+    function insightTagsHtml(ins){ return ins.tags.map(t=>`<span class="tag ${t.cls}">${t.label}</span>`).join(''); }
+    function frequencyLabel(ins){
+      if(ins.frequency) return `visita cada ${ins.frequency} días`;
+      if(ins.visits===1) return '1 visita registrada';
+      if(ins.visits>1) return `${ins.visits} visitas`;
+      return 'sin visitas aún';
+    }
+
     function renderClients(){
       const q=state.clientSearch.toLowerCase();
       const list=state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c),...c.tags].join(' ').toLowerCase().includes(q));
-      $('clientsList').innerHTML=list.map(c=>`<article class="client-card"><div class="client-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${clientCode(c)} · ${c.phone} · ${c.email||'Sin email'} · visita cada 28 días</div><div class="tags">${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="openClientProfile('${c.id}')">Ver perfil</button><button class="small-btn" onclick="fillAppointmentOptions('${c.id}');openDrawer('appointmentDrawer')">Crear turno</button></div></article>`).join('')
+      $('clientsList').innerHTML=list.map(c=>{
+        const ins = clientInsights(c.id);
+        const lastTxt = ins.daysSinceLast!==null ? ` · última hace ${ins.daysSinceLast} día(s)` : '';
+        return `<article class="client-card"><div class="client-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${clientCode(c)} · ${c.phone} · ${c.email||'Sin email'} · ${frequencyLabel(ins)}${lastTxt}</div><div class="tags">${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}${insightTagsHtml(ins)}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="openClientProfile('${c.id}')">Ver perfil</button><button class="small-btn" onclick="fillAppointmentOptions('${c.id}');openDrawer('appointmentDrawer')">Crear turno</button></div></article>`;
+      }).join('')
     }
     $('clientSearch').oninput=e=>{state.clientSearch=e.target.value;renderClients()};
     function renderTeam(){
@@ -3220,7 +3690,7 @@
       $('teamKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
       $('teamList').innerHTML=state.collaborators.map(c=>{
         const groupLabels = (c.groupIds||[]).map(id=>state.catalog.groups.find(g=>g.id===id)?.name||'').filter(Boolean);
-        return `<article class="person-card"><div class="person-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${c.phone}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${g}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${c.days} · ${c.hours}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="showToast('${fullName(c)} se usa en Agenda')">Ver</button></div></article>`
+        return `<article class="person-card"><div class="person-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${c.phone}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${g}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${c.days} · ${c.hours}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="editCollaborator('${c.id}')">Editar</button></div></article>`
       }).join('')
     }
 
@@ -3609,8 +4079,32 @@
       const group = $('editAddGroup')?.value||'Manicuria';
       if(!name||!price) return showToast('Completá nombre y precio.');
       const add = state.catalog.additionals.find(a=>a.id===id);
-      if(add){ add.name=name; add.price=price; add.duration=duration; add.group=group; }
-      closeDrawers();renderCatalog();updateServiceGroupFromCatalog();showToast('Adicional actualizado.');
+      if(!add) return;
+
+      const affectedAppts = state.appointments.filter(a=>a.isAdditional && a.variantId===id);
+      const priceChanged = price !== add.price;
+      const nameChanged = name !== add.name;
+      const durationChanged = duration !== add.duration;
+
+      if(affectedAppts.length && (priceChanged || nameChanged || durationChanged)){
+        const changes = [priceChanged && `precio $${add.price}→$${price}`, nameChanged && `nombre`, durationChanged && `duración`].filter(Boolean).join(', ');
+        const msg = `Este adicional aparece en ${affectedAppts.length} turno(s) agendado(s) (${changes}). ¿Actualizar los turnos existentes?`;
+        if(confirm(msg)){
+          affectedAppts.forEach(a=>{
+            if(priceChanged) a.price=price;
+            if(nameChanged) a.service=name;
+            if(durationChanged){ a.duration=duration; a.end=addMinutes(a.start,duration); }
+          });
+          showToast(`Adicional y ${affectedAppts.length} turno(s) actualizados.`);
+        } else {
+          showToast('Catálogo actualizado. Turnos existentes mantienen valores anteriores.');
+        }
+      } else {
+        showToast('Adicional actualizado.');
+      }
+
+      add.name=name; add.price=price; add.duration=duration; add.group=group;
+      closeDrawers(); saveState(); renderCatalog(); updateServiceGroupFromCatalog(); renderAgenda();
     }
 
     function updateProduct(id){
@@ -3713,19 +4207,13 @@
       if(service && service.toLowerCase().includes('kapping')) return 36000;
       return 28000;
     }
-    const saleAddons = [
-      {id:'retiro', name:'Retiro', price:6000},
-      {id:'reparacion', name:'Reparación', price:5000},
-      {id:'diseno', name:'Diseño premium', price:9000},
-      {id:'tratamiento', name:'Tratamiento', price:8000}
-    ];
     const paymentMethods = ['Efectivo','Transf','MP','Débito','Crédito'];
     state.saleClient = {clientId:null, clientName:''};
     state.appointmentClient = {clientId:null, clientName:''};
     state.cashMode = 'admin';
     state.cashCurrentCollaboratorId = 'co1';
     state.cashClosings = [];
-    state.cashSession = {isOpen:false, openingAmount:0, openedBy:null, openedAt:null, closedAt:null, countedCash:null, withdrawals:[]};
+    state.cashSession = {isOpen:false, openingAmount:0, openedBy:null, openedAt:null, closedAt:null, countedCash:null, withdrawals:[], expenses:[]};
     state.afterClientCreate = null;
     state.saleSource = 'appointment';
     state.saleAppointmentId = null;
@@ -3744,16 +4232,16 @@
     }
     function renderCashKpis(){
       const confirmed = state.salesTickets.filter(t=>t.status==='confirmed');
-      const services = confirmed.reduce((s,t)=>s+t.servicesTotal,0);
-      const tips = confirmed.reduce((s,t)=>s+t.tipsTotal,0);
-      const collected = state.payments.filter(p=>p.type!=='refund' && p.type!=='deposit_applied').reduce((s,p)=>s+Number(p.amount||0),0);
-      const cash = state.payments.filter(p=>p.method==='Efectivo').reduce((s,p)=>s+Number(p.amount||0),0);
+      const ingresos = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      const transferTotal = state.payments.filter(p=>p.type==='service'&&!p.voided&&p.method==='Transf').reduce((s,p)=>s+Number(p.amount||0),0);
+      const expenses = (state.cashSession.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
+      const cashExpected = cashExpectedAmount();
       const pending = state.pendingCharges.filter(p=>p.status==='pending').length;
       const items = [
-        ['Servicios', money(services), 'tickets confirmados'],
-        ['Propinas', money(tips), 'separadas'],
-        ['Cobrado', money(collected), 'medios de pago'],
-        ['Efectivo', money(cash), 'esperado'],
+        ['Ingresó hoy', money(ingresos), 'cobrado en el día'],
+        ['En efectivo', money(cashExpected), 'esperado en caja'],
+        ['Por transferencia', money(transferTotal), 'acreditado'],
+        ['Gastos', money(expenses), 'egresos del día'],
         ['Pendientes', pending, 'por cobrar']
       ];
       $('cashKpis').innerHTML = items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
@@ -3769,9 +4257,10 @@
     }
     function isCashAdmin(){ return state.cashMode === 'admin'; }
     function cashExpectedAmount(){
-      const cashSales = state.payments.filter(p=>p.method==='Efectivo').reduce((sum,p)=>sum+Number(p.amount||0),0);
-      const withdrawals = state.cashSession.withdrawals.reduce((sum,w)=>sum+Number(w.amount||0),0);
-      return Number(state.cashSession.openingAmount||0) + cashSales - withdrawals;
+      const cashIn = state.payments.filter(p=>p.method==='Efectivo'&&!p.voided).reduce((sum,p)=>sum+Number(p.amount||0),0);
+      const withdrawals = (state.cashSession.withdrawals||[]).reduce((sum,w)=>sum+Number(w.amount||0),0);
+      const cashExpenses = (state.cashSession.expenses||[]).filter(e=>e.method==='Efectivo').reduce((sum,e)=>sum+Number(e.amount||0),0);
+      return Number(state.cashSession.openingAmount||0) + cashIn - withdrawals - cashExpenses;
     }
 
     function renderCashStatus(){
@@ -3781,7 +4270,7 @@
         $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja cerrada</strong><span>Para registrar ventas del día, primero abrí caja con monto inicial obligatorio.</span><div style="margin-top:8px"><button class="small-btn primary" onclick="openCashSession()">Abrir caja</button></div></div>`;
         return;
       }
-      const cashSales = state.payments.filter(p=>p.method==='Efectivo').reduce((s,p)=>s+Number(p.amount||0),0);
+      const cashSales = state.payments.filter(p=>p.method==='Efectivo'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
       const withdrawals = session.withdrawals.reduce((s,w)=>s+Number(w.amount||0),0);
       const expected = Number(session.openingAmount||0) + cashSales - withdrawals;
       $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja abierta</strong><span>Apertura: ${money(session.openingAmount)} · Efectivo esperado ahora: ${money(expected)} · Abrió: ${session.openedBy||'Admin caja'}</span></div>`;
@@ -3820,6 +4309,70 @@
       showToast('Retiro registrado');
     }
 
+    function registerDeposit(){
+      if(!state.cashSession.isOpen) return showToast('Primero abrí caja.');
+      const sel = $('depositAppointmentSelect');
+      if(sel){
+        const reservations = [];
+        const seen = new Set();
+        activeAppointments().filter(a=>!a.isAdditional).forEach(a=>{
+          const key = reservationKey(a);
+          if(seen.has(key)) return;
+          seen.add(key);
+          const related = reservationAppointments(a);
+          reservations.push({id:a.id, label:`${a.start} · ${fullName(client(a.clientId))} · ${related.map(r=>r.service).join(' + ')}`});
+        });
+        sel.innerHTML = reservations.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
+        sel.onchange = () => {
+          const appt = state.appointments.find(x=>x.id===sel.value);
+          if($('depositAppointmentPreview')) $('depositAppointmentPreview').textContent = appt ? `${fullName(client(appt.clientId))} · ${appt.service}` : '—';
+          if($('depositCurrentAmount')) $('depositCurrentAmount').textContent = money(appointmentDepositAmount(appt));
+        };
+        sel.dispatchEvent(new Event('change'));
+      }
+      if($('depositAmount2')) $('depositAmount2').value = 0;
+      if($('depositNote2')) $('depositNote2').value = '';
+      openDrawer('cashDepositDrawer');
+    }
+    function confirmDeposit(){
+      const amount = Number($('depositAmount2')?.value || 0);
+      if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
+      const apptId = $('depositAppointmentSelect')?.value;
+      const appt = apptId ? state.appointments.find(a=>a.id===apptId) : null;
+      if(appt){
+        const related = reservationAppointments(appt);
+        related.forEach(a=>{ a.bookingDepositAmount = amount; a.depositMethod = $('depositMethod2')?.value || 'Transferencia'; a.deposit = 'paid'; });
+        if(related[0]) related[0].depositAmount = amount;
+      }
+      state.payments.push({id:uid('dep'),ticketId:null,appointmentId:apptId||null,amount,method:$('depositMethod2')?.value||'Transferencia',type:'deposit_received',reference:$('depositNote2')?.value||'',note:`Seña recibida${appt?' · '+fullName(client(appt.clientId)):''}`});
+      closeDrawers();
+      renderAll();
+      showToast(`Seña de ${money(amount)} registrada`);
+    }
+    function registerExpense(){
+      if(!isCashAdmin()) return showToast('Solo admin caja puede registrar gastos.');
+      if(!state.cashSession.isOpen) return showToast('Primero abrí caja.');
+      if($('expenseAmount')) $('expenseAmount').value = 0;
+      if($('expenseNote')) $('expenseNote').value = '';
+      openDrawer('cashExpenseDrawer');
+    }
+    function confirmExpense(){
+      const amount = Number($('expenseAmount')?.value || 0);
+      if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
+      if(!state.cashSession.expenses) state.cashSession.expenses = [];
+      state.cashSession.expenses.push({
+        id:'exp'+Date.now(),
+        amount,
+        category: $('expenseCategory')?.value || 'Otro',
+        method: $('expenseMethod')?.value || 'Efectivo',
+        note: $('expenseNote')?.value || '',
+        createdAt: new Date().toISOString(),
+        createdBy: state.cashMode === 'admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId))
+      });
+      closeDrawers();
+      renderAll();
+      showToast('Gasto registrado');
+    }
     function setCashTab(tab){
       state.cashTab = tab;
       document.querySelectorAll('[data-cash-tab]').forEach(b=>b.classList.toggle('active', b.dataset.cashTab===tab));
@@ -3859,10 +4412,10 @@
         seen.add(key);
         const related = reservationAppointments(a);
         const services = related.map(r=>r.service).join(' + ');
-        const total = related.reduce((sum,r)=>sum+Number(r.price||estimateAmount(r)||0),0);
+        const total = related.reduce((sum,r)=>sum+Number(currentApptPrice(r)||estimateAmount(r)||0),0);
         reservations.push({id:a.id,start:related[0]?.start||a.start,clientName:fullName(client(a.clientId)),services,total,count:related.length});
       });
-      $('saleAppointmentSelect').innerHTML = reservations.map(r=>`<option value="${r.id}">${r.start} · ${r.clientName} · ${r.count} servicio(s) · ${servicesShort(r.services)} · ${money(r.total)}</option>`).join('');
+      $('saleAppointmentSelect').innerHTML = reservations.map(r=>`<option value="${r.id}">${r.start} · ${r.clientName} · ${r.count>1?`[${r.count} servicios] `:''}${servicesShort(r.services)} · ${money(r.total)}</option>`).join('');
       if(reservations.some(r=>r.id===current)) {
         state.saleAppointmentId = current;
         $('saleAppointmentSelect').value = current;
@@ -3884,7 +4437,7 @@
       if(source === 'new') {
         state.afterClientCreate = 'sale';
         showToast('Creá el cliente y volverás a Caja.');
-        openDrawer('clientDrawer');
+        openClientDrawerNew();
       }
       updateSaleSummary();
     }
@@ -3897,8 +4450,29 @@
       if($('saleLines')) {
         $('saleLines').innerHTML='';
         const related = reservationAppointments(appt);
+        const additionals = activeAppointments().filter(a=>reservationKey(a)===reservationKey(appt) && a.isAdditional);
         const deposit = reservationDeposit(related);
-        related.forEach((line,idx)=>addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:estimateAmount(line), depositAmount:idx===0?deposit:0}));
+        if($('reservationDeposit')) $('reservationDeposit').value = deposit;
+        related.forEach(line=>{
+          addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
+          const lineAdds = additionals.filter(a=>a.memberId===line.memberId);
+          if(lineAdds.length){
+            const saleLineEl = $('saleLines').lastElementChild;
+            lineAdds.forEach(add=>{
+              const chip = saleLineEl.querySelector(`.sale-addon[data-addon-id="${add.variantId}"]`);
+              if(chip){ chip.classList.add('selected'); saleLineEl.querySelector('.sale-extras')?.classList.add('open'); }
+            });
+          }
+        });
+      }
+      const related = reservationAppointments(appt);
+      if($('reservationBanner')){
+        if(related.length > 1){
+          $('reservationBanner').style.display='block';
+          $('reservationBanner').textContent = `Reserva combinada · ${related.length} servicios · ${related.map(r=>r.service).join(' + ')}`;
+        } else {
+          $('reservationBanner').style.display='none';
+        }
       }
       updateSaleSummary();
     }
@@ -3919,6 +4493,17 @@
       }
       return null;
     }
+    function getAdditionalFromId(addId){
+      return state.catalog.additionals.find(a=>a.id===addId) || null;
+    }
+    function currentApptPrice(appt){
+      if(appt.isAdditional){
+        const add = getAdditionalFromId(appt.variantId);
+        return add ? add.price : appt.price;
+      }
+      const vi = getVariantFromId(appt.variantId);
+      return vi ? vi.variant.price : appt.price;
+    }
     function methodChips(selected='Efectivo', prefix='primary'){
       return `<div class="method-chips" data-method-group="${prefix}">${paymentMethods.map(m=>`<button type="button" class="method-chip ${m===selected?'active':''}" data-method="${m}">${m}</button>`).join('')}</div>`;
     }
@@ -3927,9 +4512,12 @@
     }
     function addSaleLine(prefill={}){
       const id = 'line'+(++state.saleLineSeq);
-      const service = prefill.service || 'Semipermanente';
-      const group = prefill.group || findServiceGroup(service);
-      const price = prefill.finalPrice || servicePrice(group, service);
+      // Default to first catalog variant so price and service display stay in sync
+      const defaultVariantId = state.catalog.groups[0]?.services[0]?.variants[0]?.id || '';
+      const defaultVariantInfo = defaultVariantId ? getVariantFromId(defaultVariantId) : null;
+      const service = prefill.service || defaultVariantId;
+      const group = prefill.group || defaultVariantInfo?.group.name || findServiceGroup(service);
+      const price = prefill.finalPrice !== undefined ? prefill.finalPrice : (defaultVariantInfo?.variant.price || 0);
       const collaboratorId = prefill.collaboratorId || (state.collaborators.find(c=>c.can)||{}).id || '';
       const html = `<div class="sale-line" data-sale-line="${id}">
         <div class="sale-line-grid">
@@ -3937,82 +4525,45 @@
           <select class="sale-service" aria-label="Servicio">${serviceOptionsFlat(service)}</select>
           <input class="sale-final" aria-label="Precio" type="number" value="${price}" placeholder="$ precio">
         </div>
-        <div class="sale-payment-row">
-          <div class="inline-field"><label>Anticipo/seña</label><input class="sale-deposit" type="number" value="${prefill.depositAmount||0}" placeholder="0"></div>
-          ${methodChips('Efectivo','primary')}
-          <div class="inline-field"><label>A cobrar hoy</label><input class="payment-amount primary-payment" type="number" value="${price}" placeholder="Monto"></div>
-          <button type="button" class="link-btn mixed-toggle">+ pago mixto</button>
-        </div>
-        <div class="mixed-payment-row">
-          <div class="sale-payment-row mixed-inner-row">
-            <span></span>
-            ${methodChips('Transf','secondary')}
-            <div class="inline-field"><label>Segundo pago</label><input class="payment-amount secondary-payment" type="number" value="0" placeholder="Monto"></div>
-            <span></span>
-          </div>
-        </div>
-        <div class="sale-line-links"><button type="button" class="link-btn extras-toggle">+ extras</button><button type="button" class="small-btn pending-line">Guardar para cobrar después</button><button type="button" class="link-btn" data-remove-line="${id}">quitar</button></div>
-        <div class="sale-line-status warn">Falta validar pago</div>
+        <div class="sale-line-links"><button type="button" class="link-btn extras-toggle">+ extras</button><button type="button" class="link-btn" data-remove-line="${id}">quitar</button></div>
+        <div class="sale-line-status warn">Falta validar</div>
         <div class="sale-extras">
           <div class="sale-extras-grid">
-            <input class="sale-tip" type="number" value="${prefill.tipAmount||0}" placeholder="Propina">
-            <input class="sale-reference" type="text" value="${prefill.reference||''}" placeholder="Referencia pago">
+            <div class="sale-extras-field">
+              <label class="sale-extras-label">Propina</label>
+              <input class="sale-tip" type="number" min="0" value="${prefill.tipAmount||0}" placeholder="$0">
+            </div>
+            <div class="sale-extras-field">
+              <label class="sale-extras-label">Referencia / nota</label>
+              <input class="sale-reference" type="text" value="${prefill.reference||''}" placeholder="Ej: transferencia #12345">
+            </div>
           </div>
-          <div class="addon-row">${saleAddons.map(a=>`<span class="select-chip sale-addon" data-price="${a.price}" data-addon-id="${a.id}">${a.name} · ${money(a.price)}</span>`).join('')}</div>
+          <div class="addon-row">${state.catalog.additionals.map(a=>`<span class="select-chip sale-addon" data-price="${a.price}" data-addon-id="${a.id}">${a.name} · ${money(a.price)}</span>`).join('')}</div>
         </div>
       </div>`;
       $('saleLines').insertAdjacentHTML('beforeend', html);
       bindSaleLine($('saleLines').lastElementChild);
-      updateLinePayment($('saleLines').lastElementChild);
       updateSaleSummary();
     }
     function bindSaleLine(line){
       line.querySelector('[data-remove-line]').onclick = () => { line.remove(); updateSaleSummary(); };
       line.querySelector('.extras-toggle').onclick = () => line.querySelector('.sale-extras').classList.toggle('open');
-      line.querySelector('.mixed-toggle').onclick = () => line.querySelector('.mixed-payment-row').classList.toggle('open');
-      line.querySelector('.pending-line').onclick = () => saveSinglePendingLine(line);
       line.querySelector('.sale-service').onchange = e => {
         const info = getVariantFromId(e.target.value);
         if(info){
           line.querySelector('.sale-final').value = info.variant.price;
-          line.querySelector('.payment-amount.primary-payment').value = info.variant.price;
         }
-        updateLinePayment(line);
         updateSaleSummary();
       };
-      line.querySelectorAll('.method-chip').forEach(chip=>chip.onclick=()=>{
-        chip.parentElement.querySelectorAll('.method-chip').forEach(c=>c.classList.remove('active'));
-        chip.classList.add('active');
-        updateSaleSummary();
-      });
-      line.querySelectorAll('input,select').forEach(el=>{el.oninput=()=>{if(!el.classList.contains('payment-amount')) updateLinePayment(line); updateSaleSummary();}; el.onchange=()=>{if(!el.classList.contains('payment-amount')) updateLinePayment(line); updateSaleSummary();};});
-      line.querySelectorAll('.sale-addon').forEach(chip=>chip.onclick=()=>{chip.classList.toggle('selected'); updateLinePayment(line); updateSaleSummary();});
+      line.querySelectorAll('input,select').forEach(el=>{el.oninput=()=>updateSaleSummary(); el.onchange=()=>updateSaleSummary();});
+      line.querySelectorAll('.sale-addon').forEach(chip=>chip.onclick=()=>{chip.classList.toggle('selected'); updateSaleSummary();});
     }
     function lineServiceSubtotal(line){
       const addons = Array.from(line.querySelectorAll('.sale-addon.selected')).reduce((s,a)=>s+Number(a.dataset.price||0),0);
       return Number(line.querySelector('.sale-final').value||0) + addons;
     }
-    function lineDepositApplied(line){
-      return Math.min(Number(line.querySelector('.sale-deposit')?.value||0), lineServiceSubtotal(line));
-    }
     function lineTotal(line){
-      return lineServiceSubtotal(line) + Number(line.querySelector('.sale-tip').value||0);
-    }
-    function lineBalanceDueToday(line){
-      return Math.max(0, lineTotal(line) - lineDepositApplied(line));
-    }
-    function updateLinePayment(line){
-      const total = lineBalanceDueToday(line);
-      const primary = line.querySelector('.primary-payment');
-      const secondary = line.querySelector('.secondary-payment');
-      const mixedOpen = line.querySelector('.mixed-payment-row').classList.contains('open');
-      if(mixedOpen){
-        const secondaryValue = Number(secondary.value||0);
-        if(document.activeElement !== primary) primary.value = Math.max(0,total-secondaryValue);
-      } else {
-        if(document.activeElement !== primary) primary.value = total;
-        secondary.value = 0;
-      }
+      return lineServiceSubtotal(line) + Number(line.querySelector('.sale-tip')?.value||0);
     }
     function collectSaleLines(){
       return Array.from(document.querySelectorAll('[data-sale-line]')).map(line=>{
@@ -4022,56 +4573,60 @@
         const groupName = info ? info.group.name : '';
         const addons = Array.from(line.querySelectorAll('.sale-addon.selected')).map(a=>({id:a.dataset.addonId,name:a.textContent.split(' · ')[0],price:Number(a.dataset.price||0)}));
         const baseFinal = Number(line.querySelector('.sale-final').value||0) + addons.reduce((s,a)=>s+a.price,0);
-        const payments = [{method:selectedMethod(line,'primary'),amount:Number(line.querySelector('.primary-payment').value||0)}];
-        if(line.querySelector('.mixed-payment-row').classList.contains('open')) payments.push({method:selectedMethod(line,'secondary'),amount:Number(line.querySelector('.secondary-payment').value||0)});
-        return {collaboratorId:line.querySelector('.sale-collaborator').value,group:groupName,service:serviceName,variantId,addons,finalPrice:baseFinal,depositAmount:Number(line.querySelector('.sale-deposit').value||0),depositAppliedAmount:Math.min(Number(line.querySelector('.sale-deposit').value||0), baseFinal),tipAmount:Number(line.querySelector('.sale-tip').value||0),reference:line.querySelector('.sale-reference')?.value||'',payments:payments.filter(p=>p.amount>0)};
+        return {collaboratorId:line.querySelector('.sale-collaborator').value,group:groupName,service:serviceName,variantId,addons,finalPrice:baseFinal,tipAmount:Number(line.querySelector('.sale-tip')?.value||0),reference:line.querySelector('.sale-reference')?.value||''};
       }).filter(l=>l.collaboratorId && l.service);
     }
-    function collectSalePayments(){return collectSaleLines().flatMap(l=>l.payments)}
+    function collectSalePayments(){
+      const payments = [];
+      const primaryAmt = Number($('checkoutPaymentPrimary')?.value||0);
+      const primaryMethod = document.querySelector('#checkoutMethodPrimary .method-chip.active')?.dataset.method || 'Efectivo';
+      if(primaryAmt > 0) payments.push({method:primaryMethod, amount:primaryAmt});
+      if($('checkoutMixedRow')?.style.display !== 'none'){
+        const secondaryAmt = Number($('checkoutPaymentSecondary')?.value||0);
+        const secondaryMethod = document.querySelector('#checkoutMethodSecondary .method-chip.active')?.dataset.method || 'Transf';
+        if(secondaryAmt > 0) payments.push({method:secondaryMethod, amount:secondaryAmt});
+      }
+      return payments;
+    }
     function saleTotals(){
       const lines = collectSaleLines();
       const services = lines.reduce((s,l)=>s+l.finalPrice,0);
       const tips = lines.reduce((s,l)=>s+l.tipAmount,0);
       const grossTotal = services + tips;
-      const depositApplied = lines.reduce((s,l)=>s+Number(l.depositAppliedAmount||0),0);
+      const depositApplied = Math.min(Number($('reservationDeposit')?.value||0), grossTotal);
       const due = Math.max(0, grossTotal - depositApplied);
-      const payments = lines.flatMap(l=>l.payments).reduce((s,p)=>s+p.amount,0);
+      const payments = collectSalePayments().reduce((s,p)=>s+p.amount,0);
       return {lines,services,tips,grossTotal,depositApplied,due,payments};
     }
-    function linePaymentTotal(line){
-      const primary = Number(line.querySelector('.primary-payment')?.value || 0);
-      const secondary = line.querySelector('.mixed-payment-row')?.classList.contains('open') ? Number(line.querySelector('.secondary-payment')?.value || 0) : 0;
-      return primary + secondary;
-    }
+    function linePaymentTotal(line){ return 0; }
     function updateLineStatus(line){
       const status = line.querySelector('.sale-line-status');
       if(!status) return;
       const collaborator = line.querySelector('.sale-collaborator')?.value;
       const service = line.querySelector('.sale-service')?.value;
-      const total = lineBalanceDueToday(line);
-      const paid = linePaymentTotal(line);
-      let text = 'Completa';
-      let ok = true;
-      if(!collaborator){ text = 'Falta colaboradora'; ok = false; }
-      else if(!service){ text = 'Falta servicio'; ok = false; }
-      else if(Math.abs(total - paid) > 1){ text = `Pago incompleto: faltan ${money(total - paid)}`; ok = false; }
-      status.textContent = text;
+      const ok = !!(collaborator && service);
+      status.textContent = ok ? 'Completa' : (!collaborator ? 'Falta colaboradora' : 'Falta servicio');
       status.classList.toggle('ok', ok);
       status.classList.toggle('warn', !ok);
     }
 
     function updateSaleSummary(){
       if(!$('summaryDue')) return;
-      document.querySelectorAll('[data-sale-line]').forEach(line=>{ if(document.activeElement && !document.activeElement.classList.contains('payment-amount')) updateLinePayment(line); updateLineStatus(line); });
+      document.querySelectorAll('[data-sale-line]').forEach(line=>updateLineStatus(line));
       const t = saleTotals();
-      const deposits = t.depositApplied;
-      if($('summaryServices')) $('summaryServices').textContent = money(t.services);
-      if($('summaryTips')) $('summaryTips').textContent = money(t.tips);
-      if($('summaryDeposits')) $('summaryDeposits').textContent = money(deposits);
+      if($('summaryGross')) $('summaryGross').textContent = money(t.grossTotal);
+      if($('summaryDeposits')) $('summaryDeposits').textContent = money(t.depositApplied);
+      if($('depositRow')) $('depositRow').style.display = t.depositApplied > 0 ? 'flex' : 'none';
       $('summaryDue').textContent = money(t.due);
-      if($('summaryPayments')) $('summaryPayments').textContent = money(t.payments);
-      if($('summaryDiff')) $('summaryDiff').textContent = money(t.payments - t.due);
-      if($('summaryWarning')) $('summaryWarning').classList.toggle('show', Math.abs(t.payments - t.due) > 1);
+      if($('checkoutPaymentPrimary') && document.activeElement !== $('checkoutPaymentPrimary') && $('checkoutMixedRow')?.style.display === 'none'){
+        $('checkoutPaymentPrimary').value = t.due || '';
+      }
+      const balance = t.due - t.payments;
+      const overpaid = t.payments > t.due + 1;
+      const partial = balance > 1 && t.payments > 0;
+      if($('summaryWarning')) $('summaryWarning').classList.toggle('show', overpaid);
+      if($('partialPaymentNotice')) $('partialPaymentNotice').style.display = partial ? 'block' : 'none';
+      if($('partialBalance')) $('partialBalance').textContent = money(Math.max(0, balance));
     }
     function saleClientName(){
       if(state.saleSource === 'appointment') return (state.saleClient.clientName || '').trim();
@@ -4082,54 +4637,45 @@
       if(!clientName) return showToast('El cliente es obligatorio.');
       const t = saleTotals();
       if(!t.lines.length) return showToast('Agregá al menos un servicio.');
-      if(Math.abs(t.payments - t.due) > 1) return showToast('Los pagos del día deben coincidir con el saldo a cobrar.');
+      if(t.payments > t.due + 1) return showToast('El monto ingresado supera el saldo a cobrar.');
       const clientIdForTicket = state.saleClient.clientId || null;
       const sourceAppointment = state.saleSource==='appointment' ? state.appointments.find(a=>a.id===state.saleAppointmentId) : null;
-      const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.due,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
+      const salePayments = collectSalePayments();
+      const pendingBalance = Math.max(0, t.due - t.payments);
+      const isPartial = pendingBalance > 1;
+      const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:isPartial?'partial':'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.payments,pendingBalance,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
       state.salesTickets.unshift(ticket);
-      t.lines.forEach(l=>{
-        if(Number(l.depositAppliedAmount||0)>0){
-          state.payments.push({id:uid('depapp'),ticketId:ticket.id,amount:l.depositAppliedAmount,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
-        }
-        l.payments.forEach(p=>state.payments.push({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:l.reference||'',note:'Venta confirmada'}));
-      });
-      resetSaleForm(); renderAll(); showToast('Venta registrada');
+      if(t.depositApplied>0) state.payments.push({id:uid('depapp'),ticketId:ticket.id,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
+      salePayments.forEach(p=>state.payments.push({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
+      if(isPartial){
+        state.pendingCharges.unshift({id:'pending'+Date.now(),clientId:clientIdForTicket,clientNameSnapshot:clientName,status:'pending',service:'Saldo de visita',group:'',finalPrice:pendingBalance,depositAmount:0,ticketId:ticket.id,reservationId:ticket.reservationId,createdBy:ticket.createdBy,serviceOf:'—',createdAt:new Date().toISOString()});
+      }
+      resetSaleForm(); renderAll(); showToast(isPartial?`Venta registrada. Saldo pendiente: ${money(pendingBalance)}`:'Venta registrada');
     }
-    function saveSinglePendingLine(line){
-      const clientName = saleClientName();
-      if(!clientName) return showToast('El cliente es obligatorio.');
-      const service = line.querySelector('.sale-service').value;
-      const group = findServiceGroup(service);
-      const addons = Array.from(line.querySelectorAll('.sale-addon.selected')).map(a=>({id:a.dataset.addonId,name:a.textContent.split(' · ')[0],price:Number(a.dataset.price||0)}));
-      const finalPrice = Number(line.querySelector('.sale-final').value||0) + addons.reduce((s,a)=>s+a.price,0);
-      const pending = {
-        id:'pending'+Date.now()+Math.random(),
-        clientId:state.saleSource==='new'?null:state.saleClient.clientId,
-        clientNameSnapshot:clientName,
-        status:'pending',
-        collaboratorId:line.querySelector('.sale-collaborator').value,
-        group,
-        service,
-        addons,
-        finalPrice,
-        depositAmount:Number(line.querySelector('.sale-deposit').value||0),
-        tipAmount:Number(line.querySelector('.sale-tip').value||0),
-        createdBy: state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),
-        serviceOf: fullName(member(line.querySelector('.sale-collaborator').value)),
-        createdAt:new Date().toISOString()
-      };
-      state.pendingCharges.unshift(pending);
-      line.remove();
-      if(!$('saleLines').children.length) addSaleLine();
-      renderCashKpis(); renderPendingCharges(); updateSaleSummary();
-      showToast('Servicio guardado como pendiente');
+    function saveSinglePendingLine(){
+      savePendingSale();
     }
     function savePendingSale(){
       const clientName = saleClientName();
       const lines = collectSaleLines();
       if(!clientName || !lines.length) return showToast('Cliente y servicio son obligatorios.');
-      lines.forEach(l=>state.pendingCharges.unshift({id:'pending'+Date.now()+Math.random(),clientId:state.saleSource==='new'?null:state.saleClient.clientId,clientNameSnapshot:clientName,status:'pending',...l,createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),serviceOf:fullName(member(l.collaboratorId)),createdAt:new Date().toISOString()}));
-      resetSaleForm(); renderAll(); setCashTab('pending'); showToast('Servicio guardado como pendiente');
+      const deposit = Number($('reservationDeposit')?.value||0);
+      const sourceApptId = state.saleSource==='appointment' ? (state.saleAppointmentId||null) : null;
+      const sourceAppt = sourceApptId ? state.appointments.find(a=>a.id===sourceApptId) : null;
+      lines.forEach(l=>state.pendingCharges.unshift({
+        id:'pending'+Date.now()+Math.random(),
+        clientId:state.saleSource==='new'?null:state.saleClient.clientId,
+        clientNameSnapshot:clientName,
+        status:'pending',
+        ...l,
+        depositAmount:deposit,
+        appointmentId:sourceApptId,
+        reservationId:reservationKey(sourceAppt)||null,
+        createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),
+        serviceOf:fullName(member(l.collaboratorId)),
+        createdAt:new Date().toISOString()
+      }));
+      resetSaleForm(); renderAll(); setCashTab('pending'); showToast('Guardado como pendiente');
     }
     function resetSaleForm(){
       state.saleClient = {clientId:null, clientName:''};
@@ -4139,6 +4685,11 @@
       if($('saleNote')) $('saleNote').value='';
       if($('saleNoteBox')) $('saleNoteBox').style.display='none';
       if($('saleLines')) $('saleLines').innerHTML='';
+      if($('reservationDeposit')) $('reservationDeposit').value='0';
+      if($('checkoutPaymentPrimary')) $('checkoutPaymentPrimary').value='';
+      if($('checkoutPaymentSecondary')) $('checkoutPaymentSecondary').value='0';
+      if($('checkoutMixedRow')) $('checkoutMixedRow').style.display='none';
+      if($('reservationBanner')) $('reservationBanner').style.display='none';
       fillSaleSourceOptions();
       if(state.saleSource === 'appointment' && state.saleAppointmentId) selectSaleAppointment(state.saleAppointmentId);
       else addSaleLine();
@@ -4151,6 +4702,7 @@
       $('saleClientInput').value = p.clientNameSnapshot;
       $('saleLines').innerHTML='';
       addSaleLine(p);
+      if($('reservationDeposit')) $('reservationDeposit').value = p.depositAmount||0;
       p.status='converted'; p.convertedBy = state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); p.convertedAt = new Date().toISOString();
       renderPendingCharges(); updateSaleSummary(); showToast('Pendiente cargado en venta');
     }
@@ -4162,17 +4714,55 @@
     function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
     function renderCashDaily(){
       if(!$('cashMovements')) return;
-      $('cashMovements').innerHTML = state.payments.length ? state.payments.map(p=>`<div class="mini-row"><strong>${money(p.amount)} · ${p.method}</strong><span>${p.ticketId||p.appointmentId||'Movimiento'} · ${p.type==='deposit_applied'?'anticipo aplicado':p.type}</span></div>`).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Todavía no se registraron cobros.</span></div>';
-      const methods = paymentMethods;
-      $('cashByMethod').innerHTML = methods.map(m=>{const total=state.payments.filter(p=>p.method===m).reduce((s,p)=>s+Number(p.amount||0),0);return `<div class="mini-row"><strong>${m}</strong><span>${money(total)}</span></div>`}).join('');
-      if($('cashWithdrawals')) $('cashWithdrawals').innerHTML = state.cashSession.withdrawals.length ? state.cashSession.withdrawals.map(w=>`<div class="mini-row"><strong>${money(w.amount)} · ${w.reason}</strong><span>${new Date(w.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · ${w.createdBy}</span></div>`).join('') : '<div class="mini-row"><strong>Sin retiros</strong><span>Propinas, gastos, compras o depósito aparecerán acá.</span></div>';
+      // Panel resumen financiero
+      if($('cashDailySummary')){
+        const session = state.cashSession;
+        const cashIn = state.payments.filter(p=>p.method==='Efectivo'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const transferIn = state.payments.filter(p=>p.method==='Transf'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const debitIn = state.payments.filter(p=>p.method==='Débito'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const creditIn = state.payments.filter(p=>p.method==='Crédito'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const totalIn = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const withdrawalsTotal = (session.withdrawals||[]).reduce((s,w)=>s+Number(w.amount||0),0);
+        const expensesTotal = (session.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
+        const cashExpected = cashExpectedAmount();
+        $('cashDailySummary').innerHTML = `
+          <div class="eyebrow" style="color:#cbb8a6;margin-bottom:8px;">Resumen del día</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:16px;">
+            <div><div style="color:#cbb8a6;font-size:11px;margin-bottom:4px;">INGRESÓ HOY</div><div style="font-family:'Cormorant',serif;font-size:32px;color:#f5ede4;">${money(totalIn)}</div></div>
+            <div><div style="color:#cbb8a6;font-size:11px;margin-bottom:4px;">EFECTIVO ESPERADO</div><div style="font-family:'Cormorant',serif;font-size:32px;color:#f5ede4;">${money(cashExpected)}</div></div>
+            <div><div style="color:#cbb8a6;font-size:11px;margin-bottom:4px;">GASTOS + RETIROS</div><div style="font-family:'Cormorant',serif;font-size:32px;color:#f5ede4;">${money(expensesTotal+withdrawalsTotal)}</div></div>
+          </div>
+          <div style="border-top:0.5px solid rgba(245,237,228,0.14);padding-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Apertura</span><br><strong style="color:#f5ede4;">${money(session.openingAmount||0)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Efectivo cobrado</span><br><strong style="color:#f5ede4;">${money(cashIn)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Transferencia</span><br><strong style="color:#f5ede4;">${money(transferIn)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Débito</span><br><strong style="color:#f5ede4;">${money(debitIn)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Crédito</span><br><strong style="color:#f5ede4;">${money(creditIn)}</strong></div>
+          </div>`;
+      }
+      // Movimientos
+      $('cashMovements').innerHTML = state.payments.filter(p=>!p.voided).length ? state.payments.filter(p=>!p.voided).map(p=>`<div class="mini-row"><strong>${money(p.amount)} · ${p.method}</strong><span>${p.ticketId||'Movimiento'} · ${p.type==='deposit_applied'?'anticipo aplicado':p.type==='service'?'cobro de servicio':p.type}</span></div>`).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Los cobros del día aparecerán acá.</span></div>';
+      // Por medio
+      $('cashByMethod').innerHTML = paymentMethods.map(m=>{
+        const total = state.payments.filter(p=>p.method===m&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        return total > 0 ? `<div class="mini-row"><strong>${m}</strong><span>${money(total)}</span></div>` : '';
+      }).join('') || '<div class="mini-row"><strong>Sin cobros</strong><span>—</span></div>';
+      // Retiros
+      if($('cashWithdrawals')) $('cashWithdrawals').innerHTML = (state.cashSession.withdrawals||[]).length ? state.cashSession.withdrawals.map(w=>`<div class="mini-row"><strong>${money(w.amount)} · ${w.reason}</strong><span>${new Date(w.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · ${w.createdBy}</span></div>`).join('') : '<div class="mini-row"><strong>Sin retiros</strong><span>—</span></div>';
+      // Gastos
+      if($('cashExpenses')) $('cashExpenses').innerHTML = (state.cashSession.expenses||[]).length ? state.cashSession.expenses.map(e=>`<div class="mini-row"><strong>${money(e.amount)} · ${e.category}</strong><span>${e.method} · ${e.note||'—'} · ${new Date(e.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span></div>`).join('') : '<div class="mini-row"><strong>Sin gastos</strong><span>—</span></div>';
     }
     function renderTickets(){
       if(!$('ticketsList')) return;
       const visibleTickets = state.cashMode==='collaborator' ? state.salesTickets.filter(t=>t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) : state.salesTickets;
-      $('ticketsList').innerHTML = visibleTickets.length ? visibleTickets.map(t=>`<div class="mini-row"><strong>${t.clientNameSnapshot} · ${money(t.totalDueToday)}</strong><span>${t.lines.length} servicio(s) · ${t.reservationId?'reserva '+t.reservationId+' · ':''}anticipo ${money(t.depositAppliedTotal||0)} · propinas ${money(t.tipsTotal)} · creado por ${t.createdBy||'—'} · <span class="ticket-status">${t.status}</span></span><div style="margin-top:8px"><button class="small-btn" onclick="voidTicket('${t.id}')">Anular ticket</button></div></div>`).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
+      $('ticketsList').innerHTML = visibleTickets.length ? visibleTickets.map(t=>{
+        const statusLabel = t.status==='partial'?'Pago parcial':t.status==='confirmed'?'Confirmado':'Anulado';
+        const statusColor = t.status==='partial'?'warn':t.status==='confirmed'?'ok':'';
+        const breakdown = `Total: ${money(t.grossTotal)}${t.depositAppliedTotal>0?' · Seña: −'+money(t.depositAppliedTotal):''}${t.pendingBalance>0?' · <strong style="color:#8a5a14;">Saldo pendiente: '+money(t.pendingBalance)+'</strong>':''}`;
+        return `<div class="mini-row"><strong>${t.clientNameSnapshot} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${t.createdBy||'—'} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" onclick="voidTicket('${t.id}')">Anular ticket</button></div></div>`;
+      }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
-    function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); const reason = prompt('Motivo de anulación'); if(reason===null)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); renderAll(); showToast('Ticket anulado');}
+    function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); const reason = prompt('Motivo de anulación'); if(reason===null)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); renderAll(); showToast('Ticket anulado');}
     function cashClose(){
       if(!isCashAdmin()) return showToast('Solo admin caja puede cerrar caja.');
       if(!state.cashSession.isOpen) return showToast('La caja no está abierta.');
@@ -4238,7 +4828,7 @@
     function refreshAgendaFilters(){
       const current = state.agenda.member;
       $('memberFilter').innerHTML = '<option value="Todos">Todos los profesionales</option>' + state.collaborators.filter(c=>c.can).map(c=>`<option value="${c.id}">${fullName(c)}</option>`).join('');
-      $('memberFilter').value = state.collaborators.some(c=>c.id===current) ? current : 'Todos';
+      $('memberFilter').value = state.collaborators.some(c=>c.id===current && c.can) ? current : 'Todos';
     }
     function populateGroupFilter(){
       const filter = $('groupFilter');
@@ -4276,7 +4866,7 @@
       $('calendarBody').style.gridTemplateColumns=cols;
       $('membersHeader').innerHTML='<div class="corner-cell"></div>'+members.map(m=>`<div class="member-head"><div class="member-avatar">${initials(m)}</div><div class="member-copy"><strong>${fullName(m)}</strong><span>${m.groups.join(' · ')}</span></div></div>`).join('');
       const axis=renderTimeAxis();
-      const colsHtml=members.map(m=>`<div class="member-column" data-member-col="${m.id}">${state.agenda.showBlockers ? renderBlockers(m.id) : ''}${visibleAppointments().filter(a=>a.memberId===m.id).map(renderAppt).join('')}${renderGaps(m.id)}</div>`).join('');
+      const colsHtml=members.map(m=>`<div class="member-column" data-member-col="${m.id}">${renderUnavailableCol(m)}${state.agenda.showBlockers ? renderBlockers(m.id) : ''}${visibleAppointments().filter(a=>a.memberId===m.id).map(renderAppt).join('')}${renderGaps(m.id)}</div>`).join('');
       $('calendarBody').innerHTML=axis+colsHtml;
       renderNowLine();
       document.querySelectorAll('[data-appt]').forEach(el=>{el.onclick=e=>openPopover(e,el.dataset.appt); el.ondragstart=e=>{state.agenda.dragging=el.dataset.appt; e.dataTransfer.effectAllowed='move';};});
@@ -4285,22 +4875,62 @@
     }
     function renderAgendaList(mode){
       const title = mode === 'week' ? 'Vista semana simplificada' : 'Vista lista del día';
-      const rows = visibleAppointments().sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`<div class="agenda-list-row"><div><strong>${a.start}</strong><br><span>${a.end}</span></div><div><strong>${fullName(client(a.clientId))}</strong><br><span>${a.service} · ${fullName(member(a.memberId))}</span></div><button class="small-btn" onclick="showToast('Abrir detalle de ${fullName(client(a.clientId))}')">Detalle</button></div>`).join('');
+      const rows = visibleAppointments().sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`<div class="agenda-list-row" id="list-row-${a.id}"><div><strong>${a.start}</strong><br><span>${a.end}</span></div><div><strong>${fullName(client(a.clientId))}</strong><br><span>${a.service} · ${fullName(member(a.memberId))}</span></div><button class="small-btn" onclick="openPopover({currentTarget:document.getElementById('list-row-${a.id}')??this},'${a.id}')">Detalle</button></div>`).join('');
       $('agendaListView').innerHTML = `<div class="mini-row"><strong>${title}</strong><span>Ideal para recepción cuando no necesita grilla visual. La vista semana completa queda para la siguiente iteración.</span></div>${rows}`;
     }
-    function renderBlockers(memberId){return state.blockers.filter(b=>b.memberId===memberId).map(b=>`<div class="blocker" style="top:${topFor(b.start)}px;height:${heightFor(b.start,b.end)}px">${b.start} - ${b.end} · ${b.label}</div>`).join('')}
+    function renderBlockers(memberId){
+      const today=dateKey(state.agenda.currentDate);
+      return state.blockers
+        .filter(b=>b.memberId===memberId && (!b.date || b.date===today))
+        .map(b=>`<div class="blocker" data-blocker="${b.id}" style="top:${topFor(b.start)}px;height:${heightFor(b.start,b.end)}px"><span class="blocker-text">${b.start}–${b.end} · ${b.label}${b.date?'':' ↻'}</span><button class="blocker-del" data-blocker-del="${b.id}" title="Eliminar bloqueo">×</button></div>`).join('');
+    }
+    function renderUnavailableCol(m){
+      const dayMap={0:'Domingo',1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
+      const todayName=dayMap[state.agenda.currentDate.getDay()];
+      const workDays=(m.days||'').split(',').map(d=>d.trim()).filter(Boolean);
+      const gridStart=startHour*60, gridEnd=endHour*60;
+      const totalH=(gridEnd-gridStart)*pxPerMin;
+      // Full day off
+      if(workDays.length && !workDays.includes(todayName)){
+        return `<div class="col-unavailable full-day" style="top:0;height:${totalH}px"></div>`;
+      }
+      // Hours outside shift: per-day schedule takes priority over global hours
+      const daySched = m.schedule && m.schedule[todayName];
+      let wStart, wEnd;
+      if(daySched && daySched.start && daySched.end){
+        wStart = daySched.start; wEnd = daySched.end;
+      } else {
+        if(!m.hours) return '';
+        const parts=m.hours.split(' - ');
+        if(parts.length<2) return '';
+        wStart=parts[0].trim(); wEnd=parts[1].trim();
+      }
+      const wStartM=mins(wStart), wEndM=mins(wEnd);
+      let html='';
+      if(wStartM>gridStart) html+=`<div class="col-unavailable" style="top:0;height:${(wStartM-gridStart)*pxPerMin}px"></div>`;
+      if(wEndM<gridEnd) html+=`<div class="col-unavailable" style="top:${topFor(wEnd)}px;height:${(gridEnd-wEndM)*pxPerMin}px"></div>`;
+      return html;
+    }
     function renderAppt(a){
       const c=client(a.clientId);
       const paid=a.deposit==='paid'?'paid':a.deposit==='pending'?'pending':'none';
       const depositAmount = appointmentDepositAmount(a);
-      const combinedCount = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId).length : 1;
+      const combinedCount = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId && !x.isAdditional).length : 1;
       const flags = [];
       if(a.isAdditional) flags.push('Adicional');
-      else if(combinedCount > 1) flags.push('Combinado');
+      else if(combinedCount > 1) flags.push(`${combinedCount} servicios`);
       if(depositAmount > 0 && !a.isAdditional) flags.push(`Seña ${money(depositAmount)}`);
-      else if(paid !== 'paid' && !a.isAdditional) flags.push('pago pendiente');
-      const flagsHtml = flags.length ? `<div class="appt-flags">${flags.map(f=>`<span class="mini-flag ${f==='Adicional'?'add-flag':''}">${f}</span>`).join('')}</div>` : '';
-      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${heightFor(a.start,a.end)}px"><div class="appt-service"><span class="status-dot ${a.status||'confirmed'}"></span>${a.service}</div><div class="appt-client">${a.isAdditional?'':fullName(c)}</div><div class="appt-time">${a.start} - ${a.end}</div>${flagsHtml}</div>`;
+      else if(paid === 'pending' && !a.isAdditional) flags.push('Sin seña');
+      const blockH = heightFor(a.start, a.end);
+      // padding 7px + gap 2px: hora~13 nombre~14 servicio~12 flags~18
+      const showClient  = blockH >= 40 && !a.isAdditional;
+      const showService = blockH >= 54;
+      const showFlags   = blockH >= 74 && flags.length;
+      const timeRow = `<div class="appt-time-row"><span class="status-dot ${a.status||'confirmed'}"></span>${a.start}–${a.end}</div>`;
+      const clientRow = showClient  ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
+      const serviceRow= showService ? `<div class="appt-service">${a.service}</div>` : '';
+      const flagsRow  = showFlags   ? `<div class="appt-flags">${flags.map(f=>`<span class="mini-flag ${f==='Adicional'?'add-flag':''}">${f}</span>`).join('')}</div>` : '';
+      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${timeRow}${clientRow}${serviceRow}${flagsRow}</div>`;
     }
     function renderNowLine() {
       const existing = document.getElementById('nowLine');
@@ -4332,14 +4962,14 @@
         const aStart = mins(a.start);
         if (aStart - cursor >= 30) {
           const time = `${String(Math.floor(cursor/60)).padStart(2,'0')}:${String(cursor%60).padStart(2,'0')}`;
-          html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" style="top:${topFor(time)}px;height:${(aStart - cursor) * pxPerMin}px">Hueco · ${aStart - cursor} min</div>`;
+          html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" title="Agendar ${time}" style="top:${topFor(time)}px;height:${(aStart - cursor) * pxPerMin}px"></div>`;
         }
         cursor = Math.max(cursor, mins(a.end));
       });
       const dayEnd = endHour * 60;
       if (dayEnd - cursor >= 30) {
         const time = `${String(Math.floor(cursor/60)).padStart(2,'0')}:${String(cursor%60).padStart(2,'0')}`;
-        html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" style="top:${topFor(time)}px;height:${(dayEnd - cursor) * pxPerMin}px">Hueco · ${dayEnd - cursor} min</div>`;
+        html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" title="Agendar ${time}" style="top:${topFor(time)}px;height:${(dayEnd - cursor) * pxPerMin}px"></div>`;
       }
       return html;
     }
@@ -4354,7 +4984,7 @@
         return Math.max(mins(a.start),mins(appt.start)) < Math.min(mins(a.end),mins(appt.end));
       });
     }
-    function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+document.getElementById('calendarWrap').scrollTop; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); renderAgenda(); showToast('Turno movido.');}
+    function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+window.scrollY; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration),date:dateKey(state.agenda.currentDate)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); renderAgenda(); showToast('Turno movido.');}
     function resizeAppointment(id,delta){const a=state.appointments.find(x=>x.id===id); if(!a)return; const old=a.end; a.end=toTime(mins(a.end)+delta); if(mins(a.end)<=mins(a.start)+15 || overlaps(a,a.id)){a.end=old; showToast('No se puede ajustar duración.'); return;} renderAgenda(); showToast('Duración actualizada.');}
     function togglePaid(id){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.deposit = a.deposit==='paid'?'pending':'paid'; renderAgenda(); showToast(a.deposit==='paid'?'Pago/seña marcado OK.':'Pago/seña pendiente.');}
     function cancelAppointment(id,status='cancelado'){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.status=status; showToast(`Turno marcado como ${status}.`); openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();}
@@ -4366,17 +4996,56 @@
       const isCombined = related.length > 1;
       const statuses=[{key:'confirmed',label:'Conf.'},{key:'in_progress',label:'En curso'},{key:'completed',label:'Fin.'},{key:'cancelled',label:'Canc.'},{key:'no_show',label:'No show'}];
       const statusHtml=`<div class="detail-section"><strong>Estado</strong><div class="status-chips">${statuses.map(s=>`<button class="small-btn ${a.status===s.key?'primary':''}" onclick="updateApptStatus('${a.id}','${s.key}')">${s.label}</button>`).join('')}</div></div>`;
-      const combinedHtml = isCombined ? `<div class="detail-section"><strong>Servicios del turno</strong>${related.map(r=>`<div class="mini-row"><strong>${r.start} - ${r.end}</strong><br><span>${r.service} · ${fullName(member(r.memberId))}${r.price?` · ${money(r.price)}`:''}</span></div>`).join('')}</div>` : '';
+      const combinedHtml = isCombined ? `<div class="detail-section"><strong>Servicios del turno</strong>${related.map(r=>`<div class="mini-row"><strong>${r.start} - ${r.end}</strong><br><span>${r.service} · ${fullName(member(r.memberId))}${currentApptPrice(r)?` · ${money(currentApptPrice(r))}`:''}</span></div>`).join('')}</div>` : '';
       const servicesList = isCombined ? related.map(r=>r.service).join(', ') : a.service;
-      pop.innerHTML=`<div class="eyebrow">${isCombined?'Turno combinado':'Turno'}</div><h3>${fullName(c)}</h3><div class="popover-service">${servicesList}</div><div class="meta">${fullName(m)} · ${a.start} - ${a.end}<br>${c.phone}</div>${appointmentDepositAmount(a)>0?`<div class="detail-section"><strong>Seña</strong><span>${money(appointmentDepositAmount(a))} · ${a.depositMethod || 'Transferencia'}</span></div>`:''}${isCombined?'<div class="tags"><span class="tag">Combinado</span></div>':''}${combinedHtml}${statusHtml}<div class="detail-section"><strong>Nota</strong><span>${a.note||c.note||'Sin nota'}</span></div><div class="detail-actions"><button class="small-btn" onclick="editAppointment('${a.id}');closePopover()">Editar turno</button><button class="small-btn ${a.deposit==='paid'?'primary':''}" onclick="togglePaid('${a.id}')">${a.deposit==='paid'?'Pagado':'Marcar pagado'}</button><button class="small-btn" onclick="cancelAppointment('${a.id}','cancelled')">Cancelar</button></div>`;
+      const depositAmt = appointmentDepositAmount(a);
+      const totalCombined = related.reduce((s,r)=>s+Number(currentApptPrice(r)||0),0);
+      pop.innerHTML=`
+        <div class="popover-body">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;">
+            <div class="eyebrow" style="margin:0;">${isCombined?'Turno combinado':'Turno'}</div>
+            <button onclick="closePopover()" style="background:var(--surface-2);border:0;border-radius:8px;width:28px;height:28px;font-size:16px;color:var(--text-muted);cursor:pointer;flex-shrink:0;">×</button>
+          </div>
+          <h3 style="margin:2px 0 1px;">${fullName(c)}</h3>
+          <div class="meta" style="margin-bottom:10px;">${c.phone}</div>
+          ${isCombined
+            ? `<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service}<br><span style="color:var(--text-muted);font-size:11px;">${fullName(member(r.memberId))} · ${r.start}–${r.end}</span></span><strong style="color:var(--text);font-size:13px;margin-left:8px;flex-shrink:0;">${money(currentApptPrice(r)||0)}</strong></div>`).join('')}<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 0;font-size:12px;"><span style="color:var(--text-muted);">Total</span><strong>${money(totalCombined)}</strong></div></div>`
+            : `<div class="popover-service" style="margin-bottom:4px;">${a.service} · ${fullName(m)} · ${a.start}–${a.end}</div><div style="font-family:'Cormorant',serif;font-size:22px;font-weight:300;margin-bottom:8px;">${money(currentApptPrice(a)||0)}</div>`}
+          ${depositAmt>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:0.5px solid var(--line);font-size:12px;"><span style="color:var(--accent-dark);">− Seña abonada</span><strong style="color:var(--accent-dark);">${money(depositAmt)} · ${a.depositMethod||'Transf'}</strong></div><div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 8px;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="font-weight:500;">Saldo</span><strong style="font-size:15px;">${money(Math.max(0,totalCombined-depositAmt))}</strong></div>`:''}
+          ${statusHtml}
+          ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${a.note||c.note}</span></div>`:''}
+        </div>
+        <div class="popover-footer">
+          <button class="small-btn primary" onclick="chargeFromAppointment('${a.id}')">Cobrar visita</button>
+          <button class="small-btn" onclick="editAppointment('${a.id}');closePopover()">Editar turno</button>
+          <button class="small-btn ${a.deposit==='paid'?'primary':''}" onclick="togglePaid('${a.id}')">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
+          <button class="small-btn" onclick="cancelAppointment('${a.id}','cancelled')">Cancelar</button>
+        </div>`;
       const r=e.currentTarget.getBoundingClientRect?e.currentTarget.getBoundingClientRect():{right:300,top:120};
-      pop.style.left=Math.max(16,Math.min(r.right+12,window.innerWidth-400))+'px';
-      pop.style.top=Math.min(r.top,window.innerHeight-500)+'px';
-      pop.classList.add('open');
+      const popW=380;
+      pop.style.left='-9999px'; pop.style.top='-9999px'; pop.classList.add('open');
+      const popH = Math.min(pop.offsetHeight, window.innerHeight*0.88);
+      let left = r.right+12;
+      if(left + popW > window.innerWidth-16) left = r.left - popW - 12;
+      left = Math.max(16, left);
+      let top = r.top;
+      if(top + popH > window.innerHeight-16) top = window.innerHeight - popH - 16;
+      top = Math.max(16, top);
+      pop.style.left=left+'px';
+      pop.style.top=top+'px';
     }
 
     function closePopover(){
       $('detailPopover').classList.remove('open');
+    }
+    function chargeFromAppointment(id){
+      closePopover();
+      showPage('cash');
+      setCashTab('register');
+      setSaleSource('appointment');
+      fillSaleSourceOptions();
+      if($('saleAppointmentSelect')) $('saleAppointmentSelect').value = id;
+      selectSaleAppointment(id);
     }
 
     function editAppointment(appointmentId){
@@ -4390,8 +5059,10 @@
       if($('apDepositMethod')) $('apDepositMethod').value = a.depositMethod || 'Transferencia';
       if($('apNote')) $('apNote').value = a.note || '';
       const related = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId).sort((x,y)=>x.start.localeCompare(y.start)) : [a];
+      const mainLines = related.filter(r=>!r.isAdditional);
+      const additionalIds = related.filter(r=>r.isAdditional).map(r=>r.variantId).filter(Boolean);
       $('appointmentServiceLines').innerHTML='';
-      related.forEach(r=>{
+      mainLines.forEach(r=>{
         addAppointmentServiceLine({
           service: r.service,
           variantId: r.variantId,
@@ -4401,11 +5072,9 @@
           duration: r.duration || 60,
           price: r.price,
           finalPrice: r.price,
-          group: r.group,
-          isAdditional: r.isAdditional
+          group: r.group
         });
       });
-      const additionalIds = related.filter(r=>r.isAdditional).map(r=>r.variantId).filter(Boolean);
       if(additionalIds.length){
         setTimeout(()=>{
           document.querySelectorAll('[data-appt-line]').forEach(line=>{
@@ -4437,7 +5106,115 @@
     function setupChips(){document.querySelectorAll('.select-chip').forEach(c=>c.onclick=()=>{c.classList.toggle('selected');updatePreviews()})}
     $('clientPrefChips').querySelectorAll('.select-chip').forEach(c=>c.onclick=()=>{c.classList.toggle('selected');updateClientPreview()});
     function updateClientPreview(){const n=[$('clFirst').value,$('clLast').value].filter(Boolean).join(' ')||'Nuevo cliente';$('clientPreviewName').textContent=n;$('clientPreviewMeta').textContent=$('clPhone').value||'WhatsApp pendiente';$('clientPreviewTags').innerHTML=selectedTexts('#clientPrefChips .select-chip').map(t=>`<span class="tag">${t}</span>`).join('')}
-    ['clFirst','clLast','clPhone','clEmail'].forEach(id=>$(id).oninput=updateClientPreview);$('saveClient').onclick=()=>{const first=$('clFirst').value.trim(),last=$('clLast').value.trim();if(!first||!last)return showToast('Completá nombre y apellido');const newClient={id:'cl'+Date.now(),code:nextClientCode(),first,last,phone:$('clPhone').value.trim(),email:$('clEmail').value.trim(),tags:selectedTexts('#clientPrefChips .select-chip'),note:$('clNote').value.trim()||'Sin nota clave.'};state.clients.unshift(newClient);if(state.afterClientCreate==='sale'){state.afterClientCreate=null;state.saleSource='existing';state.saleClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();showPage('cash');setCashTab('register');setTimeout(()=>{if($('saleClientInput')) $('saleClientInput').value=fullName(newClient);updateSaleSummary();},0);showToast('Cliente creado y seleccionado para la venta');}else if(state.afterClientCreate==='appointment'){state.afterClientCreate=null;state.appointmentClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();openDrawer('appointmentDrawer');setTimeout(()=>{if($('apClientSearch')) $('apClientSearch').value=fullName(newClient);updateApPreview();},0);showToast('Cliente creado y seleccionado para el turno');}else{closeDrawers();showPage('clients');showToast('Cliente creado')}};
+    ['clFirst','clLast','clPhone','clEmail'].forEach(id=>$(id).oninput=updateClientPreview);
+
+    state.editingClientId = null;
+
+    function openClientDrawerNew(){
+      state.editingClientId = null;
+      $('clFirst').value=''; $('clLast').value=''; $('clPhone').value=''; $('clEmail').value=''; $('clNote').value='';
+      $('clientPrefChips').querySelectorAll('.select-chip').forEach(c=>c.classList.remove('selected'));
+      const eyebrow = document.querySelector('#clientDrawer .eyebrow');
+      const title = document.querySelector('#clientDrawer .drawer-title');
+      const saveBtn = $('saveClient');
+      if(eyebrow) eyebrow.textContent = 'Nuevo cliente';
+      if(title) title.textContent = 'Cargar cliente';
+      if(saveBtn) saveBtn.textContent = 'Guardar';
+      updateClientPreview();
+      openDrawer('clientDrawer');
+    }
+
+    function editClient(id){
+      const c = state.clients.find(x=>x.id===id);
+      if(!c) return;
+      state.editingClientId = id;
+      $('clFirst').value = c.first || '';
+      $('clLast').value = c.last || '';
+      $('clPhone').value = c.phone || '';
+      $('clEmail').value = c.email || '';
+      $('clNote').value = c.note && c.note !== 'Sin nota clave.' ? c.note : '';
+      // Pre-select preference chips that match saved tags
+      $('clientPrefChips').querySelectorAll('.select-chip').forEach(chip=>{
+        chip.classList.toggle('selected', c.tags.includes(chip.textContent.trim()));
+      });
+      const eyebrow = document.querySelector('#clientDrawer .eyebrow');
+      const title = document.querySelector('#clientDrawer .drawer-title');
+      const saveBtn = $('saveClient');
+      if(eyebrow) eyebrow.textContent = 'Editar cliente';
+      if(title) title.textContent = 'Modificar datos';
+      if(saveBtn) saveBtn.textContent = 'Guardar cambios';
+      updateClientPreview();
+      openDrawer('clientDrawer');
+    }
+
+    $('saveClient').onclick=()=>{
+      const first=$('clFirst').value.trim(),last=$('clLast').value.trim();
+      if(!first||!last)return showToast('Completá nombre y apellido');
+      const data={first,last,phone:$('clPhone').value.trim(),email:$('clEmail').value.trim(),tags:selectedTexts('#clientPrefChips .select-chip'),note:$('clNote').value.trim()||'Sin nota clave.'};
+      if(state.editingClientId){
+        const idx=state.clients.findIndex(c=>c.id===state.editingClientId);
+        if(idx>=0) Object.assign(state.clients[idx], data);
+        state.editingClientId=null;
+        closeDrawers();renderAll();showToast('Cliente actualizado');
+      } else {
+        const newClient={id:'cl'+Date.now(),code:nextClientCode(),...data};
+        state.clients.unshift(newClient);
+        if(state.afterClientCreate==='sale'){state.afterClientCreate=null;state.saleSource='existing';state.saleClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();showPage('cash');setCashTab('register');setTimeout(()=>{if($('saleClientInput')) $('saleClientInput').value=fullName(newClient);updateSaleSummary();},0);showToast('Cliente creado y seleccionado para la venta');}
+        else if(state.afterClientCreate==='appointment'){state.afterClientCreate=null;state.appointmentClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();openDrawer('appointmentDrawer');setTimeout(()=>{if($('apClientSearch')) $('apClientSearch').value=fullName(newClient);updateApPreview();},0);showToast('Cliente creado y seleccionado para el turno');}
+        else{closeDrawers();showPage('clients');showToast('Cliente creado')}
+      }
+    };
+
+    state.editingCollaboratorId = null;
+
+    function editCollaborator(id){
+      const c = state.collaborators.find(x=>x.id===id);
+      if(!c) return;
+      state.editingCollaboratorId = id;
+      buildCollaboratorForm();
+      // Pre-fill identity fields
+      $('coFirst').value = c.first || '';
+      $('coLast').value = c.last || '';
+      $('coPhone').value = c.phone || '';
+      $('coEmail').value = c.email || '';
+      $('coType').value = c.type || 'professional';
+      $('coCan').value = c.can ? 'yes' : 'no';
+      // Pre-select service chips by serviceId or groupId; fallback to group names for legacy data
+      const enabledServiceIds = new Set(c.serviceIds || []);
+      let enabledGroupIds = new Set(c.groupIds || []);
+      if(!enabledGroupIds.size && c.groups && c.groups.length){
+        state.catalog.groups.filter(g=>c.groups.includes(g.name)).forEach(g=>enabledGroupIds.add(g.id));
+      }
+      document.querySelectorAll('#coServices .select-chip[data-service]').forEach(chip => {
+        if(enabledServiceIds.has(chip.dataset.service) || enabledGroupIds.has(chip.dataset.group)){
+          chip.classList.add('selected');
+        }
+      });
+      // Pre-fill availability: per-day schedule when available, fallback to global hours
+      const enabledDays = new Set((c.days || '').split(',').map(d=>d.trim()).filter(Boolean));
+      const hoursParts = (c.hours || '').split(' - ');
+      const fallbackStart = hoursParts.length===2 ? hoursParts[0].trim() : '10:00';
+      const fallbackEnd = hoursParts.length===2 ? hoursParts[1].trim() : '19:00';
+      document.querySelectorAll('.availability-row').forEach(row => {
+        const day = row.dataset.day;
+        const cb = row.querySelector('.availability-enabled');
+        const startI = row.querySelector('.availability-start');
+        const endI = row.querySelector('.availability-end');
+        const daySched = c.schedule && c.schedule[day];
+        if(cb) cb.checked = enabledDays.has(day);
+        if(startI) startI.value = daySched?.start || fallbackStart;
+        if(endI) endI.value = daySched?.end || fallbackEnd;
+      });
+      // Update drawer header
+      const header = document.querySelector('#collaboratorDrawer .eyebrow');
+      const title = document.querySelector('#collaboratorDrawer .drawer-title');
+      const saveBtn = $('saveCollaborator');
+      if(header) header.textContent = 'Editar colaboradora';
+      if(title) title.textContent = 'Modificar datos';
+      if(saveBtn) saveBtn.textContent = 'Guardar cambios';
+      updatePreviews();
+      openDrawer('collaboratorDrawer');
+    }
 
     function buildCollaboratorForm(){
       const catalog = state.catalog;
@@ -4481,8 +5258,10 @@
       const groupNames = groupIds.map(id=>state.catalog.groups.find(g=>g.id===id)?.name||'');
       const serviceNames = selectedChips.map(x=>x.textContent.trim());
       const av=availability();
-      state.collaborators.push({
-        id:'co'+Date.now(),
+      const schedule={};
+      av.forEach(x=>{ schedule[x.day]={start:x.start,end:x.end}; });
+      const sameHours = av.length && av.every(x=>x.start===av[0].start && x.end===av[0].end);
+      const data = {
         first,last,
         phone:$('coPhone').value.trim(),
         email:$('coEmail').value.trim(),
@@ -4493,9 +5272,21 @@
         groups:groupNames,
         groupIds:groupIds,
         days:av.map(x=>x.day).join(', '),
-        hours:av.length?`${av[0].start} - ${av[0].end}`:'Sin horario'
-      });
-      closeDrawers();showPage('team');showToast('Colaboradora creada y agenda actualizada')
+        hours:av.length?(sameHours?`${av[0].start} - ${av[0].end}`:'Horario variable'):'Sin horario',
+        schedule
+      };
+      if(state.editingCollaboratorId){
+        const idx = state.collaborators.findIndex(c=>c.id===state.editingCollaboratorId);
+        if(idx<0) return showToast('Colaboradora no encontrada');
+        state.collaborators[idx] = {...state.collaborators[idx], ...data};
+        state.editingCollaboratorId = null;
+        saveState();
+        closeDrawers();showPage('team');showToast('Colaboradora actualizada');
+      } else {
+        state.collaborators.push({id:'co'+Date.now(), ...data});
+        saveState();
+        closeDrawers();showPage('team');showToast('Colaboradora creada y agenda actualizada');
+      }
     };
 
     function serviceDuration(service){
@@ -4533,7 +5324,7 @@
           updateApPreview();
         });
         const add = document.querySelector('[data-ap-new-client]');
-        if(add) add.onclick=()=>{ state.afterClientCreate='appointment'; box.classList.remove('open'); closeDrawers(); openDrawer('clientDrawer'); };
+        if(add) add.onclick=()=>{ state.afterClientCreate='appointment'; box.classList.remove('open'); closeDrawers(); openClientDrawerNew(); };
       };
     }
     function getCatalogGroups(){return state.catalog.groups.map(g=>({id:g.id,name:g.name,type:g.type}))}
@@ -4556,7 +5347,13 @@
       const services = getCatalogServices(firstGroup.id);
       const firstSvc = services[0] || {id:'',name:'',groupName:''};
       const variants = getCatalogVariants(firstSvc.id);
-      const firstVar = prefill.variantId ? variants.find(v=>v.id===prefill.variantId) : (variants[0]||{name:'',price:0,duration:60});
+      // When editing, look up the variant from the correct service (not first group's first service)
+      let firstVar;
+      if(prefill.variantId){
+        const pvInfo = getVariantFromId(prefill.variantId);
+        firstVar = pvInfo ? pvInfo.variant : null;
+      }
+      if(!firstVar) firstVar = variants[0] || {id:'',name:'',price:0,duration:60};
 
       let defaultStart = prefill.start || '16:00';
       if(!prefill.start){
@@ -4606,7 +5403,7 @@
         <div class="appointment-line-actions"><span class="appointment-line-summary">Finaliza ${addMinutes(defaultStart,duration)}</span></div>
       </div>`;
       $('appointmentServiceLines').insertAdjacentHTML('beforeend', html);
-      bindAppointmentServiceLine($('appointmentServiceLines').lastElementChild, prefillSvc);
+      bindAppointmentServiceLine($('appointmentServiceLines').lastElementChild, prefillSvc, prefill.variantId, prefill.duration, prefill.price);
       updateApPreview();
     }
 
@@ -4615,7 +5412,7 @@
       if(panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     }
 
-    function bindAppointmentServiceLine(line, prefillSvcId){
+    function bindAppointmentServiceLine(line, prefillSvcId, prefillVariantId, prefillDuration, prefillPrice){
       const lineId = line.dataset.apptLine;
 
       const groupSel = line.querySelector('.appt-group-select');
@@ -4628,6 +5425,21 @@
           if(s){
             groupSel.value = g.id;
             updateServiceSelect(line, g.id, s.id);
+            // Restore specific variant after cascade rebuild (updateServiceSelect picks variants[0])
+            if(prefillVariantId && variantSel.querySelector(`option[value="${prefillVariantId}"]`)){
+              variantSel.value = prefillVariantId;
+              line.querySelector('.appt-variant-id-display').value = prefillVariantId;
+              const pvInfo = getVariantFromId(prefillVariantId);
+              if(pvInfo){
+                const nameDisplay = line.querySelector('.appt-service-name-display');
+                if(nameDisplay) nameDisplay.textContent = pvInfo.variant.name;
+                line.querySelector('.appt-duration-input').value = prefillDuration || pvInfo.variant.duration;
+                line.querySelector('.appt-price-input').value = prefillPrice !== undefined ? prefillPrice : pvInfo.variant.price;
+              }
+            } else if(prefillDuration || prefillPrice !== undefined){
+              if(prefillDuration) line.querySelector('.appt-duration-input').value = prefillDuration;
+              if(prefillPrice !== undefined) line.querySelector('.appt-price-input').value = prefillPrice;
+            }
             break;
           }
         }
@@ -4663,7 +5475,8 @@
         updateApPreview();
       };
 
-      line.querySelectorAll('input,select').forEach(el=>{el.oninput=refresh; el.onchange=refresh;});
+      // Only apply refresh to plain inputs — NOT to cascade selects (they have their own handlers above)
+      line.querySelectorAll('.appt-start-input,.appt-duration-input,.appt-price-input').forEach(el=>{el.oninput=refresh; el.onchange=refresh;});
       line.querySelector('[data-remove-appt-line]').onclick=()=>{line.remove(); if(!$('appointmentServiceLines').children.length) addAppointmentServiceLine(); updateApPreview();};
 
       refresh();
@@ -4757,7 +5570,7 @@
       const clientName = state.appointmentClient.clientName || $('apClientSearch')?.value || 'Cliente sin seleccionar';
       $('apPreviewName').textContent = clientName;
       $('apPreviewMeta').textContent = lines.length ? `${lines.length} servicio(s) · ${lines[0].start}` : 'Agregá al menos un servicio';
-      $('apPreviewTags').innerHTML=[dep>0?`Seña ${money(dep)}`:'Seña $0', ...lines.slice(0,2).map(l=>l.service)].map(t=>`<span class="tag">${t}</span>`).join('');
+      $('apPreviewTags').innerHTML=[dep>0?`Seña ${money(dep)}`:'Seña $0', ...lines.slice(0,2).map(l=>getVariantFromId(l.variantId)?.variant.name||l.serviceId||'')].map(t=>`<span class="tag">${t}</span>`).join('');
     }
     $('saveAppointment').onclick=()=>{
       const clientName = state.appointmentClient.clientName || $('apClientSearch')?.value.trim();
@@ -4944,11 +5757,27 @@
       $('profileEmail').textContent = c.email || 'Sin email';
       $('profilePreferences').innerHTML = c.tags.map(t=>`<span class="tag">${t}</span>`).join('') || '<span class="tag neutral">Sin preferencias</span>';
       $('profileNote').textContent = c.note || 'Sin nota clave.';
+      const ins = clientInsights(c.id);
+      $('profileMetricTicket').textContent = ins.avgTicket ? money(ins.avgTicket) : '—';
+      $('profileMetricFreq').textContent = ins.frequency ? `${ins.frequency} días` : '—';
+      $('profileMetricLast').textContent = ins.daysSinceLast!==null ? (ins.daysSinceLast===0?'Hoy':`hace ${ins.daysSinceLast} día(s)`) : '—';
+      $('profileMetricVisits').textContent = ins.visits || '0';
+      $('profileMetricSpent').textContent = ins.totalSpent ? money(ins.totalSpent) : '—';
+      $('profileInsightTags').innerHTML = insightTagsHtml(ins) || '<span class="tag neutral">Sin señales aún</span>';
+      let insightText;
+      if(ins.tags.some(t=>t.cls==='risk')) insightText = `Atención: suele visitar cada ${ins.frequency||'30+'} días pero lleva ${ins.daysSinceLast} sin venir. Recomendado: contacto proactivo por WhatsApp con propuesta de turno.`;
+      else if(ins.tags.some(t=>t.label==='Frecuente')) insightText = `Cliente fiel: visita cada ${ins.frequency} días en promedio. Ideal para ofrecer upgrades o membresía.`;
+      else if(ins.visits===0) insightText = 'Todavía sin visitas registradas. Primer turno pendiente de concretar.';
+      else if(ins.visits===1) insightText = 'Primera visita reciente. Clave: seguimiento post-servicio para asegurar la segunda visita.';
+      else insightText = `Ritmo de visita normal${ins.frequency?` (cada ${ins.frequency} días aprox.)`:''}. Mantener experiencia habitual.`;
+      if(ins.tags.some(t=>t.label==='Alto valor')) insightText += ' Ticket promedio por encima de la media del salón: priorizar su experiencia.';
+      $('profileInsightText').textContent = insightText;
       const history = state.appointments.filter(a=>a.clientId===c.id);
       $('profileHistory').innerHTML = history.length ? history.map(a=>`<div class="history-item"><strong>${a.service}</strong><span>${fullName(member(a.memberId))} · ${a.start} - ${a.end} · ${a.status || 'confirmado'}</span></div>`).join('') : '<div class="history-item"><strong>Sin turnos</strong><span>Todavía no tiene historial en agenda.</span></div>';
       $('profileCreateAppointment').onclick = ()=>{ closeDrawers(); fillAppointmentOptions(c.id); openDrawer('appointmentDrawer'); };
       $('profileMessage').onclick = ()=>showToast('Abriendo WhatsApp...');
       $('profileVip').onclick = ()=>{ if(!c.tags.includes('VIP')) c.tags.push('VIP'); renderClients(); openClientProfile(c.id); showToast('Cliente marcado como VIP.'); };
+      $('profileEditClient').onclick = ()=>{ closeDrawers(); editClient(c.id); };
       openDrawer('clientProfileDrawer');
     }
 
@@ -4960,6 +5789,14 @@
       state.agenda.colWidth = agendaZoomSteps[nextIndex];
       updateAgendaZoomLabel();
       renderAgenda();
+    }
+    function toggleAgendaFilters(){
+      const row = $('agendaFiltersRow');
+      if(!row) return;
+      const isOpen = row.style.display !== 'none';
+      row.style.display = isOpen ? 'none' : 'flex';
+      const btn = $('agendaFiltersToggle');
+      if(btn) btn.classList.toggle('active', !isOpen);
     }
     function updateAgendaZoomLabel(){
       const label = document.getElementById('agendaZoomLabel');
@@ -4974,13 +5811,91 @@
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
     ['groupFilter','memberFilter','roleView','agendaView'].forEach(id=>{ if($(id)) $(id).onchange=()=>{renderAgenda(); if(id==='agendaView' && $(id).value==='week') showToast('Vista semana simplificada activada.');}; });
     if($('toggleBlockers')) $('toggleBlockers').onclick=()=>{state.agenda.showBlockers=!state.agenda.showBlockers;renderAgenda();};
+
+    // ── Blocker drawer ──────────────────────────────────────────────
+    function buildBlockerMemberSelect(){
+      const sel=$('blockerMember'); if(!sel)return;
+      sel.innerHTML=state.collaborators.map(c=>`<option value="${c.id}">${fullName(c)}</option>`).join('');
+    }
+    function snapDuration(durationMins){
+      const opts=[15,30,45,60,90,120,150,180,240];
+      return opts.reduce((a,b)=>Math.abs(b-durationMins)<Math.abs(a-durationMins)?b:a, 60);
+    }
+    function openBlockerDrawer(blockerId){
+      buildBlockerMemberSelect();
+      $('blockerDrawerTitle').textContent = blockerId ? 'Editar bloqueo' : 'Nuevo bloqueo';
+      $('blockerDeleteBtn').style.display = blockerId ? 'inline-flex' : 'none';
+      $('blockerEditId').value = blockerId || '';
+      $('blockerPresets').querySelectorAll('[data-preset]').forEach(b=>b.classList.remove('active'));
+      if(blockerId){
+        const b=state.blockers.find(x=>x.id===blockerId);
+        if(b){
+          $('blockerMember').value=b.memberId;
+          $('blockerLabel').value=b.label;
+          $('blockerDate').value=b.date||'';
+          $('blockerStart').value=b.start;
+          $('blockerDuration').value=String(snapDuration(mins(b.end)-mins(b.start)));
+          const preset=$('blockerPresets').querySelector(`[data-preset="${b.label}"]`);
+          if(preset) preset.classList.add('active');
+        }
+      } else {
+        $('blockerMember').value=state.collaborators[0]?.id||'';
+        $('blockerLabel').value='';
+        $('blockerDate').value=dateKey(state.agenda.currentDate);
+        $('blockerStart').value='13:00';
+        $('blockerDuration').value='60';
+      }
+      openDrawer('blockerDrawer');
+    }
+    if($('addBlockerBtn')) $('addBlockerBtn').onclick=()=>openBlockerDrawer(null);
+    if($('blockerPresets')){
+      $('blockerPresets').querySelectorAll('[data-preset]').forEach(btn=>{
+        btn.onclick=()=>{$('blockerLabel').value=btn.dataset.preset; $('blockerPresets').querySelectorAll('[data-preset]').forEach(b=>b.classList.remove('active')); btn.classList.add('active');};
+      });
+    }
+    if($('blockerSaveBtn')) $('blockerSaveBtn').onclick=()=>{
+      const memberId=$('blockerMember').value;
+      const label=($('blockerLabel').value||'').trim();
+      const date=$('blockerDate').value||'';
+      const start=$('blockerStart').value;
+      const duration=parseInt($('blockerDuration').value)||60;
+      const end=toTime(mins(start)+duration);
+      if(!label){showToast('Escribí una etiqueta para el bloqueo.');return;}
+      if(!start){showToast('Seleccioná una hora de inicio.');return;}
+      const editId=$('blockerEditId').value;
+      if(editId){
+        const b=state.blockers.find(x=>x.id===editId);
+        if(b) Object.assign(b,{memberId,label,date,start,end});
+      } else {
+        state.blockers.push({id:'blk'+Date.now(),memberId,label,date,start,end});
+      }
+      if(!state.agenda.showBlockers) state.agenda.showBlockers=true;
+      closeDrawers(); saveState(); renderAgenda();
+      showToast(editId?'Bloqueo actualizado.':'Bloqueo creado.');
+    };
+    if($('blockerDeleteBtn')) $('blockerDeleteBtn').onclick=()=>{
+      const editId=$('blockerEditId').value;
+      if(!editId)return;
+      state.blockers=state.blockers.filter(b=>b.id!==editId);
+      closeDrawers(); saveState(); renderAgenda(); showToast('Bloqueo eliminado.');
+    };
+    document.addEventListener('click',e=>{
+      const del=e.target.closest('[data-blocker-del]');
+      if(del){e.stopPropagation(); state.blockers=state.blockers.filter(b=>b.id!==del.dataset.blockerDel); saveState(); renderAgenda(); showToast('Bloqueo eliminado.'); return;}
+      const blk=e.target.closest('[data-blocker]');
+      if(blk && !e.target.closest('[data-blocker-del]')) openBlockerDrawer(blk.dataset.blocker);
+    });
     if($('waitlistBtn')) $('waitlistBtn').onclick=openWaitlist;
     if($('closeDayBtn')) $('closeDayBtn').onclick=closeDay;
     if($('cashOpenBtn')) $('cashOpenBtn').onclick=openCashSession;
+    if($('cashDepositBtn')) $('cashDepositBtn').onclick=registerDeposit;
     if($('cashWithdrawalBtn')) $('cashWithdrawalBtn').onclick=registerWithdrawal;
+    if($('cashExpenseBtn')) $('cashExpenseBtn').onclick=registerExpense;
+    if($('confirmDepositBtn')) $('confirmDepositBtn').onclick=confirmDeposit;
     if($('cashCloseBtn')) $('cashCloseBtn').onclick=cashClose;
     if($('confirmCashOpenBtn')) $('confirmCashOpenBtn').onclick=confirmCashOpen;
     if($('confirmWithdrawalBtn')) $('confirmWithdrawalBtn').onclick=confirmWithdrawal;
+    if($('confirmExpenseBtn')) $('confirmExpenseBtn').onclick=confirmExpense;
     if($('confirmCashCloseBtn')) $('confirmCashCloseBtn').onclick=confirmCashClose;
     if($('cashUserMode')) $('cashUserMode').onchange=()=>{state.cashMode=$('cashUserMode').value; renderAll(); showToast(state.cashMode==='admin'?'Modo Admin caja':'Modo Colaboradora');};
     if($('cashCurrentCollaborator')) $('cashCurrentCollaborator').onchange=()=>{state.cashCurrentCollaboratorId=$('cashCurrentCollaborator').value; renderAll();};
@@ -4991,16 +5906,47 @@
     if($('savePendingSaleBtn')) $('savePendingSaleBtn').onclick=savePendingSale;
     if($('toggleSaleNoteBtn')) $('toggleSaleNoteBtn').onclick=()=>{$('saleNoteBox').style.display = $('saleNoteBox').style.display === 'none' ? 'block' : 'none';};
     document.querySelectorAll('[data-cash-tab]').forEach(b=>b.onclick=()=>setCashTab(b.dataset.cashTab));
+    function initCheckoutPayment(){
+      const primaryEl = $('checkoutMethodPrimary');
+      const secondaryEl = $('checkoutMethodSecondary');
+      if(primaryEl) primaryEl.innerHTML = paymentMethods.map(m=>`<button type="button" class="method-chip ${m==='Efectivo'?'active':''}" data-method="${m}">${m}</button>`).join('');
+      if(secondaryEl) secondaryEl.innerHTML = paymentMethods.map(m=>`<button type="button" class="method-chip ${m==='Transf'?'active':''}" data-method="${m}">${m}</button>`).join('');
+      [primaryEl, secondaryEl].forEach(el=>{
+        if(!el) return;
+        el.querySelectorAll('.method-chip').forEach(chip=>chip.onclick=()=>{
+          chip.parentElement.querySelectorAll('.method-chip').forEach(c=>c.classList.remove('active'));
+          chip.classList.add('active');
+          updateSaleSummary();
+        });
+      });
+      if($('checkoutMixedToggle')) $('checkoutMixedToggle').onclick=()=>{
+        const row = $('checkoutMixedRow');
+        if(row) row.style.display = row.style.display==='none' ? 'block' : 'none';
+        updateSaleSummary();
+      };
+      if($('checkoutPaymentPrimary')) $('checkoutPaymentPrimary').oninput=updateSaleSummary;
+      if($('checkoutPaymentSecondary')) $('checkoutPaymentSecondary').oninput=updateSaleSummary;
+      if($('reservationDeposit')) $('reservationDeposit').oninput=updateSaleSummary;
+    }
+    initCheckoutPayment();
     document.querySelectorAll('[data-sale-source]').forEach(b=>b.onclick=()=>setSaleSource(b.dataset.saleSource));
     initSaleClientAutocomplete();
     if($('saleAppointmentSelect')) $('saleAppointmentSelect').onchange=()=>selectSaleAppointment($('saleAppointmentSelect').value);
     if($('prevDay')) $('prevDay').onclick = () => { state.agenda.currentDate.setDate(state.agenda.currentDate.getDate() - 1); updateDateTitle(); renderAgenda(); };
     if($('nextDay')) $('nextDay').onclick = () => { state.agenda.currentDate.setDate(state.agenda.currentDate.getDate() + 1); updateDateTitle(); renderAgenda(); };
     if($('todayBtn')) $('todayBtn').onclick = () => { state.agenda.currentDate = new Date(); updateDateTitle(); renderAgenda(); };
+    if($('agendaDatePicker')) $('agendaDatePicker').onchange = () => {
+      const val = $('agendaDatePicker').value;
+      if(!val) return;
+      const [y,mo,d] = val.split('-').map(Number);
+      state.agenda.currentDate = new Date(y, mo-1, d);
+      updateDateTitle();
+      renderAgenda();
+    };
     setInterval(renderNowLine, 60000);
     loadState();
     state.appointments.forEach(a=>{ if(!a.date) a.date=dateKey(new Date()); });
-    buildCollaboratorForm();fillAppointmentOptions();renderAll();setTimeout(()=>{$('calendarWrap').scrollTop=topFor('12:00')},100);
+    buildCollaboratorForm();fillAppointmentOptions();renderAll();
     setInterval(saveState, 5000);
     window.addEventListener('beforeunload', saveState);
   
