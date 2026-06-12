@@ -1889,6 +1889,20 @@
       margin-bottom: 8px;
     }
 
+    .sale-extras-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .sale-extras-label {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
     .sale-line-title,
     .payment-line-title {
       font-family: 'Cormorant', serif;
@@ -4411,8 +4425,14 @@
         <div class="sale-line-status warn">Falta validar</div>
         <div class="sale-extras">
           <div class="sale-extras-grid">
-            <input class="sale-tip" type="number" value="${prefill.tipAmount||0}" placeholder="Propina">
-            <input class="sale-reference" type="text" value="${prefill.reference||''}" placeholder="Referencia">
+            <div class="sale-extras-field">
+              <label class="sale-extras-label">Propina</label>
+              <input class="sale-tip" type="number" min="0" value="${prefill.tipAmount||0}" placeholder="$0">
+            </div>
+            <div class="sale-extras-field">
+              <label class="sale-extras-label">Referencia / nota</label>
+              <input class="sale-reference" type="text" value="${prefill.reference||''}" placeholder="Ej: transferencia #12345">
+            </div>
           </div>
           <div class="addon-row">${state.catalog.additionals.map(a=>`<span class="select-chip sale-addon" data-price="${a.price}" data-addon-id="${a.id}">${a.name} · ${money(a.price)}</span>`).join('')}</div>
         </div>
