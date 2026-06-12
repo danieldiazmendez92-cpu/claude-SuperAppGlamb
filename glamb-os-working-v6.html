@@ -9,21 +9,21 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant:ital,wght@0,300;0,400;1,300&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #faf6f1;
-      --surface: #fffdf9;
-      --surface-2: #f5ede4;
-      --text: #1a1410;
-      --text-muted: #8a7e74;
-      --text-soft: #b8a99a;
-      --line: #e8e0d6;
-      --line-strong: #c8bdb2;
-      --accent: #c4956a;
-      --accent-dark: #7a5c48;
-      --accent-bg: #f5ede4;
-      --black: #1a1410;
-      --shadow-card: 0 2px 12px rgba(60,40,20,0.06);
-      --shadow-drawer: 0 8px 48px rgba(60,40,20,0.14);
-      --radius-card: 16px;
+      --bg: #F6F6F4;
+      --surface: #FBFBFA;
+      --surface-2: #EFEFEC;
+      --text: #0E0E0D;
+      --text-muted: #666662;
+      --text-soft: #94948E;
+      --line: #E3E3DF;
+      --line-strong: #CECEC8;
+      --accent: #0E0E0D;
+      --accent-dark: #1F1F1D;
+      --accent-bg: #EFEFEC;
+      --black: #0E0E0D;
+      --shadow-card: 0 1px 6px rgba(14,14,13,0.06);
+      --shadow-drawer: 0 8px 40px rgba(14,14,13,0.13);
+      --radius-card: 20px;
       --radius-pill: 999px;
       --hour-height: 67.2px;
       --slot-height: 33.6px;
@@ -44,6 +44,7 @@
       color: var(--text);
       font-family: 'DM Sans', sans-serif;
       font-weight: 300;
+      -webkit-font-smoothing: antialiased;
     }
 
     button,
@@ -76,17 +77,18 @@
 
     .app {
       display: grid;
-      grid-template-columns: 236px 1fr;
+      grid-template-columns: 220px 1fr;
       min-height: 100vh;
     }
 
     .sidebar {
       background: var(--surface);
       border-right: 0.5px solid var(--line);
-      padding: 24px 16px;
+      padding: 20px 12px;
       position: sticky;
       top: 0;
       height: 100vh;
+      overflow: hidden;
     }
 
     .brand {
@@ -97,29 +99,29 @@
     }
 
     .mark {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       display: grid;
       place-items: center;
       font-family: 'Cormorant', serif;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 300;
     }
 
     .brand-name {
       display: block;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 500;
-      letter-spacing: 0.01em;
+      letter-spacing: 0.04em;
     }
 
     .brand-subtitle {
       display: block;
       margin-top: 2px;
-      font-size: 11px;
+      font-size: 10px;
       color: var(--text-muted);
     }
 
@@ -134,14 +136,15 @@
       border: 0;
       width: 100%;
       text-align: left;
-      padding: 10px 12px;
-      border-radius: 12px;
+      padding: 9px 10px;
+      border-radius: 10px;
       color: var(--text-muted);
-      font-size: 13px;
+      font-size: 12px;
       font-weight: 300;
       display: flex;
-      gap: 10px;
+      gap: 9px;
       align-items: center;
+      letter-spacing: 0.01em;
     }
 
     .nav button.active,
@@ -150,15 +153,16 @@
       color: var(--text);
     }
 
+
     .side-note {
       position: absolute;
-      left: 16px;
-      right: 16px;
+      left: 12px;
+      right: 12px;
       bottom: 20px;
       background: var(--black);
-      color: #f5ede4;
-      border-radius: var(--radius-card);
-      padding: 16px;
+      color: #F6F6F4;
+      border-radius: 14px;
+      padding: 14px;
     }
 
     .side-note strong {
@@ -175,7 +179,7 @@
     }
 
     main {
-      padding: 28px;
+      padding: 32px 36px;
       min-width: 0;
     }
 
@@ -198,26 +202,26 @@
     .eyebrow {
       font-size: 10px;
       line-height: 1;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: var(--text-muted);
+      color: var(--text-soft);
       margin-bottom: 8px;
-      font-weight: 300;
+      font-weight: 400;
     }
 
     h1 {
       margin: 0;
-      font-size: 38px;
-      line-height: 0.96;
-      letter-spacing: -0.03em;
+      font-size: 42px;
+      line-height: 0.94;
+      letter-spacing: -0.04em;
     }
 
     .subtitle {
       margin: 10px 0 0;
-      max-width: 720px;
-      color: var(--text-muted);
+      max-width: 640px;
+      color: var(--text-soft);
       font-size: 13px;
-      line-height: 1.6;
+      line-height: 1.65;
     }
 
     .top-actions {
@@ -265,14 +269,15 @@
       color: var(--text);
       border: 0.5px solid var(--line-strong);
       padding: 9px 18px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 400;
       min-height: 36px;
+      letter-spacing: 0.02em;
     }
 
     .btn.primary {
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       border: 0;
     }
 
@@ -324,12 +329,12 @@
 
     .grid {
       display: grid;
-      gap: 16px;
+      gap: 14px;
     }
 
     .kpis {
       grid-template-columns: repeat(5, minmax(0, 1fr));
-      margin-bottom: 18px;
+      margin-bottom: 20px;
     }
 
     .card {
@@ -337,19 +342,20 @@
       border: 0.5px solid var(--line);
       border-radius: var(--radius-card);
       box-shadow: var(--shadow-card);
-      padding: 18px;
+      padding: 20px 22px;
     }
 
     .kpi-value {
-      font-size: 32px;
-      line-height: 0.95;
+      font-size: 34px;
+      line-height: 0.92;
+      letter-spacing: -0.02em;
     }
 
     .kpi-label {
-      margin-top: 7px;
-      font-size: 11px;
+      margin-top: 8px;
+      font-size: 10px;
       color: var(--text-muted);
-      letter-spacing: 0.08em;
+      letter-spacing: 0.10em;
       text-transform: uppercase;
     }
 
@@ -367,16 +373,17 @@
     .layout-2 {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 360px;
-      gap: 16px;
+      gap: 20px;
       align-items: start;
     }
 
     .section-title {
-      margin: 0 0 14px;
+      margin: 0 0 16px;
       font-family: 'Cormorant', serif;
-      font-size: 22px;
+      font-size: 24px;
       font-weight: 300;
       color: var(--text);
+      letter-spacing: -0.02em;
     }
 
     .mini-row {
@@ -404,9 +411,9 @@
 
     .dark-panel {
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       border-radius: var(--radius-card);
-      padding: 20px;
+      padding: 24px 26px;
     }
 
     .dark-panel h2 {
@@ -426,22 +433,23 @@
       align-items: center;
       border-radius: var(--radius-pill);
       padding: 3px 9px;
-      background: var(--accent-bg);
-      color: var(--accent-dark);
-      border: 0.5px solid #e0cfc0;
-      font-size: 11px;
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border: 0.5px solid var(--line);
+      font-size: 10px;
       line-height: 1.3;
+      letter-spacing: 0.04em;
     }
 
     .tag.neutral {
-      background: #f0ece8;
-      color: #5c5248;
-      border-color: #e0d8d0;
+      background: var(--surface-2);
+      color: var(--text-soft);
+      border-color: var(--line);
     }
 
     .tag.dark {
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       border-color: var(--black);
     }
 
@@ -480,16 +488,17 @@
 
     .chip {
       border-radius: var(--radius-pill);
-      padding: 6px 11px;
+      padding: 6px 12px;
       border: 0.5px solid var(--line);
       background: var(--surface);
       color: var(--text-muted);
       font-size: 11px;
+      letter-spacing: 0.02em;
     }
 
     .chip.active {
       background: var(--black);
-      color: #f5ede4;
+      color: #F6F6F4;
       border-color: var(--black);
     }
 
@@ -504,7 +513,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      padding: 14px;
+      padding: 16px 18px;
       background: var(--surface);
       border: 0.5px solid var(--line);
       border-radius: var(--radius-card);
@@ -520,12 +529,12 @@
     }
 
     .avatar {
-      width: 44px;
-      height: 44px;
+      width: 42px;
+      height: 42px;
       flex: 0 0 auto;
       border-radius: 12px;
-      background: var(--accent-bg);
-      color: var(--accent-dark);
+      background: var(--surface-2);
+      color: var(--text-muted);
       display: grid;
       place-items: center;
       font-family: 'Cormorant', serif;
@@ -880,9 +889,9 @@
     /* Agenda */
     .agenda-shell {
       background: var(--surface);
-      border: 0.5px solid rgba(216,204,190,0.72);
-      border-radius: 14px;
-      box-shadow: 0 16px 42px rgba(30,25,21,0.06);
+      border: 0.5px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(14,14,13,0.06);
       flex: 1 1 auto;
       min-height: 70vh;
       overflow: hidden;
@@ -1012,10 +1021,10 @@
 
     .appointment-block {
       position: absolute;
-      left: 6px;
-      right: 6px;
+      left: 4px;
+      right: 4px;
       border: 0;
-      border-radius: 0 8px 8px 0;
+      border-radius: 0 10px 10px 0;
       padding: 7px 8px;
       overflow: hidden;
       cursor: pointer;
@@ -1037,23 +1046,23 @@
     }
 
     .appointment-block.manicuria {
-      background: #f5ede4;
-      border-left: 2px solid var(--accent);
+      background: #EFEFEC;
+      border-left: 2px solid #0E0E0D;
     }
 
     .appointment-block.eyes {
-      background: #edf4f8;
-      border-left: 2px solid #7aadca;
+      background: #E8EEF2;
+      border-left: 2px solid #5A8FAA;
     }
 
     .appointment-block.depi {
-      background: #edf2ed;
-      border-left: 2px solid #8aad8a;
+      background: #E8EFE8;
+      border-left: 2px solid #6A9A6A;
     }
 
     .appointment-block.extra {
-      background: #f0ece8;
-      border-left: 2px solid #b0a090;
+      background: #F0EEEC;
+      border-left: 2px solid #9A9088;
     }
 
     .appt-service {
@@ -1353,10 +1362,10 @@
     }
 
     #page-cash {
-      --pos-ink: #201c19;
-      --pos-panel: #fffaf5;
-      --pos-muted: #8b7a6d;
-      --pos-line: rgba(216,204,190,0.82);
+      --pos-ink: #0E0E0D;
+      --pos-panel: #FBFBFA;
+      --pos-muted: #666662;
+      --pos-line: rgba(227,227,223,0.9);
     }
 
     .cash-pos-topbar {
@@ -1512,9 +1521,9 @@
     }
 
     .cash-pos-checkout {
-      background: #201c19;
-      color: #fffaf5;
-      border-color: #201c19;
+      background: #0E0E0D;
+      color: #FBFBFA;
+      border-color: #0E0E0D;
     }
 
     .cash-pos-checkout .sale-summary > div {
@@ -1759,7 +1768,7 @@
 
     .sale-summary strong {
       font-family: 'Cormorant', serif;
-      font-size: 24px;
+      font-size: 26px;
       font-weight: 300;
       color: var(--text);
     }
