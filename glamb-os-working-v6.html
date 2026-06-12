@@ -4499,9 +4499,9 @@
       else if(paid !== 'paid' && !a.isAdditional) flags.push('pago pendiente');
       const flagsHtml = flags.length ? `<div class="appt-flags">${flags.map(f=>`<span class="mini-flag ${f==='Adicional'?'add-flag':''}">${f}</span>`).join('')}</div>` : '';
       const blockH = heightFor(a.start, a.end);
-      const showClient = blockH > 44 && !a.isAdditional;
-      const showTime = blockH > 60;
-      const showFlags = blockH > 72;
+      const showClient = blockH > 52 && !a.isAdditional;
+      const showTime = blockH > 82;
+      const showFlags = blockH > 100;
       return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px"><div class="appt-service"><span class="status-dot ${a.status||'confirmed'}"></span>${a.service}</div>${showClient?`<div class="appt-client">${fullName(c)}</div>`:''}${showTime?`<div class="appt-time">${a.start} - ${a.end}</div>`:''}${showFlags?flagsHtml:''}</div>`;
     }
     function renderNowLine() {
@@ -4597,6 +4597,8 @@
       let top = r.top;
       if(top + popH > window.innerHeight-16) top = window.innerHeight - popH - 16;
       top = Math.max(16, top);
+      pop.style.left=left+'px';
+      pop.style.top=top+'px';
       pop.classList.add('open');
     }
 
