@@ -3309,6 +3309,10 @@
           <div class="metric-card"><strong id="profileMetricVisits">—</strong><span>Visitas</span></div>
           <div class="metric-card"><strong id="profileMetricSpent">—</strong><span>Total histórico</span></div>
         </div>
+        <div id="profileDepositBanner" style="display:none;margin-top:10px;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;font-size:13px;color:#166534;">
+          <span style="font-size:16px;">💰</span>
+          <span>Seña disponible: <strong id="profileDepositAmount">$0</strong> — se aplica automáticamente al cobrar.</span>
+        </div>
       </section>
       <section class="profile-section">
         <h3>Insights automáticos</h3>
@@ -4505,6 +4509,22 @@
       const box = $('depositClientSuggestions');
       if(!input || !box) return;
       state._depositClientId = null;
+      // Event delegation: single listener, no race condition with innerHTML rebuild
+      box._depDelegated = box._depDelegated || (() => {
+        box.addEventListener('mousedown', e=>{
+          const item = e.target.closest('[data-dep-client]');
+          if(!item) return;
+          e.preventDefault(); // keep focus on input so oninput doesn't re-fire
+          const c = state.clients.find(x=>x.id===item.dataset.depClient);
+          if(!c) return;
+          state._depositClientId = c.id;
+          input.value = fullName(c);
+          box.classList.remove('open');
+          if($('depositClientPreview')) $('depositClientPreview').textContent = fullName(c);
+          if($('depositAvailableBalance')) $('depositAvailableBalance').textContent = money(clientAvailableDeposit(c.id));
+        });
+        return true;
+      })();
       input.oninput = () => {
         const q = input.value.trim().toLowerCase();
         state._depositClientId = null;
@@ -4514,15 +4534,6 @@
         const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||''].join(' ').toLowerCase().includes(q)).slice(0,4);
         box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-dep-client="${c.id}">${fullName(c)}<span>${c.phone}</span></div>`).join('');
         box.classList.toggle('open', matches.length>0);
-        box.querySelectorAll('[data-dep-client]').forEach(item=>item.onclick=()=>{
-          const c = state.clients.find(x=>x.id===item.dataset.depClient);
-          if(!c) return;
-          state._depositClientId = c.id;
-          input.value = fullName(c);
-          box.classList.remove('open');
-          if($('depositClientPreview')) $('depositClientPreview').textContent = fullName(c);
-          if($('depositAvailableBalance')) $('depositAvailableBalance').textContent = money(clientAvailableDeposit(c.id));
-        });
       };
     }
     function registerDeposit(){
@@ -4540,6 +4551,7 @@
       const amount = Number($('depositAmount2')?.value || 0);
       if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
       const clientId = state._depositClientId || null;
+      if(!clientId) return showToast('Seleccioná un cliente de la lista antes de guardar.');
       const c = clientId ? state.clients.find(x=>x.id===clientId) : null;
       state.payments.push({
         id:uid('dep'), ticketId:null, appointmentId:null, clientId:clientId||null,
@@ -5992,6 +6004,9 @@
       $('profileMetricLast').textContent = ins.daysSinceLast!==null ? (ins.daysSinceLast===0?'Hoy':`hace ${ins.daysSinceLast} día(s)`) : '—';
       $('profileMetricVisits').textContent = ins.visits || '0';
       $('profileMetricSpent').textContent = ins.totalSpent ? money(ins.totalSpent) : '—';
+      const profileDeposit = clientAvailableDeposit(c.id);
+      if($('profileDepositBanner')) $('profileDepositBanner').style.display = profileDeposit > 0 ? 'flex' : 'none';
+      if($('profileDepositAmount')) $('profileDepositAmount').textContent = money(profileDeposit);
       $('profileInsightTags').innerHTML = insightTagsHtml(ins) || '<span class="tag neutral">Sin señales aún</span>';
       let insightText;
       if(ins.tags.some(t=>t.cls==='risk')) insightText = `Atención: suele visitar cada ${ins.frequency||'30+'} días pero lleva ${ins.daysSinceLast} sin venir. Recomendado: contacto proactivo por WhatsApp con propuesta de turno.`;
