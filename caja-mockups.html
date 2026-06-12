@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLAMB · Mockups Módulo Caja</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F6F6F4;--surface:#FBFBFA;--surface-2:#EFEFEC;--text:#0E0E0D;--text-muted:#666662;--text-soft:#94948E;--line:#E3E3DF;--line-strong:#CECEC8;--black:#0E0E0D;--shadow-card:0 1px 6px rgba(14,14,13,0.06);--shadow-drawer:0 8px 40px rgba(14,14,13,0.13);--green:#1B5E20;--green-bg:#E8F5E9;--red:#B91C1C;--red-bg:#FDE8E8;--gold:#8A6D1B;--gold-bg:#FBF3E0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-weight:300;-webkit-font-smoothing:antialiased}
+h1,h2,h3{font-family:'Cormorant',serif;font-weight:300;margin:0}
+.eyebrow{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-soft);font-weight:500}
+.switcher{position:sticky;top:0;z-index:50;background:var(--black);padding:14px 24px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.switcher .brand{color:#F6F6F4;font-family:'Cormorant',serif;font-size:20px;margin-right:16px}
+.sw-btn{background:rgba(246,246,244,.12);color:#F6F6F4;border:0;border-radius:999px;padding:8px 18px;font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer}
+.sw-btn.active{background:#F6F6F4;color:var(--black);font-weight:600}
+.mock{display:none;padding:28px;max-width:1240px;margin:0 auto}
+.mock.active{display:block}
+.mock-note{background:var(--gold-bg);border:.5px solid #E8D49A;color:var(--gold);border-radius:12px;padding:10px 16px;font-size:12px;margin-bottom:20px}
+.card{background:var(--surface);border:.5px solid var(--line);border-radius:20px;box-shadow:var(--shadow-card);padding:18px 20px}
+.btn{border:.5px solid var(--line-strong);background:transparent;color:var(--text);border-radius:999px;padding:9px 18px;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer}
+.btn.primary{background:var(--black);color:#F6F6F4;border:0}
+.btn.big{padding:16px 28px;font-size:14px;font-weight:600;border-radius:14px;width:100%}
+.chip{border:.5px solid var(--line-strong);background:var(--surface);border-radius:999px;padding:6px 14px;font-size:11px;cursor:pointer;display:inline-block}
+.chip.active{background:var(--black);color:#F6F6F4;border-color:var(--black)}
+.tag{display:inline-flex;border-radius:999px;padding:3px 9px;background:var(--surface-2);color:var(--text-muted);border:.5px solid var(--line);font-size:10px}
+.money{font-family:'Cormorant',serif;font-weight:300}
+input,select{font-family:'DM Sans',sans-serif;font-weight:300;border:.5px solid var(--line);border-radius:10px;padding:9px 12px;font-size:13px;background:var(--surface)}
+/* ───── barra estado caja (quick wins + compartida) ───── */
+.cash-strip{display:flex;align-items:center;gap:14px;background:var(--green-bg);border:.5px solid #A5D6A7;border-radius:999px;padding:8px 18px;font-size:12px;margin-bottom:18px}
+.cash-strip .dot{width:9px;height:9px;border-radius:99px;background:var(--green)}
+.cash-strip strong{font-weight:600;color:var(--green)}
+.cash-strip .spacer{flex:1}
+.mode-chip{font-size:11px;background:var(--surface);border:.5px solid var(--line-strong);border-radius:999px;padding:5px 12px;color:var(--text-muted)}
+/* ───── MOCK 1 quick wins ───── */
+.qw-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:16px}
+.qw-top h1{font-size:32px}
+.menu-fake{position:relative;display:inline-block}
+.menu-pop{position:absolute;right:0;top:110%;background:var(--surface);border:.5px solid var(--line);border-radius:14px;box-shadow:var(--shadow-drawer);min-width:190px;padding:6px;z-index:5}
+.menu-pop button{display:block;width:100%;text-align:left;background:none;border:0;padding:9px 12px;font-size:12px;font-family:'DM Sans',sans-serif;border-radius:8px;cursor:pointer}
+.menu-pop button:hover{background:var(--surface-2)}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.badge{background:var(--red);color:#fff;border-radius:99px;font-size:9px;padding:1px 6px;margin-left:5px;font-weight:700}
+.qw-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;align-items:start}
+.pay-methods{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.pay-btn{border:.5px solid var(--line-strong);background:var(--surface);border-radius:12px;padding:12px 6px;text-align:center;font-size:11px;cursor:pointer}
+.pay-btn span{display:block;font-size:18px;margin-bottom:3px}
+.pay-btn.active{background:var(--black);color:#F6F6F4;border-color:var(--black)}
+.sticky-foot{position:sticky;bottom:12px;background:var(--black);color:#F6F6F4;border-radius:16px;padding:14px 22px;display:flex;justify-content:space-between;align-items:center;margin-top:18px;box-shadow:var(--shadow-drawer)}
+.sticky-foot .total{font-family:'Cormorant',serif;font-size:26px}
+.sticky-foot button{background:#F6F6F4;color:var(--black);border:0;border-radius:999px;padding:11px 26px;font-weight:600;font-size:13px;cursor:pointer}
+.line-row{display:flex;gap:8px;margin-bottom:10px;align-items:center}
+.line-row select,.line-row input{flex:1}
+/* ───── MOCK 2 caja viva ───── */
+.viva-hero{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:16px;margin-bottom:18px}
+.viva-balance{background:var(--black);color:#F6F6F4;border-radius:20px;padding:22px 24px}
+.viva-balance .amt{font-family:'Cormorant',serif;font-size:44px;line-height:1.1}
+.viva-balance .sub{font-size:11px;opacity:.7;margin-top:4px}
+.viva-mini{display:flex;flex-direction:column;justify-content:center}
+.viva-mini .amt{font-family:'Cormorant',serif;font-size:30px}
+.viva-mini .lbl{font-size:11px;color:var(--text-muted)}
+.timeline{display:flex;flex-direction:column;gap:0}
+.tl-item{display:flex;gap:14px;padding:11px 4px;border-bottom:.5px solid var(--line);font-size:12px;align-items:center}
+.tl-time{color:var(--text-soft);width:42px;flex-shrink:0}
+.tl-main{flex:1}
+.tl-amt{font-weight:600}
+.alert-chip{display:flex;justify-content:space-between;background:var(--red-bg);border:.5px solid #FCA5A5;border-radius:12px;padding:10px 14px;font-size:12px;margin-bottom:8px;align-items:center}
+.alert-chip strong{color:var(--red)}
+.drawer-demo{position:fixed;right:0;top:0;bottom:0;width:430px;background:var(--surface);box-shadow:var(--shadow-drawer);z-index:40;padding:26px;display:none;flex-direction:column;border-left:.5px solid var(--line);overflow-y:auto}
+.drawer-demo.open{display:flex}
+.overlay-demo{position:fixed;inset:0;background:rgba(14,14,13,.25);z-index:35;display:none}
+.overlay-demo.open{display:block}
+/* ───── MOCK 3 ticket-first ───── */
+.pos-queue{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;margin-bottom:16px}
+.q-card{flex-shrink:0;background:var(--surface);border:.5px solid var(--line);border-radius:14px;padding:10px 14px;font-size:12px;cursor:pointer;min-width:150px}
+.q-card:hover{border-color:var(--black)}
+.q-card .nm{font-weight:600;margin-bottom:2px}
+.q-card .due{color:var(--red);font-weight:600;font-size:13px}
+.q-card.paid .due{color:var(--green)}
+.pos-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start}
+.svc-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+.svc-card{background:var(--surface);border:.5px solid var(--line);border-radius:14px;padding:13px 14px;cursor:pointer;transition:border-color .1s}
+.svc-card:hover{border-color:var(--black)}
+.svc-card .nm{font-size:12px;font-weight:500;margin-bottom:5px;line-height:1.3}
+.svc-card .pr{font-family:'Cormorant',serif;font-size:19px}
+.svc-card .dur{font-size:10px;color:var(--text-soft)}
+.ticket{background:var(--surface);border:.5px solid var(--line);border-radius:20px;overflow:hidden;position:sticky;top:80px}
+.ticket-head{background:var(--surface-2);padding:14px 18px;border-bottom:.5px dashed var(--line-strong)}
+.ticket-body{padding:14px 18px}
+.t-line{display:flex;justify-content:space-between;font-size:12.5px;padding:7px 0;border-bottom:.5px solid var(--line)}
+.t-line .who{color:var(--text-soft);font-size:10.5px;display:block}
+.t-line .rm{color:var(--red);cursor:pointer;margin-left:8px;font-size:14px}
+.t-sub{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;color:var(--text-muted)}
+.t-total{display:flex;justify-content:space-between;align-items:center;padding:12px 0 4px}
+.t-total .money{font-size:30px}
+.ticket-foot{padding:0 18px 18px}
+/* ───── MOCK 4 wizard ───── */
+.stepper{display:flex;align-items:center;gap:0;margin-bottom:22px}
+.step{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.step .n{width:30px;height:30px;border-radius:99px;background:var(--surface-2);color:var(--text-muted);display:grid;place-items:center;font-weight:600;border:.5px solid var(--line-strong)}
+.step.done .n{background:var(--green-bg);color:var(--green);border-color:#A5D6A7}
+.step.now .n{background:var(--black);color:#F6F6F4;border-color:var(--black)}
+.step.now{font-weight:600}
+.step-line{flex:1;height:1px;background:var(--line-strong);margin:0 14px;min-width:30px}
+.wiz-grid{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start}
+.big-option{display:flex;justify-content:space-between;align-items:center;border:.5px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:10px;cursor:pointer;background:var(--surface)}
+.big-option:hover{border-color:var(--black)}
+.big-option.sel{border:1.5px solid var(--black)}
+.big-option .ttl{font-size:13.5px;font-weight:500}
+.big-option .sub{font-size:11px;color:var(--text-muted);margin-top:2px}
+.paper{background:#fff;border:.5px solid var(--line);border-radius:4px 4px 14px 14px;box-shadow:var(--shadow-card);position:sticky;top:80px;padding:0;overflow:hidden}
+.paper::before{content:"";display:block;height:8px;background:repeating-linear-gradient(90deg,var(--surface-2) 0 8px,#fff 8px 16px)}
+.paper-in{padding:18px 20px}
+.paper h3{text-align:center;font-size:18px;letter-spacing:.04em}
+.paper .meta{text-align:center;font-size:10px;color:var(--text-soft);margin:2px 0 12px}
+.wiz-nav{display:flex;justify-content:space-between;margin-top:18px}
+@media(max-width:900px){.qw-grid,.pos-grid,.wiz-grid,.viva-hero{grid-template-columns:1fr}.svc-cards{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="switcher">
+  <span class="brand">GLAMB · Caja</span>
+  <button class="sw-btn active" data-m="m1">1 · Quick wins</button>
+  <button class="sw-btn" data-m="m2">2 · Caja viva</button>
+  <button class="sw-btn" data-m="m3">3 · Ticket-first</button>
+  <button class="sw-btn" data-m="m4">4 · Wizard 3 pasos</button>
+</div>
+
+<!-- ════════ MOCK 1 · QUICK WINS ════════ -->
+<section class="mock active" id="m1">
+  <div class="mock-note">Mismo layout actual, pero: un solo botón primario, menú "Movimientos", barra de estado compacta, chip de modo, badge en Pendientes, métodos de pago grandes y footer sticky con el total.</div>
+  <div class="qw-top">
+    <div><div class="eyebrow">Ventas &amp; Caja</div><h1>Registro de ventas</h1></div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="mode-chip">⚙ Admin caja · Vero</span>
+      <div class="menu-fake">
+        <button class="btn" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='block'?'none':'block'">Movimientos ▾</button>
+        <div class="menu-pop" style="display:none;">
+          <button>○ Abrir caja</button><button>＋ Registrar seña</button><button>↑ Registrar retiro</button><button>− Registrar gasto</button><button style="color:#B91C1C;">● Cerrar caja</button>
+        </div>
+      </div>
+      <button class="btn primary">＋ Nueva venta</button>
+    </div>
+  </div>
+  <div class="cash-strip"><span class="dot"></span><strong>Caja abierta</strong><span>desde 09:02 · Apertura $10.000</span><span class="spacer"></span><span>En caja ahora: <strong style="font-size:14px;">$86.500</strong></span></div>
+  <div class="tabs">
+    <span class="chip active">Registrar venta</span>
+    <span class="chip">Pendientes<span class="badge">3</span></span>
+    <span class="chip">Caja del día</span>
+    <span class="chip">Tickets</span>
+  </div>
+  <div class="qw-grid">
+    <div class="card">
+      <h2 style="font-size:20px;margin-bottom:12px;">Servicios realizados</h2>
+      <div class="line-row"><select><option>Macarena Reyes</option></select><select><option>Kapping Polygel (Manicuria)</option></select><input value="26000" style="max-width:110px;"></div>
+      <div class="line-row"><select><option>Macarena Reyes</option></select><select><option>Decoración nail art</option></select><input value="3000" style="max-width:110px;"></div>
+      <button class="btn" style="margin-top:6px;">＋ Agregar servicio</button>
+    </div>
+    <div class="card">
+      <h2 style="font-size:20px;margin-bottom:10px;">Cobro</h2>
+      <div style="font-size:11px;color:var(--text-muted);">SEÑA YA ABONADA</div>
+      <input value="5000" style="width:100%;margin:6px 0 12px;">
+      <div style="font-size:11px;color:var(--text-muted);">FORMA DE PAGO</div>
+      <div class="pay-methods">
+        <div class="pay-btn active"><span>💵</span>Efectivo</div>
+        <div class="pay-btn"><span>🏦</span>Transf.</div>
+        <div class="pay-btn"><span>📱</span>MP</div>
+        <div class="pay-btn"><span>💳</span>Débito</div>
+        <div class="pay-btn"><span>💳</span>Crédito</div>
+        <div class="pay-btn"><span>➗</span>Mixto</div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);">MONTO QUE PAGA HOY</div>
+      <input value="24000" style="width:100%;margin-top:6px;">
+    </div>
+  </div>
+  <div class="sticky-foot">
+    <div><div style="font-size:10px;opacity:.7;letter-spacing:.08em;">SALDO A COBRAR HOY</div><div class="total">$24.000</div></div>
+    <div style="display:flex;gap:10px;"><button style="background:transparent;color:#F6F6F4;border:.5px solid rgba(246,246,244,.4);">Guardar pendiente</button><button>Registrar venta →</button></div>
+  </div>
+</section>
+
+<!-- ════════ MOCK 2 · CAJA VIVA ════════ -->
+<section class="mock" id="m2">
+  <div class="mock-note">La página es el pulso del día: saldo grande, timeline de tickets, alertas de pendientes. La venta se hace en un drawer lateral (probá el botón "Nueva venta").</div>
+  <div class="qw-top">
+    <div><div class="eyebrow">Ventas &amp; Caja</div><h1>Caja del día · vie 12 jun</h1></div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span class="mode-chip">⚙ Admin caja</span>
+      <button class="btn">Movimientos ▾</button>
+      <button class="btn primary" onclick="document.getElementById('vivaDrawer').classList.add('open');document.getElementById('vivaOverlay').classList.add('open')">＋ Nueva venta</button>
+    </div>
+  </div>
+  <div class="viva-hero">
+    <div class="viva-balance">
+      <div class="eyebrow" style="color:rgba(246,246,244,.6);">En caja ahora</div>
+      <div class="amt">$86.500</div>
+      <div class="sub">Apertura $10.000 · 09:02 · Vero F.</div>
+    </div>
+    <div class="card viva-mini"><div class="amt">$112.000</div><div class="lbl">Vendido hoy · 9 tickets</div><div style="margin-top:8px;font-size:11px;color:var(--text-muted);">💵 $61.500 · 🏦 $38.000 · 📱 $12.500</div></div>
+    <div class="card viva-mini"><div class="amt" style="color:var(--red);">$31.000</div><div class="lbl">Pendiente de cobro · 3 clientas</div><div style="margin-top:8px;"><span class="tag">Mayor: Sofía P. $18.000</span></div></div>
+  </div>
+  <div class="qw-grid">
+    <div class="card">
+      <h2 style="font-size:20px;margin-bottom:8px;">Movimientos del día</h2>
+      <div class="timeline">
+        <div class="tl-item"><span class="tl-time">13:05</span><div class="tl-main"><strong>Pilar Escalante</strong> · Kapping + Nail art · Macarena</div><span class="tl-amt">$24.000</span></div>
+        <div class="tl-item"><span class="tl-time">12:40</span><div class="tl-main"><strong>Retiro de caja</strong> · Proveedor esmaltes · Vero</div><span class="tl-amt" style="color:var(--red);">− $15.000</span></div>
+        <div class="tl-item"><span class="tl-time">11:55</span><div class="tl-main"><strong>Martina López</strong> · Semipermanente · Ana <span class="tag" style="margin-left:6px;">parcial</span></div><span class="tl-amt">$8.000</span></div>
+        <div class="tl-item"><span class="tl-time">11:10</span><div class="tl-main"><strong>Seña recibida</strong> · Valentina Paz · turno 18/6</div><span class="tl-amt">$5.000</span></div>
+        <div class="tl-item"><span class="tl-time">10:30</span><div class="tl-main"><strong>Claudia Astigarraga</strong> · Lifting pestañas · Macarena</div><span class="tl-amt">$22.000</span></div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="margin-bottom:14px;">
+        <h2 style="font-size:20px;margin-bottom:10px;">Pendientes <span class="badge" style="font-size:10px;vertical-align:middle;">3</span></h2>
+        <div class="alert-chip"><span>Sofía P. · Esculpidas 9/6</span><strong>$18.000 <button class="btn" style="padding:4px 12px;margin-left:6px;">Cobrar</button></strong></div>
+        <div class="alert-chip"><span>Martina L. · saldo de hoy</span><strong>$8.000 <button class="btn" style="padding:4px 12px;margin-left:6px;">Cobrar</button></strong></div>
+        <div class="alert-chip"><span>Carla M. · Depilación 2/6</span><strong>$5.000 <button class="btn" style="padding:4px 12px;margin-left:6px;">Cobrar</button></strong></div>
+      </div>
+      <div class="card"><h2 style="font-size:20px;margin-bottom:8px;">Por cobrar de agenda</h2>
+        <div class="tl-item"><span class="tl-time">15:00</span><div class="tl-main"><strong>Valentina Paz</strong> · Esculpidas gel</div><button class="btn primary" style="padding:5px 14px;">Cobrar</button></div>
+        <div class="tl-item"><span class="tl-time">17:30</span><div class="tl-main"><strong>Martina López</strong> · Lifting completo</div><button class="btn" style="padding:5px 14px;">Esperando</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="overlay-demo" id="vivaOverlay" onclick="document.getElementById('vivaDrawer').classList.remove('open');this.classList.remove('open')"></div>
+  <aside class="drawer-demo" id="vivaDrawer">
+    <div style="display:flex;justify-content:space-between;margin-bottom:14px;"><div><div class="eyebrow">Caja</div><h2 style="font-size:24px;">Nueva venta</h2></div><button class="btn" onclick="document.getElementById('vivaDrawer').classList.remove('open');document.getElementById('vivaOverlay').classList.remove('open')">×</button></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">CLIENTE</div>
+    <input placeholder="Buscar o turno de agenda…" style="width:100%;margin-bottom:14px;">
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">SERVICIOS</div>
+    <div class="line-row"><select style="flex:2;"><option>Kapping Polygel · Macarena</option></select><input value="26000" style="max-width:90px;"></div>
+    <button class="btn" style="margin:4px 0 16px;">＋ Servicio</button>
+    <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">PAGO</div>
+    <div class="pay-methods" style="grid-template-columns:repeat(3,1fr);">
+      <div class="pay-btn active"><span>💵</span>Efectivo</div><div class="pay-btn"><span>🏦</span>Transf.</div><div class="pay-btn"><span>📱</span>MP</div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="border-top:.5px solid var(--line);padding-top:14px;display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:10px;color:var(--text-muted);">TOTAL</div><div class="money" style="font-size:28px;">$26.000</div></div><button class="btn primary" style="padding:13px 26px;">Cobrar →</button></div>
+  </aside>
+</section>
+
+<!-- ════════ MOCK 3 · TICKET-FIRST ════════ -->
+<section class="mock" id="m3">
+  <div class="mock-note">POS estilo Square/Fresha: cola de cobro arriba (turnos del día), catálogo tocable a la izquierda, ticket vivo a la derecha. Tocá una tarjeta de servicio para "agregarla".</div>
+  <div class="qw-top">
+    <div><div class="eyebrow">Ventas &amp; Caja</div><h1>Punto de venta</h1></div>
+    <div style="display:flex;gap:8px;"><span class="mode-chip">⚙ Admin</span><button class="btn">Movimientos ▾</button></div>
+  </div>
+  <div class="cash-strip"><span class="dot"></span><strong>Caja abierta</strong><span class="spacer"></span><span>En caja: <strong>$86.500</strong></span></div>
+  <div class="eyebrow" style="margin-bottom:8px;">Cola de cobro · turnos de hoy</div>
+  <div class="pos-queue">
+    <div class="q-card"><div class="nm">Pilar Escalante</div><div style="color:var(--text-muted);">11:00 · Kapping + art</div><div class="due">Saldo $21.000</div></div>
+    <div class="q-card"><div class="nm">Valentina Paz</div><div style="color:var(--text-muted);">13:30 · Esculpidas</div><div class="due">Saldo $24.000</div></div>
+    <div class="q-card paid"><div class="nm">Claudia A.</div><div style="color:var(--text-muted);">10:00 · Lifting</div><div class="due">✓ Cobrado</div></div>
+    <div class="q-card"><div class="nm">Martina López</div><div style="color:var(--text-muted);">17:30 · Lifting</div><div class="due">Saldo $14.000</div></div>
+    <div class="q-card" style="border-style:dashed;display:grid;place-items:center;color:var(--text-muted);">＋ Venta sin turno</div>
+  </div>
+  <div class="pos-grid">
+    <div>
+      <input placeholder="🔍 Buscar servicio o producto…" style="width:100%;margin-bottom:10px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <span class="chip active">Manicuria</span><span class="chip">Eyebrow &amp; Lash</span><span class="chip">Depilación</span><span class="chip">Extras</span><span class="chip">Adicionales</span><span class="chip">Productos</span>
+      </div>
+      <div class="svc-cards">
+        <div class="svc-card" onclick="posAdd('Semipermanente clásica','Ana García',14000)"><div class="nm">Semipermanente clásica</div><div class="pr">$14.000</div><div class="dur">60 min</div></div>
+        <div class="svc-card" onclick="posAdd('Kapping Gel','Ana García',18000)"><div class="nm">Kapping Gel</div><div class="pr">$18.000</div><div class="dur">90 min</div></div>
+        <div class="svc-card" onclick="posAdd('Kapping Polygel','Macarena Reyes',26000)"><div class="nm">Kapping Polygel</div><div class="pr">$26.000</div><div class="dur">120 min</div></div>
+        <div class="svc-card" onclick="posAdd('Esculpidas gel','Vero Fuentes',24000)"><div class="nm">Esculpidas gel</div><div class="pr">$24.000</div><div class="dur">120 min</div></div>
+        <div class="svc-card" onclick="posAdd('Soft gel','Vero Fuentes',20000)"><div class="nm">Soft gel</div><div class="pr">$20.000</div><div class="dur">90 min</div></div>
+        <div class="svc-card" onclick="posAdd('Nail art (por uña)','Macarena Reyes',1500)"><div class="nm">Nail art (por uña)</div><div class="pr">$1.500</div><div class="dur">10 min</div></div>
+      </div>
+    </div>
+    <div class="ticket">
+      <div class="ticket-head"><div class="eyebrow">Ticket en curso</div><div style="font-size:15px;font-weight:600;margin-top:2px;">Pilar Escalante</div><div style="font-size:11px;color:var(--text-muted);">turno 11:00 · seña $5.000</div></div>
+      <div class="ticket-body">
+        <div id="posLines">
+          <div class="t-line"><span>Kapping Polygel<span class="who">Macarena Reyes</span></span><span>$26.000<span class="rm">×</span></span></div>
+          <div class="t-line"><span>Decoración nail art<span class="who">Macarena Reyes</span></span><span>$3.000<span class="rm">×</span></span></div>
+        </div>
+        <div class="t-sub"><span>Subtotal</span><span id="posSub">$29.000</span></div>
+        <div class="t-sub" style="color:var(--gold);"><span>− Seña abonada</span><span>$5.000</span></div>
+        <div class="t-total"><span style="font-size:13px;font-weight:600;">TOTAL</span><span class="money" id="posTot">$24.000</span></div>
+      </div>
+      <div class="ticket-foot">
+        <div class="pay-methods" style="grid-template-columns:repeat(3,1fr);"><div class="pay-btn active"><span>💵</span>Efectivo</div><div class="pay-btn"><span>🏦</span>Transf.</div><div class="pay-btn"><span>📱</span>MP</div></div>
+        <button class="btn primary big">Cobrar $24.000</button>
+        <button class="btn" style="width:100%;margin-top:8px;">Guardar como pendiente</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════ MOCK 4 · WIZARD ════════ -->
+<section class="mock" id="m4">
+  <div class="mock-note">Flujo guiado en 3 pasos con ticket de papel a la derecha. Imposible perderse: cada paso valida antes de avanzar. (Mostrado en el paso 3 · Cobro).</div>
+  <div class="qw-top">
+    <div><div class="eyebrow">Ventas &amp; Caja</div><h1>Nueva venta</h1></div>
+    <span class="mode-chip">⚙ Admin caja</span>
+  </div>
+  <div class="stepper">
+    <div class="step done"><span class="n">✓</span>Cliente</div><div class="step-line"></div>
+    <div class="step done"><span class="n">✓</span>Servicios</div><div class="step-line"></div>
+    <div class="step now"><span class="n">3</span>Cobro</div>
+  </div>
+  <div class="wiz-grid">
+    <div>
+      <div class="card">
+        <h2 style="font-size:20px;margin-bottom:12px;">¿Cómo paga Pilar?</h2>
+        <div class="big-option sel"><div><div class="ttl">💵 Paga todo hoy</div><div class="sub">Cobra el saldo completo: $24.000</div></div><span>●</span></div>
+        <div class="big-option"><div><div class="ttl">➗ Pago parcial</div><div class="sub">Cobra una parte y deja saldo pendiente</div></div><span>○</span></div>
+        <div class="big-option"><div><div class="ttl">📋 Todo pendiente</div><div class="sub">Guarda la venta para cobrar otro día</div></div><span>○</span></div>
+        <div style="font-size:11px;color:var(--text-muted);margin:16px 0 6px;">MÉTODO</div>
+        <div class="pay-methods"><div class="pay-btn active"><span>💵</span>Efectivo</div><div class="pay-btn"><span>🏦</span>Transf.</div><div class="pay-btn"><span>📱</span>MP</div><div class="pay-btn"><span>💳</span>Débito</div><div class="pay-btn"><span>💳</span>Crédito</div><div class="pay-btn"><span>➗</span>Mixto</div></div>
+      </div>
+      <div class="wiz-nav"><button class="btn">← Volver a servicios</button><button class="btn primary" style="padding:13px 30px;font-size:13px;">Confirmar venta $24.000 →</button></div>
+    </div>
+    <div class="paper">
+      <div class="paper-in">
+        <h3>GLAMB</h3>
+        <div class="meta">vie 12 jun · 13:05 · Ticket #0019</div>
+        <div class="t-line"><span>Pilar Escalante</span><span class="tag">turno 11:00</span></div>
+        <div class="t-line"><span>Kapping Polygel<span class="who">Macarena Reyes</span></span><span>$26.000</span></div>
+        <div class="t-line"><span>Decoración nail art<span class="who">Macarena Reyes</span></span><span>$3.000</span></div>
+        <div class="t-sub" style="margin-top:6px;"><span>Subtotal</span><span>$29.000</span></div>
+        <div class="t-sub" style="color:var(--gold);"><span>− Seña (transferencia)</span><span>$5.000</span></div>
+        <div class="t-total"><span style="font-size:12px;font-weight:600;">TOTAL HOY</span><span class="money">$24.000</span></div>
+        <div style="text-align:center;font-size:10px;color:var(--text-soft);margin-top:10px;">💵 Efectivo · Atendió: Vero</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+document.querySelectorAll('.sw-btn').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.sw-btn').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.mock').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');document.getElementById(b.dataset.m).classList.add('active');
+});
+const fmt=n=>'$'+n.toLocaleString('es-AR');
+function posAdd(name,who,price){
+  const div=document.createElement('div');div.className='t-line';
+  div.innerHTML=`<span>${name}<span class="who">${who}</span></span><span>${fmt(price)}<span class="rm" onclick="posRm(this,${price})">×</span></span>`;
+  document.getElementById('posLines').appendChild(div);posBump(price);
+}
+function posRm(el,price){el.closest('.t-line').remove();posBump(-price)}
+let sub=29000;
+function posBump(d){sub+=d;document.getElementById('posSub').textContent=fmt(sub);document.getElementById('posTot').textContent=fmt(sub-5000);document.querySelector('#m3 .btn.primary.big').textContent='Cobrar '+fmt(sub-5000)}
+</script>
+</body>
+</html>
