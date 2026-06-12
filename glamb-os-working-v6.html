@@ -4147,9 +4147,12 @@
     }
     function addSaleLine(prefill={}){
       const id = 'line'+(++state.saleLineSeq);
-      const service = prefill.service || 'Semipermanente';
-      const group = prefill.group || findServiceGroup(service);
-      const price = prefill.finalPrice || servicePrice(group, service);
+      // Default to first catalog variant so price and service display stay in sync
+      const defaultVariantId = state.catalog.groups[0]?.services[0]?.variants[0]?.id || '';
+      const defaultVariantInfo = defaultVariantId ? getVariantFromId(defaultVariantId) : null;
+      const service = prefill.service || defaultVariantId;
+      const group = prefill.group || defaultVariantInfo?.group.name || findServiceGroup(service);
+      const price = prefill.finalPrice !== undefined ? prefill.finalPrice : (defaultVariantInfo?.variant.price || 0);
       const collaboratorId = prefill.collaboratorId || (state.collaborators.find(c=>c.can)||{}).id || '';
       const html = `<div class="sale-line" data-sale-line="${id}">
         <div class="sale-line-grid">
@@ -4487,7 +4490,7 @@
     }
     function renderAgendaList(mode){
       const title = mode === 'week' ? 'Vista semana simplificada' : 'Vista lista del día';
-      const rows = visibleAppointments().sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`<div class="agenda-list-row"><div><strong>${a.start}</strong><br><span>${a.end}</span></div><div><strong>${fullName(client(a.clientId))}</strong><br><span>${a.service} · ${fullName(member(a.memberId))}</span></div><button class="small-btn" onclick="showToast('Abrir detalle de ${fullName(client(a.clientId))}')">Detalle</button></div>`).join('');
+      const rows = visibleAppointments().sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`<div class="agenda-list-row" id="list-row-${a.id}"><div><strong>${a.start}</strong><br><span>${a.end}</span></div><div><strong>${fullName(client(a.clientId))}</strong><br><span>${a.service} · ${fullName(member(a.memberId))}</span></div><button class="small-btn" onclick="openPopover({currentTarget:document.getElementById('list-row-${a.id}')??this},'${a.id}')">Detalle</button></div>`).join('');
       $('agendaListView').innerHTML = `<div class="mini-row"><strong>${title}</strong><span>Ideal para recepción cuando no necesita grilla visual. La vista semana completa queda para la siguiente iteración.</span></div>${rows}`;
     }
     function renderBlockers(memberId){return state.blockers.filter(b=>b.memberId===memberId).map(b=>`<div class="blocker" style="top:${topFor(b.start)}px;height:${heightFor(b.start,b.end)}px">${b.start} - ${b.end} · ${b.label}</div>`).join('')}
@@ -4796,7 +4799,13 @@
       const services = getCatalogServices(firstGroup.id);
       const firstSvc = services[0] || {id:'',name:'',groupName:''};
       const variants = getCatalogVariants(firstSvc.id);
-      const firstVar = (prefill.variantId ? variants.find(v=>v.id===prefill.variantId) : null) || variants[0] || {id:'',name:'',price:0,duration:60};
+      // When editing, look up the variant from the correct service (not first group's first service)
+      let firstVar;
+      if(prefill.variantId){
+        const pvInfo = getVariantFromId(prefill.variantId);
+        firstVar = pvInfo ? pvInfo.variant : null;
+      }
+      if(!firstVar) firstVar = variants[0] || {id:'',name:'',price:0,duration:60};
 
       let defaultStart = prefill.start || '16:00';
       if(!prefill.start){
@@ -4846,7 +4855,7 @@
         <div class="appointment-line-actions"><span class="appointment-line-summary">Finaliza ${addMinutes(defaultStart,duration)}</span></div>
       </div>`;
       $('appointmentServiceLines').insertAdjacentHTML('beforeend', html);
-      bindAppointmentServiceLine($('appointmentServiceLines').lastElementChild, prefillSvc);
+      bindAppointmentServiceLine($('appointmentServiceLines').lastElementChild, prefillSvc, prefill.variantId, prefill.duration, prefill.price);
       updateApPreview();
     }
 
@@ -4855,7 +4864,7 @@
       if(panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
     }
 
-    function bindAppointmentServiceLine(line, prefillSvcId){
+    function bindAppointmentServiceLine(line, prefillSvcId, prefillVariantId, prefillDuration, prefillPrice){
       const lineId = line.dataset.apptLine;
 
       const groupSel = line.querySelector('.appt-group-select');
@@ -4868,6 +4877,21 @@
           if(s){
             groupSel.value = g.id;
             updateServiceSelect(line, g.id, s.id);
+            // Restore specific variant after cascade rebuild (updateServiceSelect picks variants[0])
+            if(prefillVariantId && variantSel.querySelector(`option[value="${prefillVariantId}"]`)){
+              variantSel.value = prefillVariantId;
+              line.querySelector('.appt-variant-id-display').value = prefillVariantId;
+              const pvInfo = getVariantFromId(prefillVariantId);
+              if(pvInfo){
+                const nameDisplay = line.querySelector('.appt-service-name-display');
+                if(nameDisplay) nameDisplay.textContent = pvInfo.variant.name;
+                line.querySelector('.appt-duration-input').value = prefillDuration || pvInfo.variant.duration;
+                line.querySelector('.appt-price-input').value = prefillPrice !== undefined ? prefillPrice : pvInfo.variant.price;
+              }
+            } else if(prefillDuration || prefillPrice !== undefined){
+              if(prefillDuration) line.querySelector('.appt-duration-input').value = prefillDuration;
+              if(prefillPrice !== undefined) line.querySelector('.appt-price-input').value = prefillPrice;
+            }
             break;
           }
         }
@@ -4998,7 +5022,7 @@
       const clientName = state.appointmentClient.clientName || $('apClientSearch')?.value || 'Cliente sin seleccionar';
       $('apPreviewName').textContent = clientName;
       $('apPreviewMeta').textContent = lines.length ? `${lines.length} servicio(s) · ${lines[0].start}` : 'Agregá al menos un servicio';
-      $('apPreviewTags').innerHTML=[dep>0?`Seña ${money(dep)}`:'Seña $0', ...lines.slice(0,2).map(l=>l.service)].map(t=>`<span class="tag">${t}</span>`).join('');
+      $('apPreviewTags').innerHTML=[dep>0?`Seña ${money(dep)}`:'Seña $0', ...lines.slice(0,2).map(l=>getVariantFromId(l.variantId)?.variant.name||l.serviceId||'')].map(t=>`<span class="tag">${t}</span>`).join('');
     }
     $('saveAppointment').onclick=()=>{
       const clientName = state.appointmentClient.clientName || $('apClientSearch')?.value.trim();
