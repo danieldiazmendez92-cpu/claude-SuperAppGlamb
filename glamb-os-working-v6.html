@@ -3476,12 +3476,18 @@
       <section class="form-card">
         <h3>Datos de la seña</h3>
         <div class="form-grid">
-          <div class="field full"><label>Turno / reserva</label><select id="depositAppointmentSelect"></select></div>
+          <div class="field full">
+            <label>Cliente</label>
+            <div class="client-autocomplete">
+              <input id="depositClientInput" placeholder="Buscar por nombre o WhatsApp" autocomplete="off">
+              <div class="autocomplete-list" id="depositClientSuggestions"></div>
+            </div>
+          </div>
           <div class="field"><label>Monto</label><input id="depositAmount2" type="number" value="0" min="0"></div>
           <div class="field"><label>Medio de pago</label><select id="depositMethod2"><option>Transferencia</option><option>Efectivo</option><option>Mercado Pago</option><option>Débito</option><option>Crédito</option></select></div>
           <div class="field full"><label>Nota</label><textarea id="depositNote2" placeholder="Referencia, aclaración opcional"></textarea></div>
         </div>
-        <div class="mini-row" style="margin-top:12px;"><strong id="depositAppointmentPreview" style="font-size:13px;">—</strong><span>Seña actual: <span id="depositCurrentAmount">$0</span></span></div>
+        <div class="mini-row" style="margin-top:12px;"><strong id="depositClientPreview" style="font-size:13px;">Ningún cliente seleccionado</strong><span style="font-size:12px;color:var(--text-muted);">Saldo disponible: <span id="depositAvailableBalance">$0</span></span></div>
       </section>
     </div>
     <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmDepositBtn">Registrar seña</button></footer>
@@ -4484,45 +4490,62 @@
       showToast('Retiro registrado');
     }
 
+    function clientAvailableDeposit(clientId){
+      if(!clientId) return 0;
+      const received = state.payments.filter(p=>p.type==='deposit_received' && p.clientId===clientId).reduce((s,p)=>s+Number(p.amount||0),0);
+      const applied = state.payments.filter(p=>p.type==='deposit_applied' && p.clientId===clientId).reduce((s,p)=>s+Number(p.amount||0),0);
+      return Math.max(0, received - applied);
+    }
+    function initDepositClientAutocomplete(){
+      const input = $('depositClientInput');
+      const box = $('depositClientSuggestions');
+      if(!input || !box) return;
+      state._depositClientId = null;
+      input.oninput = () => {
+        const q = input.value.trim().toLowerCase();
+        state._depositClientId = null;
+        if($('depositClientPreview')) $('depositClientPreview').textContent = 'Ningún cliente seleccionado';
+        if($('depositAvailableBalance')) $('depositAvailableBalance').textContent = '$0';
+        if(!q){box.classList.remove('open'); return;}
+        const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||''].join(' ').toLowerCase().includes(q)).slice(0,4);
+        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-dep-client="${c.id}">${fullName(c)}<span>${c.phone}</span></div>`).join('');
+        box.classList.toggle('open', matches.length>0);
+        box.querySelectorAll('[data-dep-client]').forEach(item=>item.onclick=()=>{
+          const c = state.clients.find(x=>x.id===item.dataset.depClient);
+          if(!c) return;
+          state._depositClientId = c.id;
+          input.value = fullName(c);
+          box.classList.remove('open');
+          if($('depositClientPreview')) $('depositClientPreview').textContent = fullName(c);
+          if($('depositAvailableBalance')) $('depositAvailableBalance').textContent = money(clientAvailableDeposit(c.id));
+        });
+      };
+    }
     function registerDeposit(){
       if(!state.cashSession.isOpen) return showToast('Primero abrí caja.');
-      const sel = $('depositAppointmentSelect');
-      if(sel){
-        const reservations = [];
-        const seen = new Set();
-        activeAppointments().filter(a=>!a.isAdditional).forEach(a=>{
-          const key = reservationKey(a);
-          if(seen.has(key)) return;
-          seen.add(key);
-          const related = reservationAppointments(a);
-          reservations.push({id:a.id, label:`${a.start} · ${fullName(client(a.clientId))} · ${related.map(r=>r.service).join(' + ')}`});
-        });
-        sel.innerHTML = reservations.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
-        sel.onchange = () => {
-          const appt = state.appointments.find(x=>x.id===sel.value);
-          if($('depositAppointmentPreview')) $('depositAppointmentPreview').textContent = appt ? `${fullName(client(appt.clientId))} · ${appt.service}` : '—';
-          if($('depositCurrentAmount')) $('depositCurrentAmount').textContent = money(appointmentDepositAmount(appt));
-        };
-        sel.dispatchEvent(new Event('change'));
-      }
+      state._depositClientId = null;
+      if($('depositClientInput')) $('depositClientInput').value = '';
+      if($('depositClientPreview')) $('depositClientPreview').textContent = 'Ningún cliente seleccionado';
+      if($('depositAvailableBalance')) $('depositAvailableBalance').textContent = '$0';
       if($('depositAmount2')) $('depositAmount2').value = 0;
       if($('depositNote2')) $('depositNote2').value = '';
+      initDepositClientAutocomplete();
       openDrawer('cashDepositDrawer');
     }
     function confirmDeposit(){
       const amount = Number($('depositAmount2')?.value || 0);
       if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
-      const apptId = $('depositAppointmentSelect')?.value;
-      const appt = apptId ? state.appointments.find(a=>a.id===apptId) : null;
-      if(appt){
-        const related = reservationAppointments(appt);
-        related.forEach(a=>{ a.bookingDepositAmount = amount; a.depositMethod = $('depositMethod2')?.value || 'Transferencia'; a.deposit = 'paid'; });
-        if(related[0]) related[0].depositAmount = amount;
-      }
-      state.payments.push({id:uid('dep'),ticketId:null,appointmentId:apptId||null,amount,method:$('depositMethod2')?.value||'Transferencia',type:'deposit_received',reference:$('depositNote2')?.value||'',note:`Seña recibida${appt?' · '+fullName(client(appt.clientId)):''}`});
-      closeDrawers();
-      renderAll();
-      showToast(`Seña de ${money(amount)} registrada`);
+      const clientId = state._depositClientId || null;
+      const c = clientId ? state.clients.find(x=>x.id===clientId) : null;
+      state.payments.push({
+        id:uid('dep'), ticketId:null, appointmentId:null, clientId:clientId||null,
+        amount, method:$('depositMethod2')?.value||'Transferencia', type:'deposit_received',
+        reference:$('depositNote2')?.value||'',
+        note:`Seña recibida${c?' · '+fullName(c):''}`,
+        createdAt:new Date().toISOString()
+      });
+      closeDrawers(); renderAll();
+      showToast(`Seña de ${money(amount)} registrada${c?' para '+fullName(c):''}`);
     }
     function registerExpense(){
       if(!isCashAdmin()) return showToast('Solo admin caja puede registrar gastos.');
@@ -4571,6 +4594,9 @@
           state.saleClient = {clientId:c.id, clientName:fullName(c)};
           input.value = fullName(c);
           box.classList.remove('open');
+          const bal = clientAvailableDeposit(c.id);
+          if($('reservationDeposit')) $('reservationDeposit').value = bal > 0 ? bal : 0;
+          updateSaleSummary();
         });
       };
       document.addEventListener('click', e=>{ if(!e.target.closest('.client-autocomplete')) box.classList.remove('open'); });
@@ -4626,7 +4652,8 @@
         $('saleLines').innerHTML='';
         const related = reservationAppointments(appt);
         const additionals = activeAppointments().filter(a=>reservationKey(a)===reservationKey(appt) && a.isAdditional);
-        const deposit = reservationDeposit(related);
+        const clientDeposit = clientAvailableDeposit(c.id);
+        const deposit = clientDeposit > 0 ? clientDeposit : reservationDeposit(related);
         if($('reservationDeposit')) $('reservationDeposit').value = deposit;
         related.forEach(line=>{
           addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
@@ -4821,7 +4848,7 @@
       const isPartial = pendingBalance > 1;
       const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:isPartial?'partial':'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.payments,pendingBalance,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
       state.salesTickets.unshift(ticket);
-      if(t.depositApplied>0) state.payments.push({id:uid('depapp'),ticketId:ticket.id,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
+      if(t.depositApplied>0) state.payments.push({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
       salePayments.forEach(p=>state.payments.push({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
       if(isPartial){
         state.pendingCharges.unshift({id:'pending'+Date.now(),clientId:clientIdForTicket,clientNameSnapshot:clientName,status:'pending',service:'Saldo de visita',group:'',finalPrice:pendingBalance,depositAmount:0,ticketId:ticket.id,reservationId:ticket.reservationId,createdBy:ticket.createdBy,serviceOf:'—',createdAt:new Date().toISOString()});
