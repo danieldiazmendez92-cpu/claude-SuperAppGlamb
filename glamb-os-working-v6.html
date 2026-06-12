@@ -3413,6 +3413,10 @@
       </section>
       <section class="form-card">
         <h3>Seña del turno</h3>
+        <div id="apDepositAvailableBanner" style="display:none;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;color:#166534;">
+          <span style="font-size:16px;">💰</span>
+          <span id="apDepositAvailableText">Seña disponible</span>
+        </div>
         <div class="form-grid">
           <div class="field"><label>Seña</label><input id="apDepositAmount" type="number" value="0" min="0" placeholder="0"></div>
           <div class="field"><label>Medio seña</label><select id="apDepositMethod"><option selected>Transferencia</option><option>Efectivo</option><option>Mercado Pago</option><option>Tarjeta débito</option><option>Tarjeta crédito</option></select></div>
@@ -5525,6 +5529,17 @@
           state.appointmentClient = {clientId:c.id, clientName:fullName(c)};
           input.value = fullName(c);
           box.classList.remove('open');
+          const avail = clientAvailableDeposit(c.id);
+          const banner = $('apDepositAvailableBanner');
+          const bannerText = $('apDepositAvailableText');
+          if(avail > 0){
+            if(banner){ banner.style.display='flex'; }
+            if(bannerText) bannerText.textContent = `${fullName(c)} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
+            if($('apDepositAmount')) $('apDepositAmount').value = avail;
+          } else {
+            if(banner) banner.style.display='none';
+            if($('apDepositAmount')) $('apDepositAmount').value = 0;
+          }
           updateApPreview();
         });
         const add = document.querySelector('[data-ap-new-client]');
@@ -5756,9 +5771,19 @@
         const c = client(prefClient);
         state.appointmentClient = {clientId:c.id, clientName:fullName(c)};
         if($('apClientSearch')) $('apClientSearch').value = fullName(c);
+        const avail = clientAvailableDeposit(c.id);
+        if(avail > 0){
+          if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='flex';
+          if($('apDepositAvailableText')) $('apDepositAvailableText').textContent = `${fullName(c)} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
+          if($('apDepositAmount')) $('apDepositAmount').value = avail;
+        } else {
+          if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='none';
+          if($('apDepositAmount')) $('apDepositAmount').value=0;
+        }
       } else if($('apClientSearch')) $('apClientSearch').value = '';
       if($('apClientSuggestions')) $('apClientSuggestions').classList.remove('open');
-      if($('apDepositAmount')) $('apDepositAmount').value=0;
+      if($('apDepositAvailableBanner') && !prefClient) $('apDepositAvailableBanner').style.display='none';
+      if(!prefClient && $('apDepositAmount')) $('apDepositAmount').value=0;
       if($('apDepositMethod')) $('apDepositMethod').value='Transferencia';
       if($('apNote')) $('apNote').value='';
       if($('appointmentServiceLines')) { $('appointmentServiceLines').innerHTML=''; addAppointmentServiceLine(); }
