@@ -2614,6 +2614,7 @@
           </div>
           <div class="top-actions">
             <button class="btn" id="cashOpenBtn">Abrir caja</button>
+            <button class="btn" id="cashDepositBtn">Registrar seña</button>
             <button class="btn" id="cashWithdrawalBtn">Registrar retiro</button>
             <button class="btn" id="cashExpenseBtn">Registrar gasto</button>
             <button class="btn" id="cashCloseBtn">Cerrar caja</button>
@@ -2676,22 +2677,35 @@
               </section>
             </div>
             <aside class="card">
-              <h2 class="section-title">Pago</h2>
-              <div class="sale-summary simple">
-                <div><span>Servicios</span><strong id="summaryServices">$0</strong></div>
-                <div><span>Propinas</span><strong id="summaryTips">$0</strong></div>
-                <div><span>Anticipo aplicado</span><strong id="summaryDeposits">$0</strong></div>
-                <div class="summary-total"><span>Saldo a cobrar hoy</span><strong id="summaryDue">$0</strong></div>
+              <h2 class="section-title">Cobro de visita</h2>
+
+              <!-- Desglose total visita -->
+              <div style="margin-bottom:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:0.5px solid var(--line);">
+                  <span style="color:var(--text-muted);font-size:12px;">Total visita</span><strong id="summaryGross" style="font-family:'Cormorant',serif;font-size:20px;font-weight:300;">$0</strong>
+                </div>
+                <div id="depositRow" style="display:none;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:0.5px solid var(--line);">
+                  <span style="color:var(--accent-dark);font-size:12px;">− Seña abonada</span><strong id="summaryDeposits" style="font-family:'Cormorant',serif;font-size:20px;font-weight:300;color:var(--accent-dark);">$0</strong>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;padding:10px 0 0;">
+                  <span style="font-size:13px;font-weight:500;">Saldo a cobrar hoy</span><strong id="summaryDue" style="font-family:'Cormorant',serif;font-size:28px;font-weight:300;">$0</strong>
+                </div>
               </div>
-              <div style="margin-top:16px;padding-top:14px;border-top:0.5px solid var(--line);">
-                <div class="inline-field" style="margin-bottom:12px;">
-                  <label>Seña / anticipo</label>
+
+              <!-- Seña (colapsada si es 0) -->
+              <div style="margin-bottom:14px;padding:10px 12px;background:var(--surface-2);border-radius:10px;">
+                <div class="inline-field">
+                  <label>Seña ya abonada (se descuenta del saldo)</label>
                   <input id="reservationDeposit" type="number" value="0" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
                 </div>
+              </div>
+
+              <!-- Forma de pago -->
+              <div style="margin-bottom:10px;">
                 <div class="inline-field" style="margin-bottom:8px;"><label>Forma de pago</label></div>
                 <div class="method-chips" id="checkoutMethodPrimary" data-method-group="checkout-primary"></div>
                 <div class="inline-field" style="margin-top:10px;">
-                  <label>Monto a cobrar hoy</label>
+                  <label>Monto que paga hoy</label>
                   <input id="checkoutPaymentPrimary" type="number" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
                 </div>
                 <div style="margin-top:8px;">
@@ -2706,11 +2720,15 @@
                   </div>
                 </div>
               </div>
-              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-top:14px;padding-top:10px;border-top:0.5px solid var(--line);">
-                <span style="color:var(--text-muted);font-size:12px;">Pagos cargados</span><strong id="summaryPayments" style="font-family:'Cormorant',serif;font-size:22px;font-weight:300;">$0</strong>
+
+              <!-- Saldo pendiente aviso -->
+              <div id="partialPaymentNotice" style="display:none;margin-top:8px;padding:10px 12px;background:#fff7e8;border:0.5px solid #edd7a7;border-radius:10px;font-size:12px;color:#8a5a14;">
+                La diferencia quedará como <strong>saldo pendiente</strong> asociado a esta visita.
+                Pendiente: <strong id="partialBalance">$0</strong>
               </div>
-              <div class="summary-warning" id="summaryWarning">Hay diferencias entre el total a cobrar y los pagos cargados.</div>
-              <div class="detail-actions" style="flex-direction:column;gap:8px;margin-top:12px;">
+              <div class="summary-warning" id="summaryWarning" style="margin-top:8px;">El monto ingresado supera el saldo a cobrar.</div>
+
+              <div class="detail-actions" style="flex-direction:column;gap:8px;margin-top:14px;">
                 <button class="btn primary" id="registerSaleBtn">Registrar venta</button>
                 <button class="small-btn" id="savePendingSaleBtn">Guardar como pendiente</button>
               </div>
@@ -3017,6 +3035,26 @@
       </section>
     </div>
     <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmWithdrawalBtn">Registrar retiro</button></footer>
+  </aside>
+
+  <aside class="drawer" id="cashDepositDrawer">
+    <header class="drawer-header">
+      <div><div class="eyebrow">Caja</div><h2 class="drawer-title">Registrar seña</h2><p class="drawer-subtitle">Anticipo recibido para una reserva futura. Se aplica automáticamente al cobrar.</p></div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <section class="form-card">
+        <h3>Datos de la seña</h3>
+        <div class="form-grid">
+          <div class="field full"><label>Turno / reserva</label><select id="depositAppointmentSelect"></select></div>
+          <div class="field"><label>Monto</label><input id="depositAmount2" type="number" value="0" min="0"></div>
+          <div class="field"><label>Medio de pago</label><select id="depositMethod2"><option>Transferencia</option><option>Efectivo</option><option>Mercado Pago</option><option>Débito</option><option>Crédito</option></select></div>
+          <div class="field full"><label>Nota</label><textarea id="depositNote2" placeholder="Referencia, aclaración opcional"></textarea></div>
+        </div>
+        <div class="mini-row" style="margin-top:12px;"><strong id="depositAppointmentPreview" style="font-size:13px;">—</strong><span>Seña actual: <span id="depositCurrentAmount">$0</span></span></div>
+      </section>
+    </div>
+    <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmDepositBtn">Registrar seña</button></footer>
   </aside>
 
   <aside class="drawer" id="cashExpenseDrawer">
@@ -3871,6 +3909,46 @@
       showToast('Retiro registrado');
     }
 
+    function registerDeposit(){
+      if(!state.cashSession.isOpen) return showToast('Primero abrí caja.');
+      const sel = $('depositAppointmentSelect');
+      if(sel){
+        const reservations = [];
+        const seen = new Set();
+        activeAppointments().filter(a=>!a.isAdditional).forEach(a=>{
+          const key = reservationKey(a);
+          if(seen.has(key)) return;
+          seen.add(key);
+          const related = reservationAppointments(a);
+          reservations.push({id:a.id, label:`${a.start} · ${fullName(client(a.clientId))} · ${related.map(r=>r.service).join(' + ')}`});
+        });
+        sel.innerHTML = reservations.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
+        sel.onchange = () => {
+          const appt = state.appointments.find(x=>x.id===sel.value);
+          if($('depositAppointmentPreview')) $('depositAppointmentPreview').textContent = appt ? `${fullName(client(appt.clientId))} · ${appt.service}` : '—';
+          if($('depositCurrentAmount')) $('depositCurrentAmount').textContent = money(appointmentDepositAmount(appt));
+        };
+        sel.dispatchEvent(new Event('change'));
+      }
+      if($('depositAmount2')) $('depositAmount2').value = 0;
+      if($('depositNote2')) $('depositNote2').value = '';
+      openDrawer('cashDepositDrawer');
+    }
+    function confirmDeposit(){
+      const amount = Number($('depositAmount2')?.value || 0);
+      if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
+      const apptId = $('depositAppointmentSelect')?.value;
+      const appt = apptId ? state.appointments.find(a=>a.id===apptId) : null;
+      if(appt){
+        const related = reservationAppointments(appt);
+        related.forEach(a=>{ a.bookingDepositAmount = amount; a.depositMethod = $('depositMethod2')?.value || 'Transferencia'; a.deposit = 'paid'; });
+        if(related[0]) related[0].depositAmount = amount;
+      }
+      state.payments.push({id:uid('dep'),ticketId:null,appointmentId:apptId||null,amount,method:$('depositMethod2')?.value||'Transferencia',type:'deposit_received',reference:$('depositNote2')?.value||'',note:`Seña recibida${appt?' · '+fullName(client(appt.clientId)):''}`});
+      closeDrawers();
+      renderAll();
+      showToast(`Seña de ${money(amount)} registrada`);
+    }
     function registerExpense(){
       if(!isCashAdmin()) return showToast('Solo admin caja puede registrar gastos.');
       if(!state.cashSession.isOpen) return showToast('Primero abrí caja.');
@@ -4105,15 +4183,19 @@
       if(!$('summaryDue')) return;
       document.querySelectorAll('[data-sale-line]').forEach(line=>updateLineStatus(line));
       const t = saleTotals();
-      if($('summaryServices')) $('summaryServices').textContent = money(t.services);
-      if($('summaryTips')) $('summaryTips').textContent = money(t.tips);
+      if($('summaryGross')) $('summaryGross').textContent = money(t.grossTotal);
       if($('summaryDeposits')) $('summaryDeposits').textContent = money(t.depositApplied);
+      if($('depositRow')) $('depositRow').style.display = t.depositApplied > 0 ? 'flex' : 'none';
       $('summaryDue').textContent = money(t.due);
-      if($('summaryPayments')) $('summaryPayments').textContent = money(t.payments);
       if($('checkoutPaymentPrimary') && document.activeElement !== $('checkoutPaymentPrimary') && $('checkoutMixedRow')?.style.display === 'none'){
         $('checkoutPaymentPrimary').value = t.due || '';
       }
-      if($('summaryWarning')) $('summaryWarning').classList.toggle('show', Math.abs(t.payments - t.due) > 1);
+      const balance = t.due - t.payments;
+      const overpaid = t.payments > t.due + 1;
+      const partial = balance > 1 && t.payments > 0;
+      if($('summaryWarning')) $('summaryWarning').classList.toggle('show', overpaid);
+      if($('partialPaymentNotice')) $('partialPaymentNotice').style.display = partial ? 'block' : 'none';
+      if($('partialBalance')) $('partialBalance').textContent = money(Math.max(0, balance));
     }
     function saleClientName(){
       if(state.saleSource === 'appointment') return (state.saleClient.clientName || '').trim();
@@ -4124,15 +4206,20 @@
       if(!clientName) return showToast('El cliente es obligatorio.');
       const t = saleTotals();
       if(!t.lines.length) return showToast('Agregá al menos un servicio.');
-      if(Math.abs(t.payments - t.due) > 1) return showToast('Los pagos del día deben coincidir con el saldo a cobrar.');
+      if(t.payments > t.due + 1) return showToast('El monto ingresado supera el saldo a cobrar.');
       const clientIdForTicket = state.saleClient.clientId || null;
       const sourceAppointment = state.saleSource==='appointment' ? state.appointments.find(a=>a.id===state.saleAppointmentId) : null;
       const salePayments = collectSalePayments();
-      const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.due,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
+      const pendingBalance = Math.max(0, t.due - t.payments);
+      const isPartial = pendingBalance > 1;
+      const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:isPartial?'partial':'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.payments,pendingBalance,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
       state.salesTickets.unshift(ticket);
       if(t.depositApplied>0) state.payments.push({id:uid('depapp'),ticketId:ticket.id,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
       salePayments.forEach(p=>state.payments.push({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
-      resetSaleForm(); renderAll(); showToast('Venta registrada');
+      if(isPartial){
+        state.pendingCharges.unshift({id:'pending'+Date.now(),clientId:clientIdForTicket,clientNameSnapshot:clientName,status:'pending',service:'Saldo de visita',group:'',finalPrice:pendingBalance,depositAmount:0,ticketId:ticket.id,reservationId:ticket.reservationId,createdBy:ticket.createdBy,serviceOf:'—',createdAt:new Date().toISOString()});
+      }
+      resetSaleForm(); renderAll(); showToast(isPartial?`Venta registrada. Saldo pendiente: ${money(pendingBalance)}`:'Venta registrada');
     }
     function saveSinglePendingLine(){
       savePendingSale();
@@ -4223,7 +4310,12 @@
     function renderTickets(){
       if(!$('ticketsList')) return;
       const visibleTickets = state.cashMode==='collaborator' ? state.salesTickets.filter(t=>t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) : state.salesTickets;
-      $('ticketsList').innerHTML = visibleTickets.length ? visibleTickets.map(t=>`<div class="mini-row"><strong>${t.clientNameSnapshot} · ${money(t.totalDueToday)}</strong><span>${t.lines.length} servicio(s) · ${t.reservationId?'reserva '+t.reservationId+' · ':''}anticipo ${money(t.depositAppliedTotal||0)} · propinas ${money(t.tipsTotal)} · creado por ${t.createdBy||'—'} · <span class="ticket-status">${t.status}</span></span><div style="margin-top:8px"><button class="small-btn" onclick="voidTicket('${t.id}')">Anular ticket</button></div></div>`).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
+      $('ticketsList').innerHTML = visibleTickets.length ? visibleTickets.map(t=>{
+        const statusLabel = t.status==='partial'?'Pago parcial':t.status==='confirmed'?'Confirmado':'Anulado';
+        const statusColor = t.status==='partial'?'warn':t.status==='confirmed'?'ok':'';
+        const breakdown = `Total: ${money(t.grossTotal)}${t.depositAppliedTotal>0?' · Seña: −'+money(t.depositAppliedTotal):''}${t.pendingBalance>0?' · <strong style="color:#8a5a14;">Saldo pendiente: '+money(t.pendingBalance)+'</strong>':''}`;
+        return `<div class="mini-row"><strong>${t.clientNameSnapshot} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${t.createdBy||'—'} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" onclick="voidTicket('${t.id}')">Anular ticket</button></div></div>`;
+      }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
     function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); const reason = prompt('Motivo de anulación'); if(reason===null)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); renderAll(); showToast('Ticket anulado');}
     function cashClose(){
@@ -5039,8 +5131,10 @@
     if($('waitlistBtn')) $('waitlistBtn').onclick=openWaitlist;
     if($('closeDayBtn')) $('closeDayBtn').onclick=closeDay;
     if($('cashOpenBtn')) $('cashOpenBtn').onclick=openCashSession;
+    if($('cashDepositBtn')) $('cashDepositBtn').onclick=registerDeposit;
     if($('cashWithdrawalBtn')) $('cashWithdrawalBtn').onclick=registerWithdrawal;
     if($('cashExpenseBtn')) $('cashExpenseBtn').onclick=registerExpense;
+    if($('confirmDepositBtn')) $('confirmDepositBtn').onclick=confirmDeposit;
     if($('cashCloseBtn')) $('cashCloseBtn').onclick=cashClose;
     if($('confirmCashOpenBtn')) $('confirmCashOpenBtn').onclick=confirmCashOpen;
     if($('confirmWithdrawalBtn')) $('confirmWithdrawalBtn').onclick=confirmWithdrawal;
