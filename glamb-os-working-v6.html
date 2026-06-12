@@ -465,6 +465,28 @@
       border-color: rgba(245, 237, 228, 0.18);
     }
 
+    /* Tags predictivos (insights automáticos) */
+    .tag.risk {
+      background: #FDE8E8;
+      color: #B91C1C;
+      border-color: #FCA5A5;
+      font-weight: 500;
+    }
+
+    .tag.good {
+      background: #E8F5E9;
+      color: #1B5E20;
+      border-color: #A5D6A7;
+      font-weight: 500;
+    }
+
+    .tag.gold {
+      background: #FBF3E0;
+      color: #8A6D1B;
+      border-color: #E8D49A;
+      font-weight: 500;
+    }
+
     .tags {
       display: flex;
       gap: 6px;
@@ -3083,10 +3105,19 @@
       <section class="profile-section">
         <h3>Métricas</h3>
         <div class="metric-row">
-          <div class="metric-card"><strong>$32.000</strong><span>Ticket</span></div>
-          <div class="metric-card"><strong>28 días</strong><span>Frecuencia</span></div>
-          <div class="metric-card"><strong>18 días</strong><span>Última</span></div>
+          <div class="metric-card"><strong id="profileMetricTicket">—</strong><span>Ticket prom.</span></div>
+          <div class="metric-card"><strong id="profileMetricFreq">—</strong><span>Frecuencia</span></div>
+          <div class="metric-card"><strong id="profileMetricLast">—</strong><span>Última visita</span></div>
         </div>
+        <div class="metric-row" style="margin-top:8px;">
+          <div class="metric-card"><strong id="profileMetricVisits">—</strong><span>Visitas</span></div>
+          <div class="metric-card"><strong id="profileMetricSpent">—</strong><span>Total histórico</span></div>
+        </div>
+      </section>
+      <section class="profile-section">
+        <h3>Insights automáticos</h3>
+        <div class="tags" id="profileInsightTags" style="margin-bottom:8px;"></div>
+        <div class="key-note" id="profileInsightText">—</div>
       </section>
       <section class="profile-section">
         <h3>Preferencias</h3>
@@ -3567,10 +3598,62 @@
     }
     function clientCode(c){ return c.code || `GL-${String(state.clients.indexOf(c)+1).padStart(6,'0')}`; }
     function nextClientCode(){ return `GL-${String(state.clients.length+1).padStart(6,'0')}`; }
+
+    // ── Insights comerciales automáticos por cliente ──────────────────
+    function clientVisitDays(clientId){
+      const days = new Set();
+      state.salesTickets.forEach(t=>{
+        if(t.clientId===clientId && t.status!=='voided' && t.createdAt) days.add(t.createdAt.slice(0,10));
+      });
+      const today = dateKey(new Date());
+      state.appointments.forEach(a=>{
+        if(a.clientId===clientId && !['cancelled','cancelado','voided'].includes(a.status) && a.date && a.date<=today) days.add(a.date);
+      });
+      return [...days].sort();
+    }
+    function clientInsights(clientId){
+      const days = clientVisitDays(clientId);
+      const visits = days.length;
+      const tickets = state.salesTickets.filter(t=>t.clientId===clientId && t.status!=='voided');
+      const totalSpent = tickets.reduce((s,t)=>s+Number(t.grossTotal||0),0);
+      const avgTicket = tickets.length ? Math.round(totalSpent/tickets.length) : 0;
+      const msDay = 86400000;
+      let frequency = null;
+      if(visits>=2){
+        const gaps = [];
+        for(let i=1;i<days.length;i++) gaps.push((new Date(days[i])-new Date(days[i-1]))/msDay);
+        frequency = Math.round(gaps.reduce((a,b)=>a+b,0)/gaps.length);
+      }
+      const daysSinceLast = visits ? Math.round((new Date(dateKey(new Date()))-new Date(days[days.length-1]))/msDay) : null;
+      const allTickets = state.salesTickets.filter(t=>t.status!=='voided');
+      const salonAvg = allTickets.length ? allTickets.reduce((s,t)=>s+Number(t.grossTotal||0),0)/allTickets.length : 0;
+      const tags = [];
+      if(visits===0) tags.push({label:'Sin historial',cls:'neutral'});
+      else if(visits===1) tags.push({label:'Nueva',cls:'neutral'});
+      if(visits>0){
+        const threshold = frequency ? Math.max(30, frequency*1.8) : 60;
+        if(daysSinceLast>threshold) tags.push({label:'Riesgo de abandono',cls:'risk'});
+      }
+      if(frequency!==null && frequency<=21 && visits>=3) tags.push({label:'Frecuente',cls:'good'});
+      if(avgTicket>0 && salonAvg>0 && avgTicket>=salonAvg*1.4) tags.push({label:'Alto valor',cls:'gold'});
+      return {visits,totalSpent,avgTicket,frequency,daysSinceLast,tags};
+    }
+    function insightTagsHtml(ins){ return ins.tags.map(t=>`<span class="tag ${t.cls}">${t.label}</span>`).join(''); }
+    function frequencyLabel(ins){
+      if(ins.frequency) return `visita cada ${ins.frequency} días`;
+      if(ins.visits===1) return '1 visita registrada';
+      if(ins.visits>1) return `${ins.visits} visitas`;
+      return 'sin visitas aún';
+    }
+
     function renderClients(){
       const q=state.clientSearch.toLowerCase();
       const list=state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c),...c.tags].join(' ').toLowerCase().includes(q));
-      $('clientsList').innerHTML=list.map(c=>`<article class="client-card"><div class="client-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${clientCode(c)} · ${c.phone} · ${c.email||'Sin email'} · visita cada 28 días</div><div class="tags">${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="openClientProfile('${c.id}')">Ver perfil</button><button class="small-btn" onclick="fillAppointmentOptions('${c.id}');openDrawer('appointmentDrawer')">Crear turno</button></div></article>`).join('')
+      $('clientsList').innerHTML=list.map(c=>{
+        const ins = clientInsights(c.id);
+        const lastTxt = ins.daysSinceLast!==null ? ` · última hace ${ins.daysSinceLast} día(s)` : '';
+        return `<article class="client-card"><div class="client-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${clientCode(c)} · ${c.phone} · ${c.email||'Sin email'} · ${frequencyLabel(ins)}${lastTxt}</div><div class="tags">${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}${insightTagsHtml(ins)}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="openClientProfile('${c.id}')">Ver perfil</button><button class="small-btn" onclick="fillAppointmentOptions('${c.id}');openDrawer('appointmentDrawer')">Crear turno</button></div></article>`;
+      }).join('')
     }
     $('clientSearch').oninput=e=>{state.clientSearch=e.target.value;renderClients()};
     function renderTeam(){
@@ -5645,6 +5728,21 @@
       $('profileEmail').textContent = c.email || 'Sin email';
       $('profilePreferences').innerHTML = c.tags.map(t=>`<span class="tag">${t}</span>`).join('') || '<span class="tag neutral">Sin preferencias</span>';
       $('profileNote').textContent = c.note || 'Sin nota clave.';
+      const ins = clientInsights(c.id);
+      $('profileMetricTicket').textContent = ins.avgTicket ? money(ins.avgTicket) : '—';
+      $('profileMetricFreq').textContent = ins.frequency ? `${ins.frequency} días` : '—';
+      $('profileMetricLast').textContent = ins.daysSinceLast!==null ? (ins.daysSinceLast===0?'Hoy':`hace ${ins.daysSinceLast} día(s)`) : '—';
+      $('profileMetricVisits').textContent = ins.visits || '0';
+      $('profileMetricSpent').textContent = ins.totalSpent ? money(ins.totalSpent) : '—';
+      $('profileInsightTags').innerHTML = insightTagsHtml(ins) || '<span class="tag neutral">Sin señales aún</span>';
+      let insightText;
+      if(ins.tags.some(t=>t.cls==='risk')) insightText = `Atención: suele visitar cada ${ins.frequency||'30+'} días pero lleva ${ins.daysSinceLast} sin venir. Recomendado: contacto proactivo por WhatsApp con propuesta de turno.`;
+      else if(ins.tags.some(t=>t.label==='Frecuente')) insightText = `Cliente fiel: visita cada ${ins.frequency} días en promedio. Ideal para ofrecer upgrades o membresía.`;
+      else if(ins.visits===0) insightText = 'Todavía sin visitas registradas. Primer turno pendiente de concretar.';
+      else if(ins.visits===1) insightText = 'Primera visita reciente. Clave: seguimiento post-servicio para asegurar la segunda visita.';
+      else insightText = `Ritmo de visita normal${ins.frequency?` (cada ${ins.frequency} días aprox.)`:''}. Mantener experiencia habitual.`;
+      if(ins.tags.some(t=>t.label==='Alto valor')) insightText += ' Ticket promedio por encima de la media del salón: priorizar su experiencia.';
+      $('profileInsightText').textContent = insightText;
       const history = state.appointments.filter(a=>a.clientId===c.id);
       $('profileHistory').innerHTML = history.length ? history.map(a=>`<div class="history-item"><strong>${a.service}</strong><span>${fullName(member(a.memberId))} · ${a.start} - ${a.end} · ${a.status || 'confirmado'}</span></div>`).join('') : '<div class="history-item"><strong>Sin turnos</strong><span>Todavía no tiene historial en agenda.</span></div>';
       $('profileCreateAppointment').onclick = ()=>{ closeDrawers(); fillAppointmentOptions(c.id); openDrawer('appointmentDrawer'); };
