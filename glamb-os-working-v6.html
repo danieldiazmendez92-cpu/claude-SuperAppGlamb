@@ -3887,7 +3887,7 @@
         const total = related.reduce((sum,r)=>sum+Number(r.price||estimateAmount(r)||0),0);
         reservations.push({id:a.id,start:related[0]?.start||a.start,clientName:fullName(client(a.clientId)),services,total,count:related.length});
       });
-      $('saleAppointmentSelect').innerHTML = reservations.map(r=>`<option value="${r.id}">${r.start} · ${r.clientName} · ${r.count} servicio(s) · ${servicesShort(r.services)} · ${money(r.total)}</option>`).join('');
+      $('saleAppointmentSelect').innerHTML = reservations.map(r=>`<option value="${r.id}">${r.start} · ${r.clientName} · ${r.count>1?`[${r.count} servicios] `:''}${servicesShort(r.services)} · ${money(r.total)}</option>`).join('');
       if(reservations.some(r=>r.id===current)) {
         state.saleAppointmentId = current;
         $('saleAppointmentSelect').value = current;
@@ -4338,7 +4338,7 @@
       const statusHtml=`<div class="detail-section"><strong>Estado</strong><div class="status-chips">${statuses.map(s=>`<button class="small-btn ${a.status===s.key?'primary':''}" onclick="updateApptStatus('${a.id}','${s.key}')">${s.label}</button>`).join('')}</div></div>`;
       const combinedHtml = isCombined ? `<div class="detail-section"><strong>Servicios del turno</strong>${related.map(r=>`<div class="mini-row"><strong>${r.start} - ${r.end}</strong><br><span>${r.service} · ${fullName(member(r.memberId))}${r.price?` · ${money(r.price)}`:''}</span></div>`).join('')}</div>` : '';
       const servicesList = isCombined ? related.map(r=>r.service).join(', ') : a.service;
-      pop.innerHTML=`<div class="eyebrow">${isCombined?'Turno combinado':'Turno'}</div><h3>${fullName(c)}</h3><div class="popover-service">${servicesList}</div><div class="meta">${fullName(m)} · ${a.start} - ${a.end}<br>${c.phone}</div>${appointmentDepositAmount(a)>0?`<div class="detail-section"><strong>Seña</strong><span>${money(appointmentDepositAmount(a))} · ${a.depositMethod || 'Transferencia'}</span></div>`:''}${isCombined?'<div class="tags"><span class="tag">Combinado</span></div>':''}${combinedHtml}${statusHtml}<div class="detail-section"><strong>Nota</strong><span>${a.note||c.note||'Sin nota'}</span></div><div class="detail-actions"><button class="small-btn" onclick="editAppointment('${a.id}');closePopover()">Editar turno</button><button class="small-btn ${a.deposit==='paid'?'primary':''}" onclick="togglePaid('${a.id}')">${a.deposit==='paid'?'Pagado':'Marcar pagado'}</button><button class="small-btn" onclick="cancelAppointment('${a.id}','cancelled')">Cancelar</button></div>`;
+      pop.innerHTML=`<div class="eyebrow">${isCombined?'Turno combinado':'Turno'}</div><h3>${fullName(c)}</h3><div class="popover-service">${servicesList}</div><div class="meta">${fullName(m)} · ${a.start} - ${a.end}<br>${c.phone}</div>${appointmentDepositAmount(a)>0?`<div class="detail-section"><strong>Seña</strong><span>${money(appointmentDepositAmount(a))} · ${a.depositMethod || 'Transferencia'}</span></div>`:''}${isCombined?'<div class="tags"><span class="tag">Combinado</span></div>':''}${combinedHtml}${statusHtml}<div class="detail-section"><strong>Nota</strong><span>${a.note||c.note||'Sin nota'}</span></div><div class="detail-actions"><button class="small-btn primary" onclick="chargeFromAppointment('${a.id}')">Cobrar visita</button><button class="small-btn" onclick="editAppointment('${a.id}');closePopover()">Editar turno</button><button class="small-btn ${a.deposit==='paid'?'primary':''}" onclick="togglePaid('${a.id}')">${a.deposit==='paid'?'Pagado':'Marcar pagado'}</button><button class="small-btn" onclick="cancelAppointment('${a.id}','cancelled')">Cancelar</button></div>`;
       const r=e.currentTarget.getBoundingClientRect?e.currentTarget.getBoundingClientRect():{right:300,top:120};
       pop.style.left=Math.max(16,Math.min(r.right+12,window.innerWidth-400))+'px';
       pop.style.top=Math.min(r.top,window.innerHeight-500)+'px';
@@ -4347,6 +4347,15 @@
 
     function closePopover(){
       $('detailPopover').classList.remove('open');
+    }
+    function chargeFromAppointment(id){
+      closePopover();
+      showPage('cash');
+      setCashTab('register');
+      setSaleSource('appointment');
+      fillSaleSourceOptions();
+      if($('saleAppointmentSelect')) $('saleAppointmentSelect').value = id;
+      selectSaleAppointment(id);
     }
 
     function editAppointment(appointmentId){
