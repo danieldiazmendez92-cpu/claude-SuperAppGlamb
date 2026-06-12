@@ -4797,9 +4797,12 @@
       $('coEmail').value = c.email || '';
       $('coType').value = c.type || 'professional';
       $('coCan').value = c.can ? 'yes' : 'no';
-      // Pre-select service chips by serviceId or by group membership
+      // Pre-select service chips by serviceId or groupId; fallback to group names for legacy data
       const enabledServiceIds = new Set(c.serviceIds || []);
-      const enabledGroupIds = new Set(c.groupIds || []);
+      let enabledGroupIds = new Set(c.groupIds || []);
+      if(!enabledGroupIds.size && c.groups && c.groups.length){
+        state.catalog.groups.filter(g=>c.groups.includes(g.name)).forEach(g=>enabledGroupIds.add(g.id));
+      }
       document.querySelectorAll('#coServices .select-chip[data-service]').forEach(chip => {
         if(enabledServiceIds.has(chip.dataset.service) || enabledGroupIds.has(chip.dataset.group)){
           chip.classList.add('selected');
