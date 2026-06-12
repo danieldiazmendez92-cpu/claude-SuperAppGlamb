@@ -1114,13 +1114,13 @@
       right: 3px;
       border: 0;
       border-radius: 8px;
-      padding: 5px 8px 5px 9px;
+      padding: 4px 8px 3px 9px;
       overflow: hidden;
       cursor: pointer;
       box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.04);
       display: flex;
       flex-direction: column;
-      gap: 0;
+      gap: 2px;
       transition: box-shadow 0.12s ease, filter 0.12s ease;
     }
 
@@ -4922,10 +4922,10 @@
       if(depositAmount > 0 && !a.isAdditional) flags.push(`Seña ${money(depositAmount)}`);
       else if(paid === 'pending' && !a.isAdditional) flags.push('Sin seña');
       const blockH = heightFor(a.start, a.end);
-      // Thresholds: each row ~16px, padding 10px top/bottom
-      const showClient  = blockH >= 30 && !a.isAdditional;
-      const showService = blockH >= 46;
-      const showFlags   = blockH >= 64 && flags.length;
+      // padding 7px + gap 2px: hora~13 nombre~14 servicio~12 flags~18
+      const showClient  = blockH >= 40 && !a.isAdditional;
+      const showService = blockH >= 54;
+      const showFlags   = blockH >= 74 && flags.length;
       const timeRow = `<div class="appt-time-row"><span class="status-dot ${a.status||'confirmed'}"></span>${a.start}–${a.end}</div>`;
       const clientRow = showClient  ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
       const serviceRow= showService ? `<div class="appt-service">${a.service}</div>` : '';
