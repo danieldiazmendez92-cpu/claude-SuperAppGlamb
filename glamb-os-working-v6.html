@@ -1025,10 +1025,13 @@
       right: 4px;
       border: 0;
       border-radius: 0 10px 10px 0;
-      padding: 7px 8px;
+      padding: 6px 8px;
       overflow: hidden;
       cursor: pointer;
       box-shadow: none;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
     }
 
     .appointment-block:hover,
@@ -1078,7 +1081,7 @@
     }
 
     .appt-client {
-      margin-top: 2px;
+      margin-top: 1px;
       font-size: 10px;
       color: var(--text-muted);
       white-space: nowrap;
@@ -1087,9 +1090,16 @@
     }
 
     .appt-time {
-      margin-top: 2px;
+      margin-top: 1px;
       font-size: 10px;
       color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .appt-flags {
+      overflow: hidden;
+      max-height: 18px;
     }
 
     .status-dot {
