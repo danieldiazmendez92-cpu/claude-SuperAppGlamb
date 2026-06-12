@@ -2664,9 +2664,9 @@
                   <h2 class="section-title" style="margin:0;">Servicios realizados</h2>
                   <button class="small-btn primary" id="addSaleLineBtn">Agregar servicio</button>
                 </div>
+                <div id="reservationBanner" style="display:none;margin-bottom:12px;padding:10px 12px;background:var(--accent-bg);border-radius:10px;border:0.5px solid #e0cfc0;font-size:12px;color:var(--accent-dark);"></div>
                 <div id="saleLines"></div>
-                <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-                  <button class="small-btn" id="savePendingSaleBtn">Guardar como pendiente</button>
+                <div style="margin-top:10px;">
                   <button class="small-btn" id="toggleSaleNoteBtn">+ nota interna</button>
                 </div>
                 <div class="sale-note-box" id="saleNoteBox" style="display:none;margin-top:12px;">
@@ -2675,18 +2675,43 @@
               </section>
             </div>
             <aside class="card">
-              <h2 class="section-title">Resumen</h2>
+              <h2 class="section-title">Pago</h2>
               <div class="sale-summary simple">
                 <div><span>Servicios</span><strong id="summaryServices">$0</strong></div>
                 <div><span>Propinas</span><strong id="summaryTips">$0</strong></div>
                 <div><span>Anticipo aplicado</span><strong id="summaryDeposits">$0</strong></div>
                 <div class="summary-total"><span>Saldo a cobrar hoy</span><strong id="summaryDue">$0</strong></div>
-                <div><span>Pagos cargados</span><strong id="summaryPayments">$0</strong></div>
-                <div><span>Diferencia</span><strong id="summaryDiff">$0</strong></div>
+              </div>
+              <div style="margin-top:16px;padding-top:14px;border-top:0.5px solid var(--line);">
+                <div class="inline-field" style="margin-bottom:12px;">
+                  <label>Seña / anticipo</label>
+                  <input id="reservationDeposit" type="number" value="0" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                </div>
+                <div class="inline-field" style="margin-bottom:8px;"><label>Forma de pago</label></div>
+                <div class="method-chips" id="checkoutMethodPrimary" data-method-group="checkout-primary"></div>
+                <div class="inline-field" style="margin-top:10px;">
+                  <label>Monto a cobrar hoy</label>
+                  <input id="checkoutPaymentPrimary" type="number" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                </div>
+                <div style="margin-top:8px;">
+                  <button type="button" class="link-btn" id="checkoutMixedToggle">+ segundo pago</button>
+                </div>
+                <div id="checkoutMixedRow" style="display:none;margin-top:10px;padding-top:10px;border-top:0.5px solid var(--line);">
+                  <div class="inline-field" style="margin-bottom:8px;"><label>Segundo medio</label></div>
+                  <div class="method-chips" id="checkoutMethodSecondary" data-method-group="checkout-secondary"></div>
+                  <div class="inline-field" style="margin-top:10px;">
+                    <label>Segundo monto</label>
+                    <input id="checkoutPaymentSecondary" type="number" min="0" value="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
+                  </div>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-top:14px;padding-top:10px;border-top:0.5px solid var(--line);">
+                <span style="color:var(--text-muted);font-size:12px;">Pagos cargados</span><strong id="summaryPayments" style="font-family:'Cormorant',serif;font-size:22px;font-weight:300;">$0</strong>
               </div>
               <div class="summary-warning" id="summaryWarning">Hay diferencias entre el total a cobrar y los pagos cargados.</div>
-              <div class="detail-actions">
+              <div class="detail-actions" style="flex-direction:column;gap:8px;margin-top:12px;">
                 <button class="btn primary" id="registerSaleBtn">Registrar venta</button>
+                <button class="small-btn" id="savePendingSaleBtn">Guardar como pendiente</button>
               </div>
             </aside>
           </div>
@@ -3898,7 +3923,17 @@
         $('saleLines').innerHTML='';
         const related = reservationAppointments(appt);
         const deposit = reservationDeposit(related);
-        related.forEach((line,idx)=>addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:estimateAmount(line), depositAmount:idx===0?deposit:0}));
+        if($('reservationDeposit')) $('reservationDeposit').value = deposit;
+        related.forEach(line=>addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:estimateAmount(line)}));
+      }
+      const related = reservationAppointments(appt);
+      if($('reservationBanner')){
+        if(related.length > 1){
+          $('reservationBanner').style.display='block';
+          $('reservationBanner').textContent = `Reserva combinada · ${related.length} servicios · ${related.map(r=>r.service).join(' + ')}`;
+        } else {
+          $('reservationBanner').style.display='none';
+        }
       }
       updateSaleSummary();
     }
@@ -3937,82 +3972,39 @@
           <select class="sale-service" aria-label="Servicio">${serviceOptionsFlat(service)}</select>
           <input class="sale-final" aria-label="Precio" type="number" value="${price}" placeholder="$ precio">
         </div>
-        <div class="sale-payment-row">
-          <div class="inline-field"><label>Anticipo/seña</label><input class="sale-deposit" type="number" value="${prefill.depositAmount||0}" placeholder="0"></div>
-          ${methodChips('Efectivo','primary')}
-          <div class="inline-field"><label>A cobrar hoy</label><input class="payment-amount primary-payment" type="number" value="${price}" placeholder="Monto"></div>
-          <button type="button" class="link-btn mixed-toggle">+ pago mixto</button>
-        </div>
-        <div class="mixed-payment-row">
-          <div class="sale-payment-row mixed-inner-row">
-            <span></span>
-            ${methodChips('Transf','secondary')}
-            <div class="inline-field"><label>Segundo pago</label><input class="payment-amount secondary-payment" type="number" value="0" placeholder="Monto"></div>
-            <span></span>
-          </div>
-        </div>
-        <div class="sale-line-links"><button type="button" class="link-btn extras-toggle">+ extras</button><button type="button" class="small-btn pending-line">Guardar para cobrar después</button><button type="button" class="link-btn" data-remove-line="${id}">quitar</button></div>
-        <div class="sale-line-status warn">Falta validar pago</div>
+        <div class="sale-line-links"><button type="button" class="link-btn extras-toggle">+ extras</button><button type="button" class="link-btn" data-remove-line="${id}">quitar</button></div>
+        <div class="sale-line-status warn">Falta validar</div>
         <div class="sale-extras">
           <div class="sale-extras-grid">
             <input class="sale-tip" type="number" value="${prefill.tipAmount||0}" placeholder="Propina">
-            <input class="sale-reference" type="text" value="${prefill.reference||''}" placeholder="Referencia pago">
+            <input class="sale-reference" type="text" value="${prefill.reference||''}" placeholder="Referencia">
           </div>
           <div class="addon-row">${saleAddons.map(a=>`<span class="select-chip sale-addon" data-price="${a.price}" data-addon-id="${a.id}">${a.name} · ${money(a.price)}</span>`).join('')}</div>
         </div>
       </div>`;
       $('saleLines').insertAdjacentHTML('beforeend', html);
       bindSaleLine($('saleLines').lastElementChild);
-      updateLinePayment($('saleLines').lastElementChild);
       updateSaleSummary();
     }
     function bindSaleLine(line){
       line.querySelector('[data-remove-line]').onclick = () => { line.remove(); updateSaleSummary(); };
       line.querySelector('.extras-toggle').onclick = () => line.querySelector('.sale-extras').classList.toggle('open');
-      line.querySelector('.mixed-toggle').onclick = () => line.querySelector('.mixed-payment-row').classList.toggle('open');
-      line.querySelector('.pending-line').onclick = () => saveSinglePendingLine(line);
       line.querySelector('.sale-service').onchange = e => {
         const info = getVariantFromId(e.target.value);
         if(info){
           line.querySelector('.sale-final').value = info.variant.price;
-          line.querySelector('.payment-amount.primary-payment').value = info.variant.price;
         }
-        updateLinePayment(line);
         updateSaleSummary();
       };
-      line.querySelectorAll('.method-chip').forEach(chip=>chip.onclick=()=>{
-        chip.parentElement.querySelectorAll('.method-chip').forEach(c=>c.classList.remove('active'));
-        chip.classList.add('active');
-        updateSaleSummary();
-      });
-      line.querySelectorAll('input,select').forEach(el=>{el.oninput=()=>{if(!el.classList.contains('payment-amount')) updateLinePayment(line); updateSaleSummary();}; el.onchange=()=>{if(!el.classList.contains('payment-amount')) updateLinePayment(line); updateSaleSummary();};});
-      line.querySelectorAll('.sale-addon').forEach(chip=>chip.onclick=()=>{chip.classList.toggle('selected'); updateLinePayment(line); updateSaleSummary();});
+      line.querySelectorAll('input,select').forEach(el=>{el.oninput=()=>updateSaleSummary(); el.onchange=()=>updateSaleSummary();});
+      line.querySelectorAll('.sale-addon').forEach(chip=>chip.onclick=()=>{chip.classList.toggle('selected'); updateSaleSummary();});
     }
     function lineServiceSubtotal(line){
       const addons = Array.from(line.querySelectorAll('.sale-addon.selected')).reduce((s,a)=>s+Number(a.dataset.price||0),0);
       return Number(line.querySelector('.sale-final').value||0) + addons;
     }
-    function lineDepositApplied(line){
-      return Math.min(Number(line.querySelector('.sale-deposit')?.value||0), lineServiceSubtotal(line));
-    }
     function lineTotal(line){
-      return lineServiceSubtotal(line) + Number(line.querySelector('.sale-tip').value||0);
-    }
-    function lineBalanceDueToday(line){
-      return Math.max(0, lineTotal(line) - lineDepositApplied(line));
-    }
-    function updateLinePayment(line){
-      const total = lineBalanceDueToday(line);
-      const primary = line.querySelector('.primary-payment');
-      const secondary = line.querySelector('.secondary-payment');
-      const mixedOpen = line.querySelector('.mixed-payment-row').classList.contains('open');
-      if(mixedOpen){
-        const secondaryValue = Number(secondary.value||0);
-        if(document.activeElement !== primary) primary.value = Math.max(0,total-secondaryValue);
-      } else {
-        if(document.activeElement !== primary) primary.value = total;
-        secondary.value = 0;
-      }
+      return lineServiceSubtotal(line) + Number(line.querySelector('.sale-tip')?.value||0);
     }
     function collectSaleLines(){
       return Array.from(document.querySelectorAll('[data-sale-line]')).map(line=>{
@@ -4022,55 +4014,55 @@
         const groupName = info ? info.group.name : '';
         const addons = Array.from(line.querySelectorAll('.sale-addon.selected')).map(a=>({id:a.dataset.addonId,name:a.textContent.split(' · ')[0],price:Number(a.dataset.price||0)}));
         const baseFinal = Number(line.querySelector('.sale-final').value||0) + addons.reduce((s,a)=>s+a.price,0);
-        const payments = [{method:selectedMethod(line,'primary'),amount:Number(line.querySelector('.primary-payment').value||0)}];
-        if(line.querySelector('.mixed-payment-row').classList.contains('open')) payments.push({method:selectedMethod(line,'secondary'),amount:Number(line.querySelector('.secondary-payment').value||0)});
-        return {collaboratorId:line.querySelector('.sale-collaborator').value,group:groupName,service:serviceName,variantId,addons,finalPrice:baseFinal,depositAmount:Number(line.querySelector('.sale-deposit').value||0),depositAppliedAmount:Math.min(Number(line.querySelector('.sale-deposit').value||0), baseFinal),tipAmount:Number(line.querySelector('.sale-tip').value||0),reference:line.querySelector('.sale-reference')?.value||'',payments:payments.filter(p=>p.amount>0)};
+        return {collaboratorId:line.querySelector('.sale-collaborator').value,group:groupName,service:serviceName,variantId,addons,finalPrice:baseFinal,tipAmount:Number(line.querySelector('.sale-tip')?.value||0),reference:line.querySelector('.sale-reference')?.value||''};
       }).filter(l=>l.collaboratorId && l.service);
     }
-    function collectSalePayments(){return collectSaleLines().flatMap(l=>l.payments)}
+    function collectSalePayments(){
+      const payments = [];
+      const primaryAmt = Number($('checkoutPaymentPrimary')?.value||0);
+      const primaryMethod = document.querySelector('#checkoutMethodPrimary .method-chip.active')?.dataset.method || 'Efectivo';
+      if(primaryAmt > 0) payments.push({method:primaryMethod, amount:primaryAmt});
+      if($('checkoutMixedRow')?.style.display !== 'none'){
+        const secondaryAmt = Number($('checkoutPaymentSecondary')?.value||0);
+        const secondaryMethod = document.querySelector('#checkoutMethodSecondary .method-chip.active')?.dataset.method || 'Transf';
+        if(secondaryAmt > 0) payments.push({method:secondaryMethod, amount:secondaryAmt});
+      }
+      return payments;
+    }
     function saleTotals(){
       const lines = collectSaleLines();
       const services = lines.reduce((s,l)=>s+l.finalPrice,0);
       const tips = lines.reduce((s,l)=>s+l.tipAmount,0);
       const grossTotal = services + tips;
-      const depositApplied = lines.reduce((s,l)=>s+Number(l.depositAppliedAmount||0),0);
+      const depositApplied = Math.min(Number($('reservationDeposit')?.value||0), grossTotal);
       const due = Math.max(0, grossTotal - depositApplied);
-      const payments = lines.flatMap(l=>l.payments).reduce((s,p)=>s+p.amount,0);
+      const payments = collectSalePayments().reduce((s,p)=>s+p.amount,0);
       return {lines,services,tips,grossTotal,depositApplied,due,payments};
     }
-    function linePaymentTotal(line){
-      const primary = Number(line.querySelector('.primary-payment')?.value || 0);
-      const secondary = line.querySelector('.mixed-payment-row')?.classList.contains('open') ? Number(line.querySelector('.secondary-payment')?.value || 0) : 0;
-      return primary + secondary;
-    }
+    function linePaymentTotal(line){ return 0; }
     function updateLineStatus(line){
       const status = line.querySelector('.sale-line-status');
       if(!status) return;
       const collaborator = line.querySelector('.sale-collaborator')?.value;
       const service = line.querySelector('.sale-service')?.value;
-      const total = lineBalanceDueToday(line);
-      const paid = linePaymentTotal(line);
-      let text = 'Completa';
-      let ok = true;
-      if(!collaborator){ text = 'Falta colaboradora'; ok = false; }
-      else if(!service){ text = 'Falta servicio'; ok = false; }
-      else if(Math.abs(total - paid) > 1){ text = `Pago incompleto: faltan ${money(total - paid)}`; ok = false; }
-      status.textContent = text;
+      const ok = !!(collaborator && service);
+      status.textContent = ok ? 'Completa' : (!collaborator ? 'Falta colaboradora' : 'Falta servicio');
       status.classList.toggle('ok', ok);
       status.classList.toggle('warn', !ok);
     }
 
     function updateSaleSummary(){
       if(!$('summaryDue')) return;
-      document.querySelectorAll('[data-sale-line]').forEach(line=>{ if(document.activeElement && !document.activeElement.classList.contains('payment-amount')) updateLinePayment(line); updateLineStatus(line); });
+      document.querySelectorAll('[data-sale-line]').forEach(line=>updateLineStatus(line));
       const t = saleTotals();
-      const deposits = t.depositApplied;
       if($('summaryServices')) $('summaryServices').textContent = money(t.services);
       if($('summaryTips')) $('summaryTips').textContent = money(t.tips);
-      if($('summaryDeposits')) $('summaryDeposits').textContent = money(deposits);
+      if($('summaryDeposits')) $('summaryDeposits').textContent = money(t.depositApplied);
       $('summaryDue').textContent = money(t.due);
       if($('summaryPayments')) $('summaryPayments').textContent = money(t.payments);
-      if($('summaryDiff')) $('summaryDiff').textContent = money(t.payments - t.due);
+      if($('checkoutPaymentPrimary') && document.activeElement !== $('checkoutPaymentPrimary') && $('checkoutMixedRow')?.style.display === 'none'){
+        $('checkoutPaymentPrimary').value = t.due || '';
+      }
       if($('summaryWarning')) $('summaryWarning').classList.toggle('show', Math.abs(t.payments - t.due) > 1);
     }
     function saleClientName(){
@@ -4085,51 +4077,23 @@
       if(Math.abs(t.payments - t.due) > 1) return showToast('Los pagos del día deben coincidir con el saldo a cobrar.');
       const clientIdForTicket = state.saleClient.clientId || null;
       const sourceAppointment = state.saleSource==='appointment' ? state.appointments.find(a=>a.id===state.saleAppointmentId) : null;
+      const salePayments = collectSalePayments();
       const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.due,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
       state.salesTickets.unshift(ticket);
-      t.lines.forEach(l=>{
-        if(Number(l.depositAppliedAmount||0)>0){
-          state.payments.push({id:uid('depapp'),ticketId:ticket.id,amount:l.depositAppliedAmount,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
-        }
-        l.payments.forEach(p=>state.payments.push({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:l.reference||'',note:'Venta confirmada'}));
-      });
+      if(t.depositApplied>0) state.payments.push({id:uid('depapp'),ticketId:ticket.id,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
+      salePayments.forEach(p=>state.payments.push({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
       resetSaleForm(); renderAll(); showToast('Venta registrada');
     }
-    function saveSinglePendingLine(line){
-      const clientName = saleClientName();
-      if(!clientName) return showToast('El cliente es obligatorio.');
-      const service = line.querySelector('.sale-service').value;
-      const group = findServiceGroup(service);
-      const addons = Array.from(line.querySelectorAll('.sale-addon.selected')).map(a=>({id:a.dataset.addonId,name:a.textContent.split(' · ')[0],price:Number(a.dataset.price||0)}));
-      const finalPrice = Number(line.querySelector('.sale-final').value||0) + addons.reduce((s,a)=>s+a.price,0);
-      const pending = {
-        id:'pending'+Date.now()+Math.random(),
-        clientId:state.saleSource==='new'?null:state.saleClient.clientId,
-        clientNameSnapshot:clientName,
-        status:'pending',
-        collaboratorId:line.querySelector('.sale-collaborator').value,
-        group,
-        service,
-        addons,
-        finalPrice,
-        depositAmount:Number(line.querySelector('.sale-deposit').value||0),
-        tipAmount:Number(line.querySelector('.sale-tip').value||0),
-        createdBy: state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),
-        serviceOf: fullName(member(line.querySelector('.sale-collaborator').value)),
-        createdAt:new Date().toISOString()
-      };
-      state.pendingCharges.unshift(pending);
-      line.remove();
-      if(!$('saleLines').children.length) addSaleLine();
-      renderCashKpis(); renderPendingCharges(); updateSaleSummary();
-      showToast('Servicio guardado como pendiente');
+    function saveSinglePendingLine(){
+      savePendingSale();
     }
     function savePendingSale(){
       const clientName = saleClientName();
       const lines = collectSaleLines();
       if(!clientName || !lines.length) return showToast('Cliente y servicio son obligatorios.');
-      lines.forEach(l=>state.pendingCharges.unshift({id:'pending'+Date.now()+Math.random(),clientId:state.saleSource==='new'?null:state.saleClient.clientId,clientNameSnapshot:clientName,status:'pending',...l,createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),serviceOf:fullName(member(l.collaboratorId)),createdAt:new Date().toISOString()}));
-      resetSaleForm(); renderAll(); setCashTab('pending'); showToast('Servicio guardado como pendiente');
+      const deposit = Number($('reservationDeposit')?.value||0);
+      lines.forEach(l=>state.pendingCharges.unshift({id:'pending'+Date.now()+Math.random(),clientId:state.saleSource==='new'?null:state.saleClient.clientId,clientNameSnapshot:clientName,status:'pending',...l,depositAmount:deposit,createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),serviceOf:fullName(member(l.collaboratorId)),createdAt:new Date().toISOString()}));
+      resetSaleForm(); renderAll(); setCashTab('pending'); showToast('Guardado como pendiente');
     }
     function resetSaleForm(){
       state.saleClient = {clientId:null, clientName:''};
@@ -4139,6 +4103,11 @@
       if($('saleNote')) $('saleNote').value='';
       if($('saleNoteBox')) $('saleNoteBox').style.display='none';
       if($('saleLines')) $('saleLines').innerHTML='';
+      if($('reservationDeposit')) $('reservationDeposit').value='0';
+      if($('checkoutPaymentPrimary')) $('checkoutPaymentPrimary').value='';
+      if($('checkoutPaymentSecondary')) $('checkoutPaymentSecondary').value='0';
+      if($('checkoutMixedRow')) $('checkoutMixedRow').style.display='none';
+      if($('reservationBanner')) $('reservationBanner').style.display='none';
       fillSaleSourceOptions();
       if(state.saleSource === 'appointment' && state.saleAppointmentId) selectSaleAppointment(state.saleAppointmentId);
       else addSaleLine();
@@ -4151,6 +4120,7 @@
       $('saleClientInput').value = p.clientNameSnapshot;
       $('saleLines').innerHTML='';
       addSaleLine(p);
+      if($('reservationDeposit')) $('reservationDeposit').value = p.depositAmount||0;
       p.status='converted'; p.convertedBy = state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); p.convertedAt = new Date().toISOString();
       renderPendingCharges(); updateSaleSummary(); showToast('Pendiente cargado en venta');
     }
@@ -4991,6 +4961,29 @@
     if($('savePendingSaleBtn')) $('savePendingSaleBtn').onclick=savePendingSale;
     if($('toggleSaleNoteBtn')) $('toggleSaleNoteBtn').onclick=()=>{$('saleNoteBox').style.display = $('saleNoteBox').style.display === 'none' ? 'block' : 'none';};
     document.querySelectorAll('[data-cash-tab]').forEach(b=>b.onclick=()=>setCashTab(b.dataset.cashTab));
+    function initCheckoutPayment(){
+      const primaryEl = $('checkoutMethodPrimary');
+      const secondaryEl = $('checkoutMethodSecondary');
+      if(primaryEl) primaryEl.innerHTML = paymentMethods.map(m=>`<button type="button" class="method-chip ${m==='Efectivo'?'active':''}" data-method="${m}">${m}</button>`).join('');
+      if(secondaryEl) secondaryEl.innerHTML = paymentMethods.map(m=>`<button type="button" class="method-chip ${m==='Transf'?'active':''}" data-method="${m}">${m}</button>`).join('');
+      [primaryEl, secondaryEl].forEach(el=>{
+        if(!el) return;
+        el.querySelectorAll('.method-chip').forEach(chip=>chip.onclick=()=>{
+          chip.parentElement.querySelectorAll('.method-chip').forEach(c=>c.classList.remove('active'));
+          chip.classList.add('active');
+          updateSaleSummary();
+        });
+      });
+      if($('checkoutMixedToggle')) $('checkoutMixedToggle').onclick=()=>{
+        const row = $('checkoutMixedRow');
+        if(row) row.style.display = row.style.display==='none' ? 'block' : 'none';
+        updateSaleSummary();
+      };
+      if($('checkoutPaymentPrimary')) $('checkoutPaymentPrimary').oninput=updateSaleSummary;
+      if($('checkoutPaymentSecondary')) $('checkoutPaymentSecondary').oninput=updateSaleSummary;
+      if($('reservationDeposit')) $('reservationDeposit').oninput=updateSaleSummary;
+    }
+    initCheckoutPayment();
     document.querySelectorAll('[data-sale-source]').forEach(b=>b.onclick=()=>setSaleSource(b.dataset.saleSource));
     initSaleClientAutocomplete();
     if($('saleAppointmentSelect')) $('saleAppointmentSelect').onchange=()=>selectSaleAppointment($('saleAppointmentSelect').value);
