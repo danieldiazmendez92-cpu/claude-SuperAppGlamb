@@ -956,16 +956,31 @@
       display: none;
     }
 
+    .member-copy {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+    }
+
     .member-head strong {
+      display: block;
       font-size: 12px;
       font-weight: 500;
       color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .member-head span {
-      margin-top: 3px;
+      display: block;
+      margin-top: 2px;
       font-size: 10px;
       color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .calendar-body {
@@ -1124,7 +1139,6 @@
 
     .mini-flag {
       display: inline-flex;
-      margin-top: 5px;
       padding: 2px 6px;
       border-radius: var(--radius-pill);
       background: rgba(255,255,255,0.45);
@@ -1142,6 +1156,7 @@
       font-size: 11px;
       border-top: 0.5px solid var(--line);
       border-bottom: 0.5px solid var(--line);
+      overflow: hidden;
     }
 
     .empty-slot {
@@ -4585,9 +4600,9 @@
         </div>
         <h3 style="margin:4px 0 2px;">${fullName(c)}</h3>
         <div class="meta" style="margin-bottom:8px;">${c.phone}</div>
-        ${isCombined?`<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service}</span><span style="color:var(--text-muted)">${r.start}–${r.end} · ${fullName(member(r.memberId))}</span></div>`).join('')}</div>`:
-        `<div class="popover-service" style="margin-bottom:8px;">${a.service} · ${fullName(m)} · ${a.start}–${a.end}</div>`}
-        ${depositAmt>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text-muted);">Seña registrada</span><strong>${money(depositAmt)} · ${a.depositMethod||'Transf'}</strong></div>`:''}
+        ${isCombined?`<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service} · <span style="color:var(--text-muted)">${fullName(member(r.memberId))}</span></span><strong style="color:var(--text);font-size:13px;">${money(r.price||0)}</strong></div>`).join('')}<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 0;font-size:12px;"><span style="color:var(--text-muted);">Total</span><strong>${money(related.reduce((s,r)=>s+Number(r.price||0),0))}</strong></div></div>`:
+        `<div class="popover-service" style="margin-bottom:4px;">${a.service} · ${fullName(m)} · ${a.start}–${a.end}</div><div style="font-family:'Cormorant',serif;font-size:22px;font-weight:300;margin-bottom:8px;">${money(a.price||0)}</div>`}
+        ${depositAmt>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:0.5px solid var(--line);font-size:12px;"><span style="color:var(--accent-dark);">− Seña abonada</span><strong style="color:var(--accent-dark);">${money(depositAmt)} · ${a.depositMethod||'Transf'}</strong></div><div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 8px;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="font-weight:500;">Saldo</span><strong style="font-size:15px;">${money(Math.max(0,(a.price||0)-depositAmt))}</strong></div>`:''}
         ${statusHtml}
         ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${a.note||c.note}</span></div>`:''}
         <div class="detail-actions" style="margin-top:12px;">
