@@ -3323,7 +3323,21 @@
     function showPage(page){state.page=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('page-'+page).classList.add('active');document.querySelectorAll('.nav button,.mobile-module-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
     document.querySelectorAll('.nav button,.mobile-module-nav button,[data-go]').forEach(b=>b.onclick=()=>showPage(b.dataset.page||b.dataset.go));
     function openDrawer(id){$(id).classList.add('open');$('overlay').classList.add('open')} function closeDrawers(){document.querySelectorAll('.drawer').forEach(d=>d.classList.remove('open'));$('overlay').classList.remove('open')}
-    document.querySelectorAll('[data-open-client]').forEach(b=>b.onclick=()=>openDrawer('clientDrawer')); document.querySelectorAll('[data-open-collaborator]').forEach(b=>b.onclick=()=>openDrawer('collaboratorDrawer')); document.querySelectorAll('[data-open-appointment]').forEach(b=>b.onclick=()=>{fillAppointmentOptions();openDrawer('appointmentDrawer')});
+    document.querySelectorAll('[data-open-client]').forEach(b=>b.onclick=()=>openDrawer('clientDrawer'));
+    document.querySelectorAll('[data-open-collaborator]').forEach(b=>b.onclick=()=>{
+      state.editingCollaboratorId = null;
+      buildCollaboratorForm();
+      $('coFirst').value=''; $('coLast').value=''; $('coPhone').value=''; $('coEmail').value=''; $('coType').value='professional'; $('coCan').value='yes';
+      const header = document.querySelector('#collaboratorDrawer .eyebrow');
+      const title = document.querySelector('#collaboratorDrawer .drawer-title');
+      const saveBtn = $('saveCollaborator');
+      if(header) header.textContent = 'Nueva colaboradora';
+      if(title) title.textContent = 'Cargar colaboradora';
+      if(saveBtn) saveBtn.textContent = 'Guardar';
+      updatePreviews();
+      openDrawer('collaboratorDrawer');
+    });
+    document.querySelectorAll('[data-open-appointment]').forEach(b=>b.onclick=()=>{fillAppointmentOptions();openDrawer('appointmentDrawer')});
     document.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeDrawers); $('overlay').onclick=closeDrawers;
 
     function activeAppointments(){ return state.appointments.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)); }
@@ -3374,7 +3388,7 @@
       $('teamKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
       $('teamList').innerHTML=state.collaborators.map(c=>{
         const groupLabels = (c.groupIds||[]).map(id=>state.catalog.groups.find(g=>g.id===id)?.name||'').filter(Boolean);
-        return `<article class="person-card"><div class="person-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${c.phone}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${g}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${c.days} · ${c.hours}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="showToast('${fullName(c)} se usa en Agenda')">Ver</button></div></article>`
+        return `<article class="person-card"><div class="person-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${c.phone}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${g}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${c.days} · ${c.hours}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="editCollaborator('${c.id}')">Editar</button></div></article>`
       }).join('')
     }
 
@@ -4697,6 +4711,51 @@
     function updateClientPreview(){const n=[$('clFirst').value,$('clLast').value].filter(Boolean).join(' ')||'Nuevo cliente';$('clientPreviewName').textContent=n;$('clientPreviewMeta').textContent=$('clPhone').value||'WhatsApp pendiente';$('clientPreviewTags').innerHTML=selectedTexts('#clientPrefChips .select-chip').map(t=>`<span class="tag">${t}</span>`).join('')}
     ['clFirst','clLast','clPhone','clEmail'].forEach(id=>$(id).oninput=updateClientPreview);$('saveClient').onclick=()=>{const first=$('clFirst').value.trim(),last=$('clLast').value.trim();if(!first||!last)return showToast('Completá nombre y apellido');const newClient={id:'cl'+Date.now(),code:nextClientCode(),first,last,phone:$('clPhone').value.trim(),email:$('clEmail').value.trim(),tags:selectedTexts('#clientPrefChips .select-chip'),note:$('clNote').value.trim()||'Sin nota clave.'};state.clients.unshift(newClient);if(state.afterClientCreate==='sale'){state.afterClientCreate=null;state.saleSource='existing';state.saleClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();showPage('cash');setCashTab('register');setTimeout(()=>{if($('saleClientInput')) $('saleClientInput').value=fullName(newClient);updateSaleSummary();},0);showToast('Cliente creado y seleccionado para la venta');}else if(state.afterClientCreate==='appointment'){state.afterClientCreate=null;state.appointmentClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();openDrawer('appointmentDrawer');setTimeout(()=>{if($('apClientSearch')) $('apClientSearch').value=fullName(newClient);updateApPreview();},0);showToast('Cliente creado y seleccionado para el turno');}else{closeDrawers();showPage('clients');showToast('Cliente creado')}};
 
+    state.editingCollaboratorId = null;
+
+    function editCollaborator(id){
+      const c = state.collaborators.find(x=>x.id===id);
+      if(!c) return;
+      state.editingCollaboratorId = id;
+      buildCollaboratorForm();
+      // Pre-fill identity fields
+      $('coFirst').value = c.first || '';
+      $('coLast').value = c.last || '';
+      $('coPhone').value = c.phone || '';
+      $('coEmail').value = c.email || '';
+      $('coType').value = c.type || 'professional';
+      $('coCan').value = c.can ? 'yes' : 'no';
+      // Pre-select service chips by serviceId or by group membership
+      const enabledServiceIds = new Set(c.serviceIds || []);
+      const enabledGroupIds = new Set(c.groupIds || []);
+      document.querySelectorAll('#coServices .select-chip[data-service]').forEach(chip => {
+        if(enabledServiceIds.has(chip.dataset.service) || enabledGroupIds.has(chip.dataset.group)){
+          chip.classList.add('selected');
+        }
+      });
+      // Pre-fill availability
+      const enabledDays = new Set((c.days || '').split(',').map(d=>d.trim()).filter(Boolean));
+      const [startH, endH] = (c.hours || '10:00 - 19:00').split(' - ');
+      document.querySelectorAll('.availability-row').forEach(row => {
+        const day = row.dataset.day;
+        const cb = row.querySelector('.availability-enabled');
+        const startI = row.querySelector('.availability-start');
+        const endI = row.querySelector('.availability-end');
+        if(cb) cb.checked = enabledDays.has(day);
+        if(startI && startH) startI.value = startH.trim();
+        if(endI && endH) endI.value = endH.trim();
+      });
+      // Update drawer header
+      const header = document.querySelector('#collaboratorDrawer .eyebrow');
+      const title = document.querySelector('#collaboratorDrawer .drawer-title');
+      const saveBtn = $('saveCollaborator');
+      if(header) header.textContent = 'Editar colaboradora';
+      if(title) title.textContent = 'Modificar datos';
+      if(saveBtn) saveBtn.textContent = 'Guardar cambios';
+      updatePreviews();
+      openDrawer('collaboratorDrawer');
+    }
+
     function buildCollaboratorForm(){
       const catalog = state.catalog;
       const serviceHtml = catalog.groups.map(g=>`
@@ -4739,8 +4798,7 @@
       const groupNames = groupIds.map(id=>state.catalog.groups.find(g=>g.id===id)?.name||'');
       const serviceNames = selectedChips.map(x=>x.textContent.trim());
       const av=availability();
-      state.collaborators.push({
-        id:'co'+Date.now(),
+      const data = {
         first,last,
         phone:$('coPhone').value.trim(),
         email:$('coEmail').value.trim(),
@@ -4752,8 +4810,16 @@
         groupIds:groupIds,
         days:av.map(x=>x.day).join(', '),
         hours:av.length?`${av[0].start} - ${av[0].end}`:'Sin horario'
-      });
-      closeDrawers();showPage('team');showToast('Colaboradora creada y agenda actualizada')
+      };
+      if(state.editingCollaboratorId){
+        const idx = state.collaborators.findIndex(c=>c.id===state.editingCollaboratorId);
+        if(idx>=0) Object.assign(state.collaborators[idx], data);
+        state.editingCollaboratorId = null;
+        closeDrawers();showPage('team');renderAll();showToast('Colaboradora actualizada');
+      } else {
+        state.collaborators.push({id:'co'+Date.now(), ...data});
+        closeDrawers();showPage('team');showToast('Colaboradora creada y agenda actualizada');
+      }
     };
 
     function serviceDuration(service){
