@@ -934,7 +934,7 @@
     }
 
     .corner-cell {
-      min-height: 58px;
+      min-height: 76px;
       border-right: 0.5px solid var(--line);
       background: var(--surface-2);
       position: sticky;
@@ -943,28 +943,47 @@
     }
 
     .member-head {
-      min-height: 58px;
-      padding: 10px 12px;
+      min-height: 76px;
+      padding: 10px 8px 8px;
       border-right: 0.5px solid var(--line);
-      border-radius: 12px 12px 0 0;
-      background: var(--surface-2);
-      display: grid;
-      align-content: center;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      text-align: center;
+      min-width: 0;
     }
 
     .member-avatar {
-      display: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+      background: var(--surface-2);
+      border: 1.5px solid var(--line-strong);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: var(--text);
     }
 
     .member-copy {
       display: flex;
       flex-direction: column;
+      align-items: center;
       min-width: 0;
+      max-width: 100%;
       overflow: hidden;
     }
 
     .member-head strong {
       display: block;
+      max-width: 100%;
       font-size: 12px;
       font-weight: 500;
       color: var(--text);
@@ -975,8 +994,9 @@
 
     .member-head span {
       display: block;
-      margin-top: 2px;
-      font-size: 10px;
+      max-width: 100%;
+      margin-top: 1px;
+      font-size: 9px;
       color: var(--text-muted);
       white-space: nowrap;
       overflow: hidden;
@@ -1036,22 +1056,25 @@
 
     .appointment-block {
       position: absolute;
-      left: 4px;
-      right: 4px;
+      left: 3px;
+      right: 3px;
       border: 0;
-      border-radius: 0 10px 10px 0;
-      padding: 6px 8px;
+      border-radius: 8px;
+      padding: 5px 8px 5px 9px;
       overflow: hidden;
       cursor: pointer;
-      box-shadow: none;
+      box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.04);
       display: flex;
       flex-direction: column;
-      gap: 1px;
+      gap: 0;
+      transition: box-shadow 0.12s ease, filter 0.12s ease;
     }
 
     .appointment-block:hover,
     .appointment-block.selected {
-      outline: 0.5px solid var(--line-strong);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+      filter: brightness(0.985);
+      z-index: 3;
     }
     .appointment-block.additional {
       opacity: 0.65;
@@ -1064,57 +1087,67 @@
     }
 
     .appointment-block.manicuria {
-      background: #EFEFEC;
-      border-left: 2px solid #0E0E0D;
+      background: #DCEDF7;
+      border-left: 3px solid #5A93B8;
     }
 
     .appointment-block.eyes {
-      background: #E8EEF2;
-      border-left: 2px solid #5A8FAA;
+      background: #E6E3F4;
+      border-left: 3px solid #8278C2;
     }
 
     .appointment-block.depi {
-      background: #E8EFE8;
-      border-left: 2px solid #6A9A6A;
+      background: #DFF0E2;
+      border-left: 3px solid #5FA873;
     }
 
     .appointment-block.extra {
-      background: #F0EEEC;
-      border-left: 2px solid #9A9088;
+      background: #F7EBDD;
+      border-left: 3px solid #C2935A;
+    }
+
+    .appt-line1 {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #1d2b36;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .appt-line1 .appt-client-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+    }
+
+    .appt-line1 .appt-time-range {
+      flex: 0 0 auto;
+      font-weight: 600;
     }
 
     .appt-service {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 500;
-      color: var(--text);
+      display: block;
+      font-size: 10.5px;
+      font-weight: 400;
+      color: rgba(29,43,54,0.72);
+      line-height: 1.35;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-    }
-
-    .appt-client {
-      margin-top: 1px;
-      font-size: 10px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .appt-time {
-      margin-top: 1px;
-      font-size: 10px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
     }
 
     .appt-flags {
+      display: flex;
+      gap: 3px;
       overflow: hidden;
       max-height: 18px;
+      margin-top: 3px;
     }
 
     .status-dot {
@@ -1139,36 +1172,55 @@
 
     .mini-flag {
       display: inline-flex;
-      padding: 2px 6px;
+      align-items: center;
+      padding: 1px 6px;
       border-radius: var(--radius-pill);
-      background: rgba(255,255,255,0.45);
+      background: rgba(255,255,255,0.65);
       font-size: 9px;
-      color: var(--accent-dark);
+      font-weight: 500;
+      color: rgba(29,43,54,0.75);
+      white-space: nowrap;
     }
 
     .blocker {
       position: absolute;
-      left: 0;
-      right: 0;
-      padding: 6px 8px;
-      background: rgba(184,169,154,0.18);
+      left: 3px;
+      right: 3px;
+      padding: 5px 9px;
+      border-radius: 8px;
+      background: repeating-linear-gradient(135deg, #ECEAE6 0 7px, #E2DFDA 7px 14px);
       color: var(--text-muted);
-      font-size: 11px;
-      border-top: 0.5px solid var(--line);
-      border-bottom: 0.5px solid var(--line);
+      font-size: 10.5px;
+      font-weight: 500;
       overflow: hidden;
     }
 
     .empty-slot {
       position: absolute;
-      left: 7px;
-      right: 7px;
-      border: 0.5px dashed var(--line-strong);
+      left: 3px;
+      right: 3px;
+      border: none;
       border-radius: 8px;
-      padding: 7px 8px;
-      color: var(--text-muted);
-      font-size: 11px;
+      padding: 0;
+      color: transparent;
+      font-size: 0;
       cursor: pointer;
+      transition: background 0.12s ease;
+    }
+
+    .empty-slot:hover {
+      background: rgba(0,0,0,0.035);
+    }
+
+    .empty-slot:hover::after {
+      content: '+';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 16px;
+      font-weight: 300;
+      color: var(--text-muted);
     }
 
     .detail-popover {
@@ -1295,28 +1347,42 @@
     .cash-pos-kpis .card { background: var(--surface) !important; border-color: var(--line) !important; }
 
     /* ── Appointment block: service line height ── */
-    .appointment-block .appt-service { line-height: 1.2; }
+    .appointment-block .appt-service { line-height: 1.35; }
 
     .now-line {
       position: absolute;
       left: 72px;
       right: 0;
-      height: 1px;
-      background: var(--accent);
+      height: 2px;
+      background: #E04F3F;
       z-index: 4;
       pointer-events: none;
+    }
+
+    .now-line::before {
+      content: '';
+      position: absolute;
+      left: -4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #E04F3F;
     }
 
     .now-label {
       position: absolute;
       left: 8px;
       transform: translateY(-50%);
-      padding: 3px 7px;
+      padding: 3px 8px;
       border-radius: var(--radius-pill);
-      background: var(--accent);
+      background: #E04F3F;
       color: #fff;
       font-size: 10px;
-      z-index: 6;
+      font-weight: 600;
+      z-index: 7;
+      box-shadow: 0 1px 4px rgba(224,79,63,0.4);
     }
 
     .agenda-list-view {
@@ -4550,10 +4616,11 @@
       else if(paid !== 'paid' && !a.isAdditional) flags.push('pago pendiente');
       const flagsHtml = flags.length ? `<div class="appt-flags">${flags.map(f=>`<span class="mini-flag ${f==='Adicional'?'add-flag':''}">${f}</span>`).join('')}</div>` : '';
       const blockH = heightFor(a.start, a.end);
-      const showClient = blockH > 52 && !a.isAdditional;
-      const showTime = blockH > 82;
-      const showFlags = blockH > 100;
-      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px"><div class="appt-service"><span class="status-dot ${a.status||'confirmed'}"></span>${a.service}</div>${showClient?`<div class="appt-client">${fullName(c)}</div>`:''}${showTime?`<div class="appt-time">${a.start} - ${a.end}</div>`:''}${showFlags?flagsHtml:''}</div>`;
+      const showService = blockH > 40;
+      const showFlags = blockH > 72 && flags.length;
+      const clientLabel = a.isAdditional ? '' : fullName(c);
+      const line1 = `<div class="appt-line1"><span class="status-dot ${a.status||'confirmed'}"></span><span class="appt-time-range">${a.start} – ${a.end}</span>${clientLabel?`<span class="appt-client-name">${clientLabel}</span>`:''}</div>`;
+      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${line1}${showService?`<div class="appt-service">${a.service}</div>`:''}${showFlags?flagsHtml:''}</div>`;
     }
     function renderNowLine() {
       const existing = document.getElementById('nowLine');
@@ -4585,14 +4652,14 @@
         const aStart = mins(a.start);
         if (aStart - cursor >= 30) {
           const time = `${String(Math.floor(cursor/60)).padStart(2,'0')}:${String(cursor%60).padStart(2,'0')}`;
-          html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" style="top:${topFor(time)}px;height:${(aStart - cursor) * pxPerMin}px">Hueco · ${aStart - cursor} min</div>`;
+          html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" title="Agendar ${time}" style="top:${topFor(time)}px;height:${(aStart - cursor) * pxPerMin}px"></div>`;
         }
         cursor = Math.max(cursor, mins(a.end));
       });
       const dayEnd = endHour * 60;
       if (dayEnd - cursor >= 30) {
         const time = `${String(Math.floor(cursor/60)).padStart(2,'0')}:${String(cursor%60).padStart(2,'0')}`;
-        html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" style="top:${topFor(time)}px;height:${(dayEnd - cursor) * pxPerMin}px">Hueco · ${dayEnd - cursor} min</div>`;
+        html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" title="Agendar ${time}" style="top:${topFor(time)}px;height:${(dayEnd - cursor) * pxPerMin}px"></div>`;
       }
       return html;
     }
