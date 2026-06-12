@@ -909,6 +909,21 @@
       min-width: 140px;
       text-align: center;
       color: var(--text);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .col-unavailable {
+      position: absolute;
+      left: 0;
+      right: 0;
+      background: repeating-linear-gradient(
+        135deg,
+        rgba(0,0,0,0.022) 0 4px,
+        transparent 4px 8px
+      );
+      pointer-events: none;
+      z-index: 1;
     }
 
     .calendar-wrap {
@@ -2671,7 +2686,10 @@
               <button class="btn" id="todayBtn">Hoy</button>
               <div class="date-control">
                 <button class="icon-btn" id="prevDay">‹</button>
-                <div class="date-title" id="dateTitle">sáb 6 jun</div>
+                <div style="position:relative;display:inline-flex;align-items:center;">
+                  <div class="date-title" id="dateTitle" title="Ir a una fecha">sáb 6 jun</div>
+                  <input type="date" id="agendaDatePicker" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border:none;padding:0;">
+                </div>
                 <button class="icon-btn" id="nextDay">›</button>
               </div>
               <button class="btn primary toolbar-spacer" data-open-appointment>+ Nuevo turno</button>
@@ -4591,7 +4609,7 @@
       $('calendarBody').style.gridTemplateColumns=cols;
       $('membersHeader').innerHTML='<div class="corner-cell"></div>'+members.map(m=>`<div class="member-head"><div class="member-avatar">${initials(m)}</div><div class="member-copy"><strong>${fullName(m)}</strong><span>${m.groups.join(' · ')}</span></div></div>`).join('');
       const axis=renderTimeAxis();
-      const colsHtml=members.map(m=>`<div class="member-column" data-member-col="${m.id}">${state.agenda.showBlockers ? renderBlockers(m.id) : ''}${visibleAppointments().filter(a=>a.memberId===m.id).map(renderAppt).join('')}${renderGaps(m.id)}</div>`).join('');
+      const colsHtml=members.map(m=>`<div class="member-column" data-member-col="${m.id}">${renderUnavailableCol(m)}${state.agenda.showBlockers ? renderBlockers(m.id) : ''}${visibleAppointments().filter(a=>a.memberId===m.id).map(renderAppt).join('')}${renderGaps(m.id)}</div>`).join('');
       $('calendarBody').innerHTML=axis+colsHtml;
       renderNowLine();
       document.querySelectorAll('[data-appt]').forEach(el=>{el.onclick=e=>openPopover(e,el.dataset.appt); el.ondragstart=e=>{state.agenda.dragging=el.dataset.appt; e.dataTransfer.effectAllowed='move';};});
@@ -4604,6 +4622,27 @@
       $('agendaListView').innerHTML = `<div class="mini-row"><strong>${title}</strong><span>Ideal para recepción cuando no necesita grilla visual. La vista semana completa queda para la siguiente iteración.</span></div>${rows}`;
     }
     function renderBlockers(memberId){return state.blockers.filter(b=>b.memberId===memberId).map(b=>`<div class="blocker" style="top:${topFor(b.start)}px;height:${heightFor(b.start,b.end)}px">${b.start} - ${b.end} · ${b.label}</div>`).join('')}
+    function renderUnavailableCol(m){
+      const dayMap={0:'Domingo',1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
+      const todayName=dayMap[state.agenda.currentDate.getDay()];
+      const workDays=(m.days||'').split(',').map(d=>d.trim()).filter(Boolean);
+      const gridStart=startHour*60, gridEnd=endHour*60;
+      const totalH=(gridEnd-gridStart)*pxPerMin;
+      // Full day off
+      if(workDays.length && !workDays.includes(todayName)){
+        return `<div class="col-unavailable" style="top:0;height:${totalH}px;background:rgba(0,0,0,0.04)"></div>`;
+      }
+      // Hours outside shift
+      if(!m.hours) return '';
+      const parts=m.hours.split(' - ');
+      if(parts.length<2) return '';
+      const wStart=parts[0].trim(), wEnd=parts[1].trim();
+      const wStartM=mins(wStart), wEndM=mins(wEnd);
+      let html='';
+      if(wStartM>gridStart) html+=`<div class="col-unavailable" style="top:0;height:${(wStartM-gridStart)*pxPerMin}px"></div>`;
+      if(wEndM<gridEnd) html+=`<div class="col-unavailable" style="top:${topFor(wEnd)}px;height:${(gridEnd-wEndM)*pxPerMin}px"></div>`;
+      return html;
+    }
     function renderAppt(a){
       const c=client(a.clientId);
       const paid=a.deposit==='paid'?'paid':a.deposit==='pending'?'pending':'none';
@@ -5524,6 +5563,14 @@
     if($('prevDay')) $('prevDay').onclick = () => { state.agenda.currentDate.setDate(state.agenda.currentDate.getDate() - 1); updateDateTitle(); renderAgenda(); };
     if($('nextDay')) $('nextDay').onclick = () => { state.agenda.currentDate.setDate(state.agenda.currentDate.getDate() + 1); updateDateTitle(); renderAgenda(); };
     if($('todayBtn')) $('todayBtn').onclick = () => { state.agenda.currentDate = new Date(); updateDateTitle(); renderAgenda(); };
+    if($('agendaDatePicker')) $('agendaDatePicker').onchange = () => {
+      const val = $('agendaDatePicker').value;
+      if(!val) return;
+      const [y,mo,d] = val.split('-').map(Number);
+      state.agenda.currentDate = new Date(y, mo-1, d);
+      updateDateTitle();
+      renderAgenda();
+    };
     setInterval(renderNowLine, 60000);
     loadState();
     state.appointments.forEach(a=>{ if(!a.date) a.date=dateKey(new Date()); });
