@@ -287,6 +287,12 @@
       border: 0;
     }
 
+    .btn.danger {
+      background: #FDE8E8;
+      color: #B91C1C;
+      border-color: #FCA5A5;
+    }
+
     .small-btn {
       background: transparent;
       color: var(--text);
@@ -1220,7 +1226,27 @@
       font-size: 10.5px;
       font-weight: 500;
       overflow: hidden;
+      cursor: pointer;
+      display: flex;
+      align-items: flex-start;
+      gap: 4px;
     }
+    .blocker:hover { outline: 2px solid #b0a89a; }
+    .blocker-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .blocker-del {
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      color: #a09488;
+      font-size: 14px;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0 1px;
+      border-radius: 4px;
+      display: none;
+    }
+    .blocker:hover .blocker-del { display: block; }
+    .blocker-del:hover { background: rgba(0,0,0,0.1); color: #c0392b; }
 
     .empty-slot {
       position: absolute;
@@ -2728,7 +2754,7 @@
                 <span class="agenda-zoom-label" id="agendaZoomLabel">100%</span>
                 <button class="small-btn" id="agendaZoomIn" type="button">+</button>
               </div>
-              <button class="small-btn" id="toggleBlockers">Bloqueos</button>
+              <button class="small-btn" id="toggleBlockers">Bloqueos</button><button class="small-btn primary" id="addBlockerBtn" title="Agregar bloqueo de tiempo">＋ Bloqueo</button>
               <button class="small-btn" id="waitlistBtn">Lista de espera</button>
               <button class="small-btn" id="closeDayBtn">Cerrar día</button>
               <select class="select-like" id="roleView">
@@ -3271,6 +3297,57 @@
       <div class="footer-actions">
         <button class="btn" data-close>Cancelar</button>
         <button class="btn primary" id="catalogSaveBtn">Guardar</button>
+      </div>
+    </footer>
+  </aside>
+
+  <!-- Blocker Drawer -->
+  <aside class="drawer" id="blockerDrawer">
+    <header class="drawer-header">
+      <div>
+        <div class="eyebrow">Agenda</div>
+        <h2 class="drawer-title" id="blockerDrawerTitle">Nuevo bloqueo</h2>
+        <p class="drawer-subtitle">Bloquea tiempo de una colaboradora: comida, descanso, reunión, formación, etc.</p>
+      </div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <input type="hidden" id="blockerEditId">
+      <div class="form-grid">
+        <div class="field">
+          <label>Colaboradora</label>
+          <select id="blockerMember"></select>
+        </div>
+        <div class="field">
+          <label>Etiqueta</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;" id="blockerPresets">
+            <button type="button" class="chip" data-preset="Comida">🍽 Comida</button>
+            <button type="button" class="chip" data-preset="Descanso">☕ Descanso</button>
+            <button type="button" class="chip" data-preset="Reunión">📋 Reunión</button>
+            <button type="button" class="chip" data-preset="Formación">📚 Formación</button>
+            <button type="button" class="chip" data-preset="No disponible">🚫 No disponible</button>
+          </div>
+          <input type="text" id="blockerLabel" placeholder="O escribí una etiqueta personalizada…" style="width:100%;">
+        </div>
+        <div class="field">
+          <label>Fecha <span style="font-weight:400;color:var(--text-muted)">(vacío = todos los días)</span></label>
+          <input type="date" id="blockerDate" style="width:100%;">
+        </div>
+        <div class="field">
+          <label>Hora inicio</label>
+          <input type="time" id="blockerStart" step="900" style="width:100%;">
+        </div>
+        <div class="field">
+          <label>Hora fin</label>
+          <input type="time" id="blockerEnd" step="900" style="width:100%;">
+        </div>
+      </div>
+    </div>
+    <footer class="drawer-footer">
+      <div class="footer-actions">
+        <button class="btn" data-close>Cancelar</button>
+        <button class="btn danger" id="blockerDeleteBtn" style="display:none;">Eliminar</button>
+        <button class="btn primary" id="blockerSaveBtn">Guardar bloqueo</button>
       </div>
     </footer>
   </aside>
@@ -4633,7 +4710,12 @@
       const rows = visibleAppointments().sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`<div class="agenda-list-row" id="list-row-${a.id}"><div><strong>${a.start}</strong><br><span>${a.end}</span></div><div><strong>${fullName(client(a.clientId))}</strong><br><span>${a.service} · ${fullName(member(a.memberId))}</span></div><button class="small-btn" onclick="openPopover({currentTarget:document.getElementById('list-row-${a.id}')??this},'${a.id}')">Detalle</button></div>`).join('');
       $('agendaListView').innerHTML = `<div class="mini-row"><strong>${title}</strong><span>Ideal para recepción cuando no necesita grilla visual. La vista semana completa queda para la siguiente iteración.</span></div>${rows}`;
     }
-    function renderBlockers(memberId){return state.blockers.filter(b=>b.memberId===memberId).map(b=>`<div class="blocker" style="top:${topFor(b.start)}px;height:${heightFor(b.start,b.end)}px">${b.start} - ${b.end} · ${b.label}</div>`).join('')}
+    function renderBlockers(memberId){
+      const today=dateKey(state.agenda.currentDate);
+      return state.blockers
+        .filter(b=>b.memberId===memberId && (!b.date || b.date===today))
+        .map(b=>`<div class="blocker" data-blocker="${b.id}" style="top:${topFor(b.start)}px;height:${heightFor(b.start,b.end)}px"><span class="blocker-text">${b.start}–${b.end} · ${b.label}${b.date?'':' ↻'}</span><button class="blocker-del" data-blocker-del="${b.id}" title="Eliminar bloqueo">×</button></div>`).join('');
+    }
     function renderUnavailableCol(m){
       const dayMap={0:'Domingo',1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
       const todayName=dayMap[state.agenda.currentDate.getDay()];
@@ -5538,6 +5620,72 @@
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
     ['groupFilter','memberFilter','roleView','agendaView'].forEach(id=>{ if($(id)) $(id).onchange=()=>{renderAgenda(); if(id==='agendaView' && $(id).value==='week') showToast('Vista semana simplificada activada.');}; });
     if($('toggleBlockers')) $('toggleBlockers').onclick=()=>{state.agenda.showBlockers=!state.agenda.showBlockers;renderAgenda();};
+
+    // ── Blocker drawer ──────────────────────────────────────────────
+    function buildBlockerMemberSelect(){
+      const sel=$('blockerMember'); if(!sel)return;
+      sel.innerHTML=state.collaborators.map(c=>`<option value="${c.id}">${fullName(c)}</option>`).join('');
+    }
+    function openBlockerDrawer(blockerId){
+      buildBlockerMemberSelect();
+      $('blockerDrawerTitle').textContent = blockerId ? 'Editar bloqueo' : 'Nuevo bloqueo';
+      $('blockerDeleteBtn').style.display = blockerId ? 'inline-flex' : 'none';
+      $('blockerEditId').value = blockerId || '';
+      if(blockerId){
+        const b=state.blockers.find(x=>x.id===blockerId);
+        if(b){
+          $('blockerMember').value=b.memberId;
+          $('blockerLabel').value=b.label;
+          $('blockerDate').value=b.date||'';
+          $('blockerStart').value=b.start;
+          $('blockerEnd').value=b.end;
+        }
+      } else {
+        $('blockerMember').value=state.collaborators[0]?.id||'';
+        $('blockerLabel').value='';
+        $('blockerDate').value=dateKey(state.agenda.currentDate);
+        $('blockerStart').value='13:00';
+        $('blockerEnd').value='14:00';
+      }
+      openDrawer('blockerDrawer');
+    }
+    if($('addBlockerBtn')) $('addBlockerBtn').onclick=()=>openBlockerDrawer(null);
+    if($('blockerPresets')){
+      $('blockerPresets').querySelectorAll('[data-preset]').forEach(btn=>{
+        btn.onclick=()=>{$('blockerLabel').value=btn.dataset.preset; $('blockerPresets').querySelectorAll('[data-preset]').forEach(b=>b.classList.remove('active')); btn.classList.add('active');};
+      });
+    }
+    if($('blockerSaveBtn')) $('blockerSaveBtn').onclick=()=>{
+      const memberId=$('blockerMember').value;
+      const label=($('blockerLabel').value||'').trim();
+      const date=$('blockerDate').value||'';
+      const start=$('blockerStart').value;
+      const end=$('blockerEnd').value;
+      if(!label){showToast('Escribí una etiqueta para el bloqueo.');return;}
+      if(!start||!end||mins(start)>=mins(end)){showToast('Verificá las horas: la hora fin debe ser mayor que la inicio.');return;}
+      const editId=$('blockerEditId').value;
+      if(editId){
+        const b=state.blockers.find(x=>x.id===editId);
+        if(b) Object.assign(b,{memberId,label,date,start,end});
+      } else {
+        state.blockers.push({id:'blk'+Date.now(),memberId,label,date,start,end});
+      }
+      if(!state.agenda.showBlockers) state.agenda.showBlockers=true;
+      closeDrawers(); saveState(); renderAgenda();
+      showToast(editId?'Bloqueo actualizado.':'Bloqueo creado.');
+    };
+    if($('blockerDeleteBtn')) $('blockerDeleteBtn').onclick=()=>{
+      const editId=$('blockerEditId').value;
+      if(!editId)return;
+      state.blockers=state.blockers.filter(b=>b.id!==editId);
+      closeDrawers(); saveState(); renderAgenda(); showToast('Bloqueo eliminado.');
+    };
+    document.addEventListener('click',e=>{
+      const del=e.target.closest('[data-blocker-del]');
+      if(del){e.stopPropagation(); state.blockers=state.blockers.filter(b=>b.id!==del.dataset.blockerDel); saveState(); renderAgenda(); showToast('Bloqueo eliminado.'); return;}
+      const blk=e.target.closest('[data-blocker]');
+      if(blk && !e.target.closest('[data-blocker-del]')) openBlockerDrawer(blk.dataset.blocker);
+    });
     if($('waitlistBtn')) $('waitlistBtn').onclick=openWaitlist;
     if($('closeDayBtn')) $('closeDayBtn').onclick=closeDay;
     if($('cashOpenBtn')) $('cashOpenBtn').onclick=openCashSession;
