@@ -2968,6 +2968,7 @@
     <footer class="drawer-footer">
       <button class="btn primary" id="profileCreateAppointment">Crear turno</button>
       <button class="btn accent" id="profileMessage">Enviar mensaje</button>
+      <button class="btn" id="profileEditClient">Editar datos</button>
       <button class="btn" id="profileVip">Marcar VIP</button>
     </footer>
   </aside>
@@ -3323,7 +3324,7 @@
     function showPage(page){state.page=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('page-'+page).classList.add('active');document.querySelectorAll('.nav button,.mobile-module-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
     document.querySelectorAll('.nav button,.mobile-module-nav button,[data-go]').forEach(b=>b.onclick=()=>showPage(b.dataset.page||b.dataset.go));
     function openDrawer(id){$(id).classList.add('open');$('overlay').classList.add('open')} function closeDrawers(){document.querySelectorAll('.drawer').forEach(d=>d.classList.remove('open'));$('overlay').classList.remove('open')}
-    document.querySelectorAll('[data-open-client]').forEach(b=>b.onclick=()=>openDrawer('clientDrawer'));
+    document.querySelectorAll('[data-open-client]').forEach(b=>b.onclick=()=>openClientDrawerNew());
     document.querySelectorAll('[data-open-collaborator]').forEach(b=>b.onclick=()=>{
       state.editingCollaboratorId = null;
       buildCollaboratorForm();
@@ -4111,7 +4112,7 @@
       if(source === 'new') {
         state.afterClientCreate = 'sale';
         showToast('Creá el cliente y volverás a Caja.');
-        openDrawer('clientDrawer');
+        openClientDrawerNew();
       }
       updateSaleSummary();
     }
@@ -4709,7 +4710,64 @@
     function setupChips(){document.querySelectorAll('.select-chip').forEach(c=>c.onclick=()=>{c.classList.toggle('selected');updatePreviews()})}
     $('clientPrefChips').querySelectorAll('.select-chip').forEach(c=>c.onclick=()=>{c.classList.toggle('selected');updateClientPreview()});
     function updateClientPreview(){const n=[$('clFirst').value,$('clLast').value].filter(Boolean).join(' ')||'Nuevo cliente';$('clientPreviewName').textContent=n;$('clientPreviewMeta').textContent=$('clPhone').value||'WhatsApp pendiente';$('clientPreviewTags').innerHTML=selectedTexts('#clientPrefChips .select-chip').map(t=>`<span class="tag">${t}</span>`).join('')}
-    ['clFirst','clLast','clPhone','clEmail'].forEach(id=>$(id).oninput=updateClientPreview);$('saveClient').onclick=()=>{const first=$('clFirst').value.trim(),last=$('clLast').value.trim();if(!first||!last)return showToast('Completá nombre y apellido');const newClient={id:'cl'+Date.now(),code:nextClientCode(),first,last,phone:$('clPhone').value.trim(),email:$('clEmail').value.trim(),tags:selectedTexts('#clientPrefChips .select-chip'),note:$('clNote').value.trim()||'Sin nota clave.'};state.clients.unshift(newClient);if(state.afterClientCreate==='sale'){state.afterClientCreate=null;state.saleSource='existing';state.saleClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();showPage('cash');setCashTab('register');setTimeout(()=>{if($('saleClientInput')) $('saleClientInput').value=fullName(newClient);updateSaleSummary();},0);showToast('Cliente creado y seleccionado para la venta');}else if(state.afterClientCreate==='appointment'){state.afterClientCreate=null;state.appointmentClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();openDrawer('appointmentDrawer');setTimeout(()=>{if($('apClientSearch')) $('apClientSearch').value=fullName(newClient);updateApPreview();},0);showToast('Cliente creado y seleccionado para el turno');}else{closeDrawers();showPage('clients');showToast('Cliente creado')}};
+    ['clFirst','clLast','clPhone','clEmail'].forEach(id=>$(id).oninput=updateClientPreview);
+
+    state.editingClientId = null;
+
+    function openClientDrawerNew(){
+      state.editingClientId = null;
+      $('clFirst').value=''; $('clLast').value=''; $('clPhone').value=''; $('clEmail').value=''; $('clNote').value='';
+      $('clientPrefChips').querySelectorAll('.select-chip').forEach(c=>c.classList.remove('selected'));
+      const eyebrow = document.querySelector('#clientDrawer .eyebrow');
+      const title = document.querySelector('#clientDrawer .drawer-title');
+      const saveBtn = $('saveClient');
+      if(eyebrow) eyebrow.textContent = 'Nuevo cliente';
+      if(title) title.textContent = 'Cargar cliente';
+      if(saveBtn) saveBtn.textContent = 'Guardar';
+      updateClientPreview();
+      openDrawer('clientDrawer');
+    }
+
+    function editClient(id){
+      const c = state.clients.find(x=>x.id===id);
+      if(!c) return;
+      state.editingClientId = id;
+      $('clFirst').value = c.first || '';
+      $('clLast').value = c.last || '';
+      $('clPhone').value = c.phone || '';
+      $('clEmail').value = c.email || '';
+      $('clNote').value = c.note && c.note !== 'Sin nota clave.' ? c.note : '';
+      // Pre-select preference chips that match saved tags
+      $('clientPrefChips').querySelectorAll('.select-chip').forEach(chip=>{
+        chip.classList.toggle('selected', c.tags.includes(chip.textContent.trim()));
+      });
+      const eyebrow = document.querySelector('#clientDrawer .eyebrow');
+      const title = document.querySelector('#clientDrawer .drawer-title');
+      const saveBtn = $('saveClient');
+      if(eyebrow) eyebrow.textContent = 'Editar cliente';
+      if(title) title.textContent = 'Modificar datos';
+      if(saveBtn) saveBtn.textContent = 'Guardar cambios';
+      updateClientPreview();
+      openDrawer('clientDrawer');
+    }
+
+    $('saveClient').onclick=()=>{
+      const first=$('clFirst').value.trim(),last=$('clLast').value.trim();
+      if(!first||!last)return showToast('Completá nombre y apellido');
+      const data={first,last,phone:$('clPhone').value.trim(),email:$('clEmail').value.trim(),tags:selectedTexts('#clientPrefChips .select-chip'),note:$('clNote').value.trim()||'Sin nota clave.'};
+      if(state.editingClientId){
+        const idx=state.clients.findIndex(c=>c.id===state.editingClientId);
+        if(idx>=0) Object.assign(state.clients[idx], data);
+        state.editingClientId=null;
+        closeDrawers();renderAll();showToast('Cliente actualizado');
+      } else {
+        const newClient={id:'cl'+Date.now(),code:nextClientCode(),...data};
+        state.clients.unshift(newClient);
+        if(state.afterClientCreate==='sale'){state.afterClientCreate=null;state.saleSource='existing';state.saleClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();showPage('cash');setCashTab('register');setTimeout(()=>{if($('saleClientInput')) $('saleClientInput').value=fullName(newClient);updateSaleSummary();},0);showToast('Cliente creado y seleccionado para la venta');}
+        else if(state.afterClientCreate==='appointment'){state.afterClientCreate=null;state.appointmentClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();openDrawer('appointmentDrawer');setTimeout(()=>{if($('apClientSearch')) $('apClientSearch').value=fullName(newClient);updateApPreview();},0);showToast('Cliente creado y seleccionado para el turno');}
+        else{closeDrawers();showPage('clients');showToast('Cliente creado')}
+      }
+    };
 
     state.editingCollaboratorId = null;
 
@@ -4857,7 +4915,7 @@
           updateApPreview();
         });
         const add = document.querySelector('[data-ap-new-client]');
-        if(add) add.onclick=()=>{ state.afterClientCreate='appointment'; box.classList.remove('open'); closeDrawers(); openDrawer('clientDrawer'); };
+        if(add) add.onclick=()=>{ state.afterClientCreate='appointment'; box.classList.remove('open'); closeDrawers(); openClientDrawerNew(); };
       };
     }
     function getCatalogGroups(){return state.catalog.groups.map(g=>({id:g.id,name:g.name,type:g.type}))}
@@ -5295,6 +5353,7 @@
       $('profileCreateAppointment').onclick = ()=>{ closeDrawers(); fillAppointmentOptions(c.id); openDrawer('appointmentDrawer'); };
       $('profileMessage').onclick = ()=>showToast('Abriendo WhatsApp...');
       $('profileVip').onclick = ()=>{ if(!c.tags.includes('VIP')) c.tags.push('VIP'); renderClients(); openClientProfile(c.id); showToast('Cliente marcado como VIP.'); };
+      $('profileEditClient').onclick = ()=>{ closeDrawers(); editClient(c.id); };
       openDrawer('clientProfileDrawer');
     }
 
