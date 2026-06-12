@@ -1241,6 +1241,37 @@
       -ms-overflow-style: none;
     }
 
+    /* ── Premium input hover ── */
+    input, select, textarea { transition: border-color 0.15s ease; }
+    input:hover:not(:focus), select:hover:not(:focus) { border-color: var(--line-strong); }
+
+    /* ── Popover premium ── */
+    .detail-popover { border-radius: 20px; padding: 18px 20px; }
+
+    /* ── Agenda filters toggle ── */
+    #agendaFiltersToggle.active { background: var(--black); color: #F6F6F4; border-color: var(--black); }
+
+    /* ── Toolbar filters row ── */
+    .toolbar-row + .toolbar-row { flex-wrap: wrap; gap: 6px; }
+
+    /* ── Sale line rounded ── */
+    .sale-line { border-radius: 14px; padding: 14px; }
+
+    /* ── Danger buttons: neutral red (no terracota) ── */
+    .tiny-btn.danger:hover { background: #FDE8E8; color: #B91C1C; }
+    .small-btn.danger { background: #FDE8E8; color: #B91C1C; border-color: #FCA5A5; }
+    .small-btn.danger:hover { background: #FECACA; }
+    .icon-btn.danger:hover { background: #FDE8E8; color: #B91C1C; }
+
+    /* ── Side note: B&W text (no terracota) ── */
+    .side-note span { color: rgba(246,246,244,0.55) !important; }
+
+    /* ── Cash KPI cards: aligned to B&W system ── */
+    .cash-pos-kpis .card { background: var(--surface) !important; border-color: var(--line) !important; }
+
+    /* ── Appointment block: service line height ── */
+    .appointment-block .appt-service { line-height: 1.2; }
+
     .now-line {
       position: absolute;
       left: 72px;
@@ -2553,8 +2584,9 @@
                 <button class="icon-btn" id="nextDay">›</button>
               </div>
               <button class="btn primary toolbar-spacer" data-open-appointment>+ Nuevo turno</button>
+              <button class="small-btn" id="agendaFiltersToggle" onclick="toggleAgendaFilters()" title="Filtros de agenda">⚙ Filtros</button>
             </div>
-            <div class="toolbar-row">
+            <div class="toolbar-row" id="agendaFiltersRow" style="display:none;">
               <select class="select-like" id="memberFilter"><option value="Todos">Todos los profesionales</option></select>
               <select class="select-like" id="groupFilter" onchange="onGroupFilterChange()">
                 <option value="Todos">Todos los grupos</option>
@@ -4059,9 +4091,21 @@
       if($('saleLines')) {
         $('saleLines').innerHTML='';
         const related = reservationAppointments(appt);
+        const additionals = activeAppointments().filter(a=>reservationKey(a)===reservationKey(appt) && a.isAdditional);
         const deposit = reservationDeposit(related);
         if($('reservationDeposit')) $('reservationDeposit').value = deposit;
-        related.forEach(line=>addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:estimateAmount(line)}));
+        related.forEach(line=>{
+          const catalogPrice = getVariantFromId(line.variantId)?.variant.price;
+          addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:catalogPrice || line.price || estimateAmount(line)});
+          const lineAdds = additionals.filter(a=>a.memberId===line.memberId);
+          if(lineAdds.length){
+            const saleLineEl = $('saleLines').lastElementChild;
+            lineAdds.forEach(add=>{
+              const chip = saleLineEl.querySelector(`.sale-addon[data-addon-id="${add.variantId}"]`);
+              if(chip){ chip.classList.add('selected'); saleLineEl.querySelector('.sale-extras')?.classList.add('open'); }
+            });
+          }
+        });
       }
       const related = reservationAppointments(appt);
       if($('reservationBanner')){
@@ -4454,7 +4498,11 @@
       if(depositAmount > 0 && !a.isAdditional) flags.push(`Seña ${money(depositAmount)}`);
       else if(paid !== 'paid' && !a.isAdditional) flags.push('pago pendiente');
       const flagsHtml = flags.length ? `<div class="appt-flags">${flags.map(f=>`<span class="mini-flag ${f==='Adicional'?'add-flag':''}">${f}</span>`).join('')}</div>` : '';
-      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${heightFor(a.start,a.end)}px"><div class="appt-service"><span class="status-dot ${a.status||'confirmed'}"></span>${a.service}</div><div class="appt-client">${a.isAdditional?'':fullName(c)}</div><div class="appt-time">${a.start} - ${a.end}</div>${flagsHtml}</div>`;
+      const blockH = heightFor(a.start, a.end);
+      const showClient = blockH > 44 && !a.isAdditional;
+      const showTime = blockH > 60;
+      const showFlags = blockH > 72;
+      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px"><div class="appt-service"><span class="status-dot ${a.status||'confirmed'}"></span>${a.service}</div>${showClient?`<div class="appt-client">${fullName(c)}</div>`:''}${showTime?`<div class="appt-time">${a.start} - ${a.end}</div>`:''}${showFlags?flagsHtml:''}</div>`;
     }
     function renderNowLine() {
       const existing = document.getElementById('nowLine');
@@ -4522,10 +4570,33 @@
       const statusHtml=`<div class="detail-section"><strong>Estado</strong><div class="status-chips">${statuses.map(s=>`<button class="small-btn ${a.status===s.key?'primary':''}" onclick="updateApptStatus('${a.id}','${s.key}')">${s.label}</button>`).join('')}</div></div>`;
       const combinedHtml = isCombined ? `<div class="detail-section"><strong>Servicios del turno</strong>${related.map(r=>`<div class="mini-row"><strong>${r.start} - ${r.end}</strong><br><span>${r.service} · ${fullName(member(r.memberId))}${r.price?` · ${money(r.price)}`:''}</span></div>`).join('')}</div>` : '';
       const servicesList = isCombined ? related.map(r=>r.service).join(', ') : a.service;
-      pop.innerHTML=`<div class="eyebrow">${isCombined?'Turno combinado':'Turno'}</div><h3>${fullName(c)}</h3><div class="popover-service">${servicesList}</div><div class="meta">${fullName(m)} · ${a.start} - ${a.end}<br>${c.phone}</div>${appointmentDepositAmount(a)>0?`<div class="detail-section"><strong>Seña</strong><span>${money(appointmentDepositAmount(a))} · ${a.depositMethod || 'Transferencia'}</span></div>`:''}${isCombined?'<div class="tags"><span class="tag">Combinado</span></div>':''}${combinedHtml}${statusHtml}<div class="detail-section"><strong>Nota</strong><span>${a.note||c.note||'Sin nota'}</span></div><div class="detail-actions"><button class="small-btn primary" onclick="chargeFromAppointment('${a.id}')">Cobrar visita</button><button class="small-btn" onclick="editAppointment('${a.id}');closePopover()">Editar turno</button><button class="small-btn ${a.deposit==='paid'?'primary':''}" onclick="togglePaid('${a.id}')">${a.deposit==='paid'?'Pagado':'Marcar pagado'}</button><button class="small-btn" onclick="cancelAppointment('${a.id}','cancelled')">Cancelar</button></div>`;
+      const depositAmt = appointmentDepositAmount(a);
+      pop.innerHTML=`
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:2px;">
+          <div class="eyebrow" style="margin:0;">${isCombined?'Turno combinado':'Turno'}</div>
+          <button onclick="closePopover()" style="background:var(--surface-2);border:0;border-radius:8px;width:28px;height:28px;font-size:16px;color:var(--text-muted);cursor:pointer;flex-shrink:0;">×</button>
+        </div>
+        <h3 style="margin:4px 0 2px;">${fullName(c)}</h3>
+        <div class="meta" style="margin-bottom:8px;">${c.phone}</div>
+        ${isCombined?`<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service}</span><span style="color:var(--text-muted)">${r.start}–${r.end} · ${fullName(member(r.memberId))}</span></div>`).join('')}</div>`:
+        `<div class="popover-service" style="margin-bottom:8px;">${a.service} · ${fullName(m)} · ${a.start}–${a.end}</div>`}
+        ${depositAmt>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text-muted);">Seña registrada</span><strong>${money(depositAmt)} · ${a.depositMethod||'Transf'}</strong></div>`:''}
+        ${statusHtml}
+        ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${a.note||c.note}</span></div>`:''}
+        <div class="detail-actions" style="margin-top:12px;">
+          <button class="small-btn primary" onclick="chargeFromAppointment('${a.id}')">Cobrar visita</button>
+          <button class="small-btn" onclick="editAppointment('${a.id}');closePopover()">Editar turno</button>
+          <button class="small-btn ${a.deposit==='paid'?'primary':''}" onclick="togglePaid('${a.id}')">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
+          <button class="small-btn" onclick="cancelAppointment('${a.id}','cancelled')">Cancelar</button>
+        </div>`;
       const r=e.currentTarget.getBoundingClientRect?e.currentTarget.getBoundingClientRect():{right:300,top:120};
-      pop.style.left=Math.max(16,Math.min(r.right+12,window.innerWidth-400))+'px';
-      pop.style.top=Math.min(r.top,window.innerHeight-500)+'px';
+      const popW=400, popH=420;
+      let left = r.right+12;
+      if(left + popW > window.innerWidth-16) left = r.left - popW - 12;
+      left = Math.max(16, left);
+      let top = r.top;
+      if(top + popH > window.innerHeight-16) top = window.innerHeight - popH - 16;
+      top = Math.max(16, top);
       pop.classList.add('open');
     }
 
@@ -4826,7 +4897,8 @@
         updateApPreview();
       };
 
-      line.querySelectorAll('input,select').forEach(el=>{el.oninput=refresh; el.onchange=refresh;});
+      // Only apply refresh to plain inputs — NOT to cascade selects (they have their own handlers above)
+      line.querySelectorAll('.appt-start-input,.appt-duration-input,.appt-price-input').forEach(el=>{el.oninput=refresh; el.onchange=refresh;});
       line.querySelector('[data-remove-appt-line]').onclick=()=>{line.remove(); if(!$('appointmentServiceLines').children.length) addAppointmentServiceLine(); updateApPreview();};
 
       refresh();
@@ -5123,6 +5195,14 @@
       state.agenda.colWidth = agendaZoomSteps[nextIndex];
       updateAgendaZoomLabel();
       renderAgenda();
+    }
+    function toggleAgendaFilters(){
+      const row = $('agendaFiltersRow');
+      if(!row) return;
+      const isOpen = row.style.display !== 'none';
+      row.style.display = isOpen ? 'none' : 'flex';
+      const btn = $('agendaFiltersToggle');
+      if(btn) btn.classList.toggle('active', !isOpen);
     }
     function updateAgendaZoomLabel(){
       const label = document.getElementById('agendaZoomLabel');
