@@ -5127,7 +5127,38 @@
       const colsHtml=members.map(m=>`<div class="member-column" data-member-col="${m.id}">${renderUnavailableCol(m)}${state.agenda.showBlockers ? renderBlockers(m.id) : ''}${visibleAppointments().filter(a=>a.memberId===m.id).map(renderAppt).join('')}${renderGaps(m.id)}</div>`).join('');
       $('calendarBody').innerHTML=axis+colsHtml;
       renderNowLine();
-      document.querySelectorAll('[data-appt]').forEach(el=>{el.onclick=e=>openPopover(e,el.dataset.appt); el.ondragstart=e=>{state.agenda.dragging=el.dataset.appt; e.dataTransfer.effectAllowed='move';};});
+      document.querySelectorAll('[data-appt]').forEach(el=>{
+        el.onclick=e=>openPopover(e,el.dataset.appt);
+        el.ondragstart=e=>{state.agenda.dragging=el.dataset.appt; e.dataTransfer.effectAllowed='move';};
+        el.addEventListener('mouseenter', ()=>{
+          const id=el.dataset.appt;
+          const a=state.appointments.find(x=>x.id===id);
+          if(!a) return;
+          const c=client(a.clientId);
+          const m=member(a.memberId);
+          const related=a.bookingId?state.appointments.filter(x=>x.bookingId===a.bookingId&&!x.isAdditional):[a];
+          const totalPrice=related.reduce((s,r)=>s+Number(currentApptPrice(r)||0),0);
+          const depAmt=appointmentDepositAmount(a);
+          const availDep=clientAvailableDeposit(c.id);
+          const statusLabels={confirmed:'Confirmado',in_progress:'En curso',completed:'Finalizado',cancelled:'Cancelado',no_show:'No asistió'};
+          const tier=c.tags.includes('VIP')?'Diamond':c.tags.includes('Acepta upgrades')?'Black':'Muse';
+          const servicesHtml=related.map(r=>`${r.service}`).join('<br>');
+          const proHtml=related.map(r=>fullName(member(r.memberId))).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
+          const depositLine=availDep>0?`<div class="tt-deposit">💰 Seña disponible: ${money(availDep)}</div>`:depAmt>0?`<div class="tt-deposit">Seña en turno: ${money(depAmt)}</div>`:'';
+          const tip=$('apptTooltip');
+          if(!tip) return;
+          tip.innerHTML=`<div class="tt-tier">${tier}</div><div class="tt-name">${fullName(c)}</div><div class="tt-phone">${c.phone}</div><hr class="tt-divider"><div class="tt-service">${servicesHtml}</div><div class="tt-pro">con ${proHtml}</div><div class="tt-time">${a.start}–${a.end}</div>${depositLine}<hr class="tt-divider"><div class="tt-price">${money(totalPrice)}</div><div class="tt-status-chip">${statusLabels[a.status||'confirmed']||a.status||''}</div>`;
+          tip.style.display='block';
+          const rect=el.getBoundingClientRect();
+          const tipW=248, tipH=tip.offsetHeight;
+          let left=rect.right+10, top=rect.top;
+          if(left+tipW>window.innerWidth-8) left=rect.left-tipW-10;
+          if(left<8) left=8;
+          if(top+tipH>window.innerHeight-8) top=Math.max(8,window.innerHeight-tipH-8);
+          tip.style.left=left+'px'; tip.style.top=top+'px';
+        });
+        el.addEventListener('mouseleave',()=>{ const tip=$('apptTooltip'); if(tip) tip.style.display='none'; });
+      });
       document.querySelectorAll('[data-member-col]').forEach(col=>{col.ondragover=e=>{e.preventDefault(); col.classList.add('drop-target')}; col.ondragleave=()=>col.classList.remove('drop-target'); col.ondrop=e=>dropAppointment(e,col)});
       document.querySelectorAll('[data-slot]').forEach(el=>el.onclick=()=>{fillAppointmentOptions();const first=document.querySelector('[data-appt-line]');if(first){first.querySelector('.appt-member-select').value=el.dataset.member;first.querySelector('.appt-start-input').value=el.dataset.time;first.querySelector('.appt-duration-input').value=60;const start=el.dataset.time;first.querySelector('.appointment-line-summary').textContent=`Finaliza ${addMinutes(start,60)}`;}updateApPreview();openDrawer('appointmentDrawer')});
     }
@@ -5170,25 +5201,30 @@
       return html;
     }
     function renderAppt(a){
-      const c=client(a.clientId);
-      const paid=a.deposit==='paid'?'paid':a.deposit==='pending'?'pending':'none';
+      const c = client(a.clientId);
+      const m = member(a.memberId);
+      const paid = a.deposit==='paid'?'paid':a.deposit==='pending'?'pending':'none';
       const depositAmount = appointmentDepositAmount(a);
-      const combinedCount = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId && !x.isAdditional).length : 1;
-      const flags = [];
-      if(a.isAdditional) flags.push('Adicional');
-      else if(combinedCount > 1) flags.push(`${combinedCount} servicios`);
-      if(depositAmount > 0 && !a.isAdditional) flags.push(`Seña ${money(depositAmount)}`);
-      else if(paid === 'pending' && !a.isAdditional) flags.push('Sin seña');
       const blockH = heightFor(a.start, a.end);
-      // padding 7px + gap 2px: hora~13 nombre~14 servicio~12 flags~18
-      const showClient  = blockH >= 40 && !a.isAdditional;
-      const showService = blockH >= 54;
-      const showFlags   = blockH >= 74 && flags.length;
-      const timeRow = `<div class="appt-time-row"><span class="status-dot ${a.status||'confirmed'}"></span>${a.start}–${a.end}</div>`;
-      const clientRow = showClient  ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
-      const serviceRow= showService ? `<div class="appt-service">${a.service}</div>` : '';
-      const flagsRow  = showFlags   ? `<div class="appt-flags">${flags.map(f=>`<span class="mini-flag ${f==='Adicional'?'add-flag':''}">${f}</span>`).join('')}</div>` : '';
-      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${groupClass(a.group)} ${c.tags.includes('VIP')?'vip':''} ${paid==='pending'?'pending':''} ${a.isAdditional?'additional':''}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${timeRow}${clientRow}${serviceRow}${flagsRow}</div>`;
+      const price = currentApptPrice(a) || 0;
+      // Hierarchy thresholds (client → service → professional → time·price)
+      const showClient  = blockH >= 28 && !a.isAdditional;
+      const showService = blockH >= 44;
+      const showPro     = blockH >= 62;
+      const showMeta    = blockH >= 78;
+      const clientRow  = showClient  ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
+      const serviceRow = showService ? `<div class="appt-service">${a.service}</div>` : '';
+      const proRow     = showPro     ? `<div class="appt-professional">${fullName(m)}</div>` : '';
+      const metaRow    = showMeta
+        ? `<div class="appt-meta"><span class="status-dot ${a.status||'confirmed'}"></span>${a.start}–${a.end}${price ? ` · ${money(price)}` : ''}</div>`
+        : (blockH < 28 ? `<div class="appt-meta-tiny">${a.start}</div>` : '');
+      const depositDot = depositAmount > 0 && !a.isAdditional
+        ? `<span class="appt-deposit-dot" title="Seña ${money(depositAmount)}"></span>` : '';
+      const statusClass = `status-${(a.status||'confirmed').replace(/\s+/g,'_')}`;
+      const vipClass = c.tags.includes('VIP') ? 'vip' : '';
+      const pendingClass = paid==='pending' ? 'pending' : '';
+      const additionalClass = a.isAdditional ? 'additional' : '';
+      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${depositDot}${clientRow}${serviceRow}${proRow}${metaRow}</div>`;
     }
     function renderNowLine() {
       const existing = document.getElementById('nowLine');
