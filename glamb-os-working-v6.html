@@ -6408,7 +6408,401 @@
       if($('wizTicketMeta')) $('wizTicketMeta').textContent = `Atendió: ${colName}`;
     }
 
-    function renderAll(){renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
+    // ─── RRHH Module ───────────────────────────────────────────────
+
+    function showRrhhTab(tab){
+      document.querySelectorAll('.rrhh-tab-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+tab+"'")));
+      document.querySelectorAll('.rrhh-panel').forEach(p=>p.classList.remove('active'));
+      const panel=$('rrhh-'+tab);
+      if(panel) panel.classList.add('active');
+    }
+
+    function renderRRHH(){
+      renderRrhhConfig();
+      renderRrhhDeductions();
+      renderRrhhLiquidations();
+    }
+
+    function initPayrollForCollaborator(m){
+      if(!m.payroll) m.payroll = {period:'monthly',presentismo:0,viatico:0,presentismoHistory:[],viaticHistory:[],commissions:[]};
+    }
+
+    // ── Configuración ──
+    function renderRrhhConfig(){
+      const el=$('rrhh-config');
+      if(!el) return;
+      if(!state.collaborators.length){el.innerHTML='<div class="mini-row"><strong>Sin colaboradoras</strong><span>Agregá colaboradoras en el módulo Equipo.</span></div>';return;}
+      el.innerHTML=state.collaborators.map(m=>{
+        initPayrollForCollaborator(m);
+        const p=m.payroll;
+        const periodLabel={monthly:'Mensual',biweekly:'Quincenal',weekly:'Semanal'}[p.period||'monthly']||'Mensual';
+        const commSummary=p.commissions.length?p.commissions.map(c=>c.groupName+' '+c.pct+'%').join(' · '):'Sin comisiones configuradas';
+        return `<div class="payroll-card">
+          <div class="payroll-card-avatar">${initials(m)}</div>
+          <div class="payroll-card-body">
+            <div class="payroll-card-name">${fullName(m)}</div>
+            <div class="payroll-card-meta">
+              <span>📅 ${periodLabel}</span>
+              <span>✓ Presentismo ${money(p.presentismo||0)}</span>
+              <span>🚗 Viático ${money(p.viatico||0)}</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-soft);margin-top:6px;">${commSummary}</div>
+          </div>
+          <div class="payroll-card-actions">
+            <button class="small-btn primary" onclick="openPayrollConfigDrawer('${m.id}')">Configurar</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function openPayrollConfigDrawer(memberId){
+      const m=member(memberId);
+      if(!m) return;
+      initPayrollForCollaborator(m);
+      const p=m.payroll;
+      state._editingPayrollMemberId=memberId;
+      if($('payrollConfigTitle')) $('payrollConfigTitle').textContent='Liquidación · '+fullName(m);
+      if($('payrollPeriod')) $('payrollPeriod').value=p.period||'monthly';
+      if($('payrollPresentismo')) $('payrollPresentismo').value=p.presentismo||0;
+      if($('payrollViatico')) $('payrollViatico').value=p.viatico||0;
+      renderPayrollCommissionsTable(memberId);
+      openDrawer('payrollConfigDrawer');
+    }
+
+    function renderPayrollCommissionsTable(memberId){
+      const m=member(memberId);
+      if(!m||!$('payrollCommissionsTable')) return;
+      initPayrollForCollaborator(m);
+      const groups=state.catalog.groups;
+      $('payrollCommissionsTable').innerHTML=`
+        <table class="commission-config-table">
+          <thead><tr><th>Grupo</th><th style="width:100px;text-align:right">Comisión %</th><th style="width:120px">Overrides</th></tr></thead>
+          <tbody>${groups.map(g=>{
+            const existing=m.payroll.commissions.find(c=>c.groupId===g.id)||{pct:0,serviceOverrides:[]};
+            const overrides=existing.serviceOverrides||[];
+            const overrideHtml=overrides.map((ov,oi)=>{
+              const svcName=(g.services.find(s=>s.id===ov.serviceId)||{name:ov.serviceId}).name;
+              return `<div class="override-row" data-group="${g.id}" data-oi="${oi}">
+                <select class="ov-svc-select" style="font-size:11px;padding:3px 6px">${g.services.map(s=>`<option value="${s.id}"${s.id===ov.serviceId?' selected':''}>${s.name}</option>`).join('')}</select>
+                <input type="number" class="pct-input ov-pct-input" value="${ov.pct}" min="0" max="100" style="width:55px">
+                <button class="override-del" onclick="removePayrollOverride('${memberId}','${g.id}',${oi})">×</button>
+              </div>`;
+            }).join('');
+            return `<tr data-group-row="${g.id}">
+              <td><strong style="font-size:13px">${g.name}</strong><div class="override-list" id="overrides-${g.id}">${overrideHtml}</div></td>
+              <td style="text-align:right"><input type="number" class="pct-input group-pct-input" data-group-id="${g.id}" value="${existing.pct||0}" min="0" max="100"></td>
+              <td><button class="small-btn" style="font-size:10px" onclick="addPayrollOverride('${memberId}','${g.id}')">+ Servicio</button></td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>`;
+    }
+
+    function addPayrollOverride(memberId,groupId){
+      const m=member(memberId);
+      if(!m) return;
+      initPayrollForCollaborator(m);
+      let gc=m.payroll.commissions.find(c=>c.groupId===groupId);
+      if(!gc){gc={groupId,groupName:(state.catalog.groups.find(g=>g.id===groupId)||{name:''}).name,pct:0,serviceOverrides:[]};m.payroll.commissions.push(gc);}
+      if(!gc.serviceOverrides) gc.serviceOverrides=[];
+      const g=state.catalog.groups.find(x=>x.id===groupId);
+      if(!g||!g.services.length) return;
+      gc.serviceOverrides.push({serviceId:g.services[0].id,pct:0});
+      renderPayrollCommissionsTable(memberId);
+    }
+
+    function removePayrollOverride(memberId,groupId,oi){
+      const m=member(memberId);
+      if(!m) return;
+      const gc=m.payroll.commissions.find(c=>c.groupId===groupId);
+      if(gc&&gc.serviceOverrides) gc.serviceOverrides.splice(oi,1);
+      renderPayrollCommissionsTable(memberId);
+    }
+
+    function savePayrollConfig(){
+      const memberId=state._editingPayrollMemberId;
+      const m=member(memberId);
+      if(!m) return;
+      initPayrollForCollaborator(m);
+      const newPresentismo=Number($('payrollPresentismo').value||0);
+      const newViatico=Number($('payrollViatico').value||0);
+      const now=new Date().toISOString().slice(0,7);
+      // update presentismo with history
+      if(newPresentismo!==m.payroll.presentismo){
+        if(!m.payroll.presentismoHistory) m.payroll.presentismoHistory=[];
+        m.payroll.presentismoHistory.push({from:now,amount:newPresentismo});
+        m.payroll.presentismo=newPresentismo;
+      }
+      // update viatico with history
+      if(newViatico!==m.payroll.viatico){
+        if(!m.payroll.viaticHistory) m.payroll.viaticHistory=[];
+        m.payroll.viaticHistory.push({from:now,amount:newViatico});
+        m.payroll.viatico=newViatico;
+      }
+      m.payroll.period=$('payrollPeriod').value;
+      // collect commissions from table
+      const groups=state.catalog.groups;
+      m.payroll.commissions=[];
+      groups.forEach(g=>{
+        const pctInput=document.querySelector(`[data-group-id="${g.id}"]`);
+        const pct=pctInput?Number(pctInput.value)||0:0;
+        const overrideRows=document.querySelectorAll(`[data-group="${g.id}"] .ov-svc-select`);
+        const pctRows=document.querySelectorAll(`[data-group="${g.id}"] .ov-pct-input`);
+        const serviceOverrides=[];
+        overrideRows.forEach((sel,i)=>{serviceOverrides.push({serviceId:sel.value,pct:Number(pctRows[i]?.value||0)});});
+        m.payroll.commissions.push({groupId:g.id,groupName:g.name,pct,serviceOverrides});
+      });
+      saveState(); closeDrawers(); renderRrhhConfig();
+      showToast('Configuración de '+fullName(m)+' guardada');
+    }
+
+    // ── Descuentos ──
+    function renderRrhhDeductions(){
+      const el=$('rrhh-deductions');
+      if(!el) return;
+      const items=[...state.payrollDeductions].sort((a,b)=>b.date.localeCompare(a.date));
+      if(!items.length){el.innerHTML='<div class="mini-row"><strong>Sin descuentos registrados</strong><span>Los anticipos y servicios empleada aparecerán aquí.</span></div>';return;}
+      el.innerHTML=items.map(d=>{
+        const m=member(d.collaboratorId);
+        const typeLabel={anticipo:'Anticipo',servicio_empleada:'Servicio empleada',otro:'Otro'}[d.type]||d.type;
+        const applied=d.appliedToLiquidationId?'applied':'pending';
+        return `<div class="deduction-row">
+          <div class="dr-collab">${m?fullName(m):'—'}</div>
+          <div class="dr-type">${typeLabel}</div>
+          <div class="dr-desc">${d.description||'—'}</div>
+          <div class="dr-amount">${money(d.amount)}</div>
+          <div class="dr-date">${d.date||'—'}</div>
+          <div class="dr-status ${applied}">${applied==='applied'?'Aplicado':'Pendiente'}</div>
+          ${applied==='pending'?`<button class="small-btn" onclick="deleteDeduction('${d.id}')" style="font-size:10px">×</button>`:''}
+        </div>`;
+      }).join('');
+    }
+
+    function openDeductionDrawer(){
+      if($('deductionMember')) $('deductionMember').innerHTML=state.collaborators.map(m=>`<option value="${m.id}">${fullName(m)}</option>`).join('');
+      if($('deductionDate')) $('deductionDate').value=new Date().toISOString().slice(0,10);
+      if($('deductionAmount')) $('deductionAmount').value=0;
+      if($('deductionDesc')) $('deductionDesc').value='';
+      if($('deductionServiceName')) $('deductionServiceName').value='';
+      if($('deductionType')) $('deductionType').value='anticipo';
+      if($('deductionServiceFields')) $('deductionServiceFields').style.display='none';
+      if($('deductionType')) $('deductionType').onchange=()=>{
+        const show=$('deductionType').value==='servicio_empleada';
+        if($('deductionServiceFields')) $('deductionServiceFields').style.display=show?'block':'none';
+      };
+      openDrawer('deductionDrawer');
+    }
+
+    function saveDeduction(){
+      const amount=Number($('deductionAmount')?.value||0);
+      if(!amount||amount<=0) return showToast('Ingresá un monto válido.');
+      const memberId=$('deductionMember')?.value;
+      if(!memberId) return showToast('Seleccioná una colaboradora.');
+      const type=$('deductionType')?.value||'otro';
+      const desc=$('deductionDesc')?.value||'';
+      const date=$('deductionDate')?.value||new Date().toISOString().slice(0,10);
+      const serviceName=$('deductionServiceName')?.value||'';
+      if(!state.payrollDeductions) state.payrollDeductions=[];
+      state.payrollDeductions.push({
+        id:'ded'+Date.now(),
+        collaboratorId:memberId,
+        type,amount,description:desc||serviceName,
+        date,
+        serviceRef:type==='servicio_empleada'?{serviceName}:null,
+        appliedToLiquidationId:null,
+        createdAt:new Date().toISOString()
+      });
+      saveState(); closeDrawers(); renderRrhhDeductions();
+      showToast('Descuento registrado: '+money(amount));
+    }
+
+    function deleteDeduction(id){
+      if(!confirm('¿Eliminar este descuento?')) return;
+      state.payrollDeductions=state.payrollDeductions.filter(d=>d.id!==id);
+      saveState(); renderRrhhDeductions();
+      showToast('Descuento eliminado');
+    }
+
+    // ── Liquidaciones ──
+    function renderRrhhLiquidations(){
+      const el=$('rrhh-liquidations');
+      if(!el) return;
+      if(!state.liquidations) state.liquidations=[];
+      const items=[...state.liquidations].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+      if(!items.length){el.innerHTML='<div class="mini-row"><strong>Sin liquidaciones</strong><span>Usá "Nueva liquidación" para calcular el sueldo de una colaboradora.</span></div>';return;}
+      el.innerHTML=items.map(liq=>{
+        const statusLabel=liq.status==='paid'?'Pagado':'Borrador';
+        const statusCls=liq.status==='paid'?'liq-status-paid':'liq-status-draft';
+        return `<div class="liq-card">
+          <div class="liq-card-left">
+            <div class="liq-card-name">${liq.collaboratorName||'—'}</div>
+            <div class="liq-card-meta">${liq.period?.label||''} · ${liq.period?.from||''} → ${liq.period?.to||''}</div>
+          </div>
+          <div class="liq-card-right">
+            <div class="liq-card-amount">${money(liq.netPay||0)}</div>
+            <div class="liq-card-status ${statusCls}">${statusLabel}</div>
+          </div>
+          <div style="margin-left:16px;display:flex;flex-direction:column;gap:6px">
+            <button class="small-btn primary" onclick="openLiquidationView('${liq.id}')">Ver</button>
+            ${liq.status!=='paid'?`<button class="small-btn" onclick="confirmLiquidationPaid('${liq.id}')">Marcar pagado</button>`:''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function getPayrollAmountForPeriod(history,periodYYYYMM){
+      if(!history||!history.length) return 0;
+      const sorted=[...history].sort((a,b)=>b.from.localeCompare(a.from));
+      const match=sorted.find(h=>h.from<=periodYYYYMM);
+      return match?match.amount:(sorted[sorted.length-1]?.amount||0);
+    }
+
+    function getCollaboratorCommission(m,groupName,variantId){
+      if(!m.payroll||!m.payroll.commissions) return 0;
+      const gc=m.payroll.commissions.find(c=>c.groupName===groupName||c.groupId===groupName);
+      if(!gc) return 0;
+      if(variantId&&gc.serviceOverrides&&gc.serviceOverrides.length){
+        const ov=gc.serviceOverrides.find(o=>o.serviceId===variantId);
+        if(ov!==undefined) return ov.pct;
+      }
+      return gc.pct||0;
+    }
+
+    function openNewLiquidation(){
+      // Simple prompt-based wizard: collaborator + date range
+      const memberOpts=state.collaborators.map(m=>`${m.id}:${fullName(m)}`);
+      if(!memberOpts.length) return showToast('No hay colaboradoras configuradas.');
+      // Show a small inline selector using a temporary panel
+      const panel=document.createElement('div');
+      panel.id='liqWizardOverlay';
+      panel.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:9990;display:flex;align-items:center;justify-content:center';
+      const today=new Date().toISOString().slice(0,10);
+      const firstOfMonth=today.slice(0,8)+'01';
+      panel.innerHTML=`<div style="background:var(--surface);border-radius:20px;padding:32px;width:400px;max-width:90vw;box-shadow:0 16px 64px rgba(0,0,0,0.2)">
+        <div class="eyebrow" style="margin-bottom:8px">RRHH</div>
+        <h2 style="font-family:'Cormorant',serif;font-size:26px;font-weight:300;margin-bottom:20px">Nueva liquidación</h2>
+        <div class="form-grid">
+          <div class="field full"><label>Colaboradora</label><select id="liqWizMember" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px;background:var(--surface);font-family:'DM Sans',sans-serif">${state.collaborators.map(m=>`<option value="${m.id}">${fullName(m)}</option>`).join('')}</select></div>
+          <div class="field"><label>Desde</label><input id="liqWizFrom" type="date" value="${firstOfMonth}" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px;background:var(--surface);font-family:'DM Sans',sans-serif"></div>
+          <div class="field"><label>Hasta</label><input id="liqWizTo" type="date" value="${today}" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px;background:var(--surface);font-family:'DM Sans',sans-serif"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:24px;justify-content:flex-end">
+          <button class="btn" onclick="document.getElementById('liqWizardOverlay').remove()">Cancelar</button>
+          <button class="btn primary" onclick="calculateAndOpenLiquidation()">Calcular</button>
+        </div>
+      </div>`;
+      document.body.appendChild(panel);
+    }
+
+    function calculateAndOpenLiquidation(){
+      const memberId=document.getElementById('liqWizMember')?.value;
+      const from=document.getElementById('liqWizFrom')?.value;
+      const to=document.getElementById('liqWizTo')?.value;
+      document.getElementById('liqWizardOverlay')?.remove();
+      if(!memberId||!from||!to) return showToast('Completá todos los campos.');
+      const m=member(memberId);
+      if(!m) return;
+      initPayrollForCollaborator(m);
+      const p=m.payroll;
+      const periodYYMM=from.slice(0,7);
+      const presentismo=getPayrollAmountForPeriod(p.presentismoHistory,periodYYMM)||p.presentismo||0;
+      const viatico=getPayrollAmountForPeriod(p.viaticHistory,periodYYMM)||p.viatico||0;
+      // Compute commissions from sales tickets
+      if(!state.liquidations) state.liquidations=[];
+      if(!state.payrollDeductions) state.payrollDeductions=[];
+      const commissionLines=[];
+      state.salesTickets.filter(t=>t.status!=='voided'&&t.createdAt>=from&&t.createdAt<=to+'T23:59:59').forEach(t=>{
+        (t.lines||[]).forEach(l=>{
+          if(l.collaboratorId!==memberId) return;
+          const pct=getCollaboratorCommission(m,l.group,l.variantId);
+          const commAmt=Math.round((l.finalPrice||0)*pct/100);
+          commissionLines.push({ticketId:t.id,ticketDate:t.createdAt.slice(0,10),clientName:t.clientNameSnapshot||'—',service:l.service||l.group||'Servicio',group:l.group||'',variantId:l.variantId||'',saleAmount:l.finalPrice||0,pct,commissionAmt:commAmt});
+        });
+      });
+      const totalCommissions=commissionLines.reduce((s,l)=>s+l.commissionAmt,0);
+      const pendingDeds=state.payrollDeductions.filter(d=>d.collaboratorId===memberId&&!d.appliedToLiquidationId&&d.date>=from&&d.date<=to);
+      const totalDeductions=pendingDeds.reduce((s,d)=>s+Number(d.amount),0);
+      const grossPay=presentismo+viatico+totalCommissions;
+      const netPay=grossPay-totalDeductions;
+      const liqId='liq'+Date.now();
+      const liq={
+        id:liqId,collaboratorId:memberId,collaboratorName:fullName(m),
+        period:{type:p.period||'monthly',from,to,label:periodYYMM},
+        presentismo,viatico,
+        commissionLines,totalCommissions,
+        deductionRefs:pendingDeds.map(d=>d.id),
+        deductions:pendingDeds.map(d=>({type:d.type,description:d.description,amount:d.amount})),
+        totalDeductions,grossPay,netPay,
+        status:'borrador',createdAt:new Date().toISOString()
+      };
+      state.liquidations.push(liq);
+      saveState(); renderRrhhLiquidations();
+      showRrhhTab('liquidations');
+      openLiquidationView(liqId);
+    }
+
+    function openLiquidationView(liqId){
+      const liq=state.liquidations.find(l=>l.id===liqId);
+      if(!liq) return;
+      if($('liqViewTitle')) $('liqViewTitle').textContent='Liquidación · '+liq.collaboratorName;
+      if($('liqViewSubtitle')) $('liqViewSubtitle').textContent=liq.period.label+' · '+liq.period.from+' → '+liq.period.to;
+      const commHtml=liq.commissionLines.length
+        ?liq.commissionLines.map(l=>`<div class="liq-comm-row"><div class="liq-comm-service"><strong>${l.service}</strong><br><span style="font-size:11px;color:var(--text-muted)">${l.clientName} · ${l.ticketDate}</span></div><div class="liq-comm-pct">${l.pct}%</div><div class="liq-comm-amount">${money(l.commissionAmt)}</div></div>`).join('')
+        :'<div style="font-size:13px;color:var(--text-muted);padding:8px 0">Sin ventas en el período.</div>';
+      const deductHtml=liq.deductions.length
+        ?liq.deductions.map(d=>`<div class="liq-fixed-row"><span>${{anticipo:'Anticipo',servicio_empleada:'Servicio empleada',otro:'Otro'}[d.type]||d.type} · ${d.description||''}</span><strong style="color:#c46a6a">−${money(d.amount)}</strong></div>`).join('')
+        :'<div style="font-size:13px;color:var(--text-muted);padding:8px 0">Sin descuentos.</div>';
+      if($('liqViewBody')) $('liqViewBody').innerHTML=`
+        <section class="form-card liq-section">
+          <h4>Fijos del período</h4>
+          <div class="liq-fixed-row"><span>Presentismo</span><strong>${money(liq.presentismo)}</strong></div>
+          <div class="liq-fixed-row"><span>Viático</span><strong>${money(liq.viatico)}</strong></div>
+        </section>
+        <section class="form-card liq-section">
+          <h4>Comisiones (${liq.commissionLines.length} servicio${liq.commissionLines.length!==1?'s':''})</h4>
+          ${commHtml}
+          <div class="liq-total-row"><span>Total comisiones</span><span>${money(liq.totalCommissions)}</span></div>
+        </section>
+        <section class="form-card liq-section">
+          <h4>Descuentos</h4>
+          ${deductHtml}
+          <div class="liq-total-row"><span>Total descuentos</span><span style="color:#c46a6a">−${money(liq.totalDeductions)}</span></div>
+        </section>
+        <section class="form-card">
+          <div class="liq-fixed-row"><span>Bruto (presentismo + viático + comisiones)</span><strong>${money(liq.grossPay)}</strong></div>
+          <div class="liq-net-row"><span>Neto a cobrar</span><strong>${money(liq.netPay)}</strong></div>
+        </section>
+        ${liq.status==='paid'?`<div style="background:#E8F5E9;border-radius:12px;padding:12px 16px;font-size:13px;color:#1B5E20;margin-top:8px">✓ Liquidación marcada como pagada</div>`:''}
+      `;
+      if($('liqViewFooter')) $('liqViewFooter').innerHTML=liq.status==='paid'
+        ?`<button class="btn" data-close>Cerrar</button>`
+        :`<button class="btn" data-close>Cerrar</button><button class="btn" onclick="deleteLiquidation('${liqId}')">Eliminar borrador</button><button class="btn primary" onclick="confirmLiquidationPaid('${liqId}')">Marcar como pagado</button>`;
+      openDrawer('liquidationViewDrawer');
+    }
+
+    function confirmLiquidationPaid(liqId){
+      const liq=state.liquidations.find(l=>l.id===liqId);
+      if(!liq) return;
+      liq.status='paid'; liq.paidAt=new Date().toISOString();
+      // Mark deductions as applied
+      (liq.deductionRefs||[]).forEach(dId=>{
+        const d=state.payrollDeductions.find(x=>x.id===dId);
+        if(d) d.appliedToLiquidationId=liqId;
+      });
+      saveState(); renderRrhhLiquidations(); renderRrhhDeductions();
+      openLiquidationView(liqId);
+      showToast('Liquidación de '+liq.collaboratorName+' marcada como pagada');
+    }
+
+    function deleteLiquidation(liqId){
+      if(!confirm('¿Eliminar este borrador?')) return;
+      state.liquidations=state.liquidations.filter(l=>l.id!==liqId);
+      saveState(); closeDrawers(); renderRrhhLiquidations();
+      showToast('Borrador eliminado');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+
+    function renderAll(){renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
@@ -6491,6 +6885,8 @@
     if($('waitlistBtn')) $('waitlistBtn').onclick=openWaitlist;
     if($('closeDayBtn')) $('closeDayBtn').onclick=closeDay;
     if($('cashOpenBtn')) $('cashOpenBtn').onclick=openCashSession;
+    if($('savePayrollConfigBtn')) $('savePayrollConfigBtn').onclick=savePayrollConfig;
+    if($('saveDeductionBtn')) $('saveDeductionBtn').onclick=saveDeduction;
     if($('cashDepositBtn')) $('cashDepositBtn').onclick=registerDeposit;
     if($('cashWithdrawalBtn')) $('cashWithdrawalBtn').onclick=registerWithdrawal;
     if($('cashExpenseBtn')) $('cashExpenseBtn').onclick=registerExpense;
