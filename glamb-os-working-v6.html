@@ -1335,6 +1335,114 @@
       display: none;
     }
 
+    /* ── Módulo RRHH ── */
+    .rrhh-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 24px;
+      border-bottom: 0.5px solid var(--line);
+      padding-bottom: 0;
+    }
+    .rrhh-tab-btn {
+      background: transparent;
+      border: 0;
+      padding: 8px 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+    }
+    .rrhh-tab-btn.active { color: var(--text); border-bottom-color: var(--text); font-weight: 500; }
+    .rrhh-panel { display: none; }
+    .rrhh-panel.active { display: block; }
+
+    .payroll-card {
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius-card);
+      padding: 20px 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      margin-bottom: 12px;
+    }
+    .payroll-card-avatar {
+      width: 44px; height: 44px; border-radius: 999px;
+      background: var(--black); color: #F6F6F4;
+      display: grid; place-items: center;
+      font-family: 'Cormorant', serif; font-size: 18px; font-weight: 300;
+      flex-shrink: 0;
+    }
+    .payroll-card-body { flex: 1; min-width: 0; }
+    .payroll-card-name { font-family: 'Cormorant', serif; font-size: 20px; font-weight: 300; color: var(--text); }
+    .payroll-card-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; display: flex; gap: 16px; flex-wrap: wrap; }
+    .payroll-card-meta span { display: flex; gap: 4px; align-items: center; }
+    .payroll-card-actions { flex-shrink: 0; }
+
+    .commission-config-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+    .commission-config-table th { text-align: left; font-weight: 500; font-size: 11px; color: var(--text-muted); padding: 6px 8px; border-bottom: 0.5px solid var(--line); }
+    .commission-config-table td { padding: 8px 8px; border-bottom: 0.5px solid var(--line); vertical-align: middle; }
+    .commission-config-table tr:last-child td { border-bottom: none; }
+    .pct-input { width: 70px; padding: 5px 8px; border: 0.5px solid var(--line); border-radius: 8px; font-size: 13px; text-align: right; background: var(--surface); font-family: 'DM Sans', sans-serif; }
+    .override-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+    .override-row { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+    .override-row select { flex: 1; padding: 4px 8px; border: 0.5px solid var(--line); border-radius: 6px; font-size: 12px; background: var(--surface); font-family: 'DM Sans', sans-serif; }
+    .override-del { background: none; border: none; color: var(--text-muted); font-size: 16px; cursor: pointer; padding: 0 2px; }
+    .override-del:hover { color: #c46a6a; }
+
+    .deduction-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .deduction-row .dr-collab { font-weight: 500; min-width: 120px; }
+    .deduction-row .dr-type { font-size: 11px; color: var(--text-muted); background: var(--surface-2); border-radius: 999px; padding: 2px 8px; }
+    .deduction-row .dr-desc { flex: 1; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .deduction-row .dr-amount { font-family: 'Cormorant', serif; font-size: 18px; font-weight: 300; color: var(--text); }
+    .deduction-row .dr-date { font-size: 11px; color: var(--text-soft); min-width: 72px; text-align: right; }
+    .deduction-row .dr-status { font-size: 10px; padding: 2px 8px; border-radius: 999px; }
+    .dr-status.applied { background: #E8F5E9; color: #1B5E20; }
+    .dr-status.pending { background: #FFF8E1; color: #856404; }
+
+    .liq-card {
+      background: var(--surface);
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius-card);
+      padding: 20px 24px;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 20px;
+    }
+    .liq-card-left { flex: 1; }
+    .liq-card-name { font-family: 'Cormorant', serif; font-size: 20px; font-weight: 300; }
+    .liq-card-meta { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+    .liq-card-right { text-align: right; }
+    .liq-card-amount { font-family: 'Cormorant', serif; font-size: 28px; font-weight: 300; }
+    .liq-card-status { font-size: 11px; margin-top: 4px; }
+    .liq-status-draft { color: #856404; }
+    .liq-status-paid { color: #1B5E20; }
+
+    /* Liquidation view drawer */
+    .liq-section { margin-bottom: 20px; }
+    .liq-section h4 { font-size: 12px; font-weight: 500; color: var(--text-muted); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 10px; }
+    .liq-fixed-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--line); font-size: 13px; }
+    .liq-fixed-row:last-child { border-bottom: none; }
+    .liq-comm-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 0.5px solid var(--line); font-size: 12px; }
+    .liq-comm-row:last-child { border-bottom: none; }
+    .liq-comm-service { flex: 1; }
+    .liq-comm-pct { color: var(--text-muted); min-width: 36px; text-align: right; }
+    .liq-comm-amount { font-weight: 500; min-width: 80px; text-align: right; }
+    .liq-total-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0 4px; font-size: 14px; font-weight: 500; border-top: 0.5px solid var(--line-strong); margin-top: 4px; }
+    .liq-net-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; font-family: 'Cormorant', serif; font-size: 26px; font-weight: 300; border-top: 0.5px solid var(--line-strong); }
+
+    .drawer.wide { max-width: 680px; }
+
     /* ── Appointment hover tooltip ── */
     #apptTooltip {
       position: fixed;
@@ -2842,6 +2950,7 @@
         <button data-page="cash" title="Caja">◈</button>
         <button data-page="catalog" title="Catálogo">⬡</button>
         <button data-page="team" title="Equipo">✦</button>
+        <button data-page="rrhh" title="RRHH">◉</button>
       </nav>
       <button class="side-reset-btn" onclick="resetDemo()" title="Resetear demo">↺</button>
     </aside>
@@ -2854,6 +2963,7 @@
       <button data-page="cash">Caja</button>
       <button data-page="catalog">Catálogo</button>
       <button data-page="team">Equipo</button>
+      <button data-page="rrhh">RRHH</button>
     </nav>
 
     <main>
@@ -3228,6 +3338,28 @@
         <div class="list" id="teamList"></div>
       </section>
 
+      <section class="page" id="page-rrhh">
+        <div class="topbar">
+          <div>
+            <div class="eyebrow">Recursos Humanos</div>
+            <h1>RRHH</h1>
+            <p class="subtitle">Configuración de sueldos, comisiones, descuentos y liquidaciones por colaboradora.</p>
+          </div>
+          <div class="top-actions">
+            <button class="btn" onclick="openDeductionDrawer()">Registrar descuento</button>
+            <button class="btn primary" onclick="openNewLiquidation()">Nueva liquidación</button>
+          </div>
+        </div>
+        <div class="rrhh-tabs">
+          <button class="rrhh-tab-btn active" onclick="showRrhhTab('config')">Configuración</button>
+          <button class="rrhh-tab-btn" onclick="showRrhhTab('deductions')">Descuentos del período</button>
+          <button class="rrhh-tab-btn" onclick="showRrhhTab('liquidations')">Liquidaciones</button>
+        </div>
+        <div id="rrhh-config" class="rrhh-panel active"></div>
+        <div id="rrhh-deductions" class="rrhh-panel"></div>
+        <div id="rrhh-liquidations" class="rrhh-panel"></div>
+      </section>
+
       <section class="page" id="page-catalog">
         <div class="topbar">
           <div>
@@ -3513,6 +3645,92 @@
     <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmWithdrawalBtn">Registrar retiro</button></footer>
   </aside>
 
+  <!-- RRHH: Configuración de liquidación por colaboradora -->
+  <aside class="drawer wide" id="payrollConfigDrawer">
+    <header class="drawer-header">
+      <div><div class="eyebrow">RRHH</div><h2 class="drawer-title" id="payrollConfigTitle">Configurar liquidación</h2><p class="drawer-subtitle">Período, presentismo, viático y comisiones por grupo de servicio.</p></div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <section class="form-card">
+        <h3>Condiciones base</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label>Período de pago</label>
+            <select id="payrollPeriod">
+              <option value="monthly">Mensual</option>
+              <option value="biweekly">Quincenal</option>
+              <option value="weekly">Semanal</option>
+            </select>
+          </div>
+          <div class="field"><label>Presentismo</label><input id="payrollPresentismo" type="number" min="0" value="0" placeholder="0"></div>
+          <div class="field"><label>Viático</label><input id="payrollViatico" type="number" min="0" value="0" placeholder="0"></div>
+        </div>
+      </section>
+      <section class="form-card">
+        <h3>Comisiones por grupo de servicio</h3>
+        <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Ingresá el % de comisión por grupo. Podés agregar overrides para servicios específicos dentro del grupo.</p>
+        <div id="payrollCommissionsTable"></div>
+      </section>
+    </div>
+    <footer class="drawer-footer">
+      <button class="btn" data-close>Cancelar</button>
+      <button class="btn primary" id="savePayrollConfigBtn">Guardar configuración</button>
+    </footer>
+  </aside>
+
+  <!-- RRHH: Registrar descuento -->
+  <aside class="drawer" id="deductionDrawer">
+    <header class="drawer-header">
+      <div><div class="eyebrow">RRHH</div><h2 class="drawer-title">Registrar descuento</h2><p class="drawer-subtitle">Anticipos, servicios empleada u otros descuentos que se aplican en la liquidación.</p></div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <section class="form-card">
+        <div class="form-grid">
+          <div class="field full">
+            <label>Colaboradora</label>
+            <select id="deductionMember"></select>
+          </div>
+          <div class="field">
+            <label>Tipo</label>
+            <select id="deductionType">
+              <option value="anticipo">Anticipo de sueldo</option>
+              <option value="servicio_empleada">Servicio empleada</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+          <div class="field"><label>Fecha</label><input id="deductionDate" type="date"></div>
+          <div class="field"><label>Monto a descontar</label><input id="deductionAmount" type="number" min="0" value="0" placeholder="0"></div>
+          <div class="field full" id="deductionServiceFields" style="display:none">
+            <label>Servicio realizado</label>
+            <input id="deductionServiceName" placeholder="Ej: Plasma · precio catálogo $50.000 · desc. 10%" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:13px;background:var(--surface);font-family:'DM Sans',sans-serif">
+          </div>
+          <div class="field full">
+            <label>Descripción / Nota</label>
+            <textarea id="deductionDesc" placeholder="Referencia opcional" style="height:60px"></textarea>
+          </div>
+        </div>
+      </section>
+    </div>
+    <footer class="drawer-footer">
+      <button class="btn" data-close>Cancelar</button>
+      <button class="btn primary" id="saveDeductionBtn">Guardar descuento</button>
+    </footer>
+  </aside>
+
+  <!-- RRHH: Ver/confirmar liquidación -->
+  <aside class="drawer wide" id="liquidationViewDrawer">
+    <header class="drawer-header">
+      <div><div class="eyebrow">RRHH · Liquidación</div><h2 class="drawer-title" id="liqViewTitle">Liquidación</h2><p class="drawer-subtitle" id="liqViewSubtitle"></p></div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body" id="liqViewBody"></div>
+    <footer class="drawer-footer" id="liqViewFooter">
+      <button class="btn" data-close>Cerrar</button>
+    </footer>
+  </aside>
+
   <aside class="drawer" id="cashDepositDrawer">
     <header class="drawer-header">
       <div><div class="eyebrow">Caja</div><h2 class="drawer-title">Registrar seña</h2><p class="drawer-subtitle">Anticipo recibido para una reserva futura. Se aplica automáticamente al cobrar.</p></div>
@@ -3671,10 +3889,10 @@
       {id:'cl2',code:'GL-000002',first:'Valentina',last:'Paz',phone:'+54 9 11 5555-8821',email:'valentina@email.com',tags:['VIP','Nail art minimalista'],note:'Ama nail art minimalista. Evitar diseños cargados.'},
       {id:'cl3',code:'GL-000003',first:'Claudia',last:'Astigarraga',phone:'+54 9 11 5555-1001',email:'',tags:['Kapping'],note:'Confirmar próximo mantenimiento.'}
     ],collaborators:[
-      {id:'co1',first:'Ana',last:'García',phone:'+54 9 11 5555-3101',email:'ana@glamb.com',type:'professional',can:true,services:['Semipermanente','Kapping','Nail art'],groups:['Manicuria'],days:'Lunes, Martes, Miércoles, Jueves, Viernes',hours:'10:00 - 19:00'},
-      {id:'co2',first:'Macarena',last:'Reyes',phone:'+54 9 11 5555-3102',email:'macarena@glamb.com',type:'professional',can:true,services:['Perfilado de cejas','Lifting de pestañas'],groups:['Eyebrow & Lash'],days:'Martes, Miércoles, Jueves, Viernes, Sábado',hours:'10:00 - 19:00'},
-      {id:'co3',first:'Vero',last:'Fuentes',phone:'+54 9 11 5555-3103',email:'vero@glamb.com',type:'professional',can:true,services:['Kapping','Esculpidas'],groups:['Manicuria'],days:'Lunes, Martes, Miércoles, Jueves, Viernes',hours:'12:00 - 20:00'},
-      {id:'co4',first:'Giuli',last:'Ortiz',phone:'+54 9 11 5555-3104',email:'giuli@glamb.com',type:'professional',can:true,services:['Depilación definitiva','Belleza de manos'],groups:['Depilación','Beauty Extras'],days:'Lunes, Miércoles, Viernes',hours:'10:00 - 18:00'}
+      {id:'co1',first:'Ana',last:'García',phone:'+54 9 11 5555-3101',email:'ana@glamb.com',type:'professional',can:true,services:['Semipermanente','Kapping','Nail art'],groups:['Manicuria'],days:'Lunes, Martes, Miércoles, Jueves, Viernes',hours:'10:00 - 19:00',payroll:{period:'monthly',presentismo:0,viatico:0,presentismoHistory:[],viaticHistory:[],commissions:[]}},
+      {id:'co2',first:'Macarena',last:'Reyes',phone:'+54 9 11 5555-3102',email:'macarena@glamb.com',type:'professional',can:true,services:['Perfilado de cejas','Lifting de pestañas'],groups:['Eyebrow & Lash'],days:'Martes, Miércoles, Jueves, Viernes, Sábado',hours:'10:00 - 19:00',payroll:{period:'monthly',presentismo:0,viatico:0,presentismoHistory:[],viaticHistory:[],commissions:[]}},
+      {id:'co3',first:'Vero',last:'Fuentes',phone:'+54 9 11 5555-3103',email:'vero@glamb.com',type:'professional',can:true,services:['Kapping','Esculpidas'],groups:['Manicuria'],days:'Lunes, Martes, Miércoles, Jueves, Viernes',hours:'12:00 - 20:00',payroll:{period:'monthly',presentismo:0,viatico:0,presentismoHistory:[],viaticHistory:[],commissions:[]}},
+      {id:'co4',first:'Giuli',last:'Ortiz',phone:'+54 9 11 5555-3104',email:'giuli@glamb.com',type:'professional',can:true,services:['Depilación definitiva','Belleza de manos'],groups:['Depilación','Beauty Extras'],days:'Lunes, Miércoles, Viernes',hours:'10:00 - 18:00',payroll:{period:'monthly',presentismo:0,viatico:0,presentismoHistory:[],viaticHistory:[],commissions:[]}}
     ],appointments:[
       {id:'a1',memberId:'co1',clientId:'cl3',group:'Manicuria',service:'Kapping Gel',variantId:'var1',serviceId:'svc1',start:'12:00',end:'14:00',status:'confirmed',deposit:'paid',depositAmount:5000,depositMethod:'Transferencia',note:'Tratamiento premium.'},
       {id:'a2',memberId:'co3',clientId:'cl2',group:'Manicuria',service:'Esculpidasgel',variantId:'var7',serviceId:'svc3',start:'13:30',end:'15:00',status:'confirmed',deposit:'paid',depositAmount:8000,depositMethod:'Transferencia',note:'Cliente VIP.'},
@@ -3758,14 +3976,18 @@
         {id:'prod4',name:'Crema manos GLAMB',price:3500,stock:3}
       ]
     },
-    catalogView:'grid',catalogFilter:'all',editingCatalogItem:null
+    catalogView:'grid',catalogFilter:'all',editingCatalogItem:null,
+    cashMode:'admin',
+    cashCurrentCollaboratorId:null,
+    payrollDeductions:[],
+    liquidations:[]
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const fullName=x=>`${x.first||''} ${x.last||''}`.trim();
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','waitlist','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','waitlist','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations'];
     function saveState(){
       try{
         const out={};
