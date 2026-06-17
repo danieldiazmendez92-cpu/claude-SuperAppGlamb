@@ -4852,7 +4852,7 @@
       const amount = Number($('withdrawalAmount')?.value || 0);
       if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
       const reason = $('withdrawalReason')?.value || 'Retiro';
-      state.cashSession.withdrawals.push({id:'with'+Date.now(), amount, reason, note:$('withdrawalNote')?.value || '', createdAt:new Date().toISOString(), createdBy: state.cashMode === 'admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId))});
+      addWithdrawal({id:'with'+Date.now(), amount, reason, note:$('withdrawalNote')?.value || '', createdAt:new Date().toISOString(), createdBy: state.cashMode === 'admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId))});
       closeDrawers();
       renderAll();
       showToast('Retiro registrado');
@@ -4913,7 +4913,7 @@
       const clientId = state._depositClientId || null;
       if(!clientId) return showToast('Seleccioná un cliente de la lista antes de guardar.');
       const c = clientId ? state.clients.find(x=>x.id===clientId) : null;
-      state.payments.push({
+      addPayment({
         id:uid('dep'), ticketId:null, appointmentId:null, clientId:clientId||null,
         amount, method:$('depositMethod2')?.value||'Transferencia', type:'deposit_received',
         reference:$('depositNote2')?.value||'',
@@ -4934,7 +4934,7 @@
       const amount = Number($('expenseAmount')?.value || 0);
       if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
       if(!state.cashSession.expenses) state.cashSession.expenses = [];
-      state.cashSession.expenses.push({
+      addCashExpense({
         id:'exp'+Date.now(),
         amount,
         category: $('expenseCategory')?.value || 'Otro',
@@ -5229,8 +5229,8 @@
       const isPartial = pendingBalance > 1;
       const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:isPartial?'partial':'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.payments,pendingBalance,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
       state.salesTickets.unshift(ticket);
-      if(t.depositApplied>0) state.payments.push({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
-      salePayments.forEach(p=>state.payments.push({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
+      if(t.depositApplied>0) addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
+      salePayments.forEach(p=>addPayment({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
       if(isPartial){
         state.pendingCharges.unshift({id:'pending'+Date.now(),clientId:clientIdForTicket,clientNameSnapshot:clientName,status:'pending',service:'Saldo de visita',group:'',finalPrice:pendingBalance,depositAmount:0,ticketId:ticket.id,reservationId:ticket.reservationId,createdBy:ticket.createdBy,serviceOf:'—',createdAt:new Date().toISOString()});
       }
@@ -5899,12 +5899,12 @@
       if(state.editingCollaboratorId){
         const idx = state.collaborators.findIndex(c=>c.id===state.editingCollaboratorId);
         if(idx<0) return showToast('Colaboradora no encontrada');
-        state.collaborators[idx] = {...state.collaborators[idx], ...data};
+        updateCollaborator(state.collaborators[idx].id, data);
         state.editingCollaboratorId = null;
         saveState();
         closeDrawers();showPage('team');showToast('Colaboradora actualizada');
       } else {
-        state.collaborators.push({id:'co'+Date.now(), ...data});
+        addCollaborator({id:'co'+Date.now(), ...data});
         saveState();
         closeDrawers();showPage('team');showToast('Colaboradora creada y agenda actualizada');
       }
@@ -6274,13 +6274,13 @@
             note,
             isAdditional:false
           };
-          state.appointments.push(mainAppt);
+          addAppointment(mainAppt);
           apptIndex++;
 
           line.additionals?.forEach(add=>{
             const addInfo = getAdditionalInfo(add.id);
             if(addInfo){
-              state.appointments.push({
+              addAppointment({
                 id:'a'+Date.now()+'add'+apptIndex,
                 bookingId:oldBookingId,
                 date:dateKey(state.agenda.currentDate),
@@ -6338,7 +6338,7 @@
           };
           if(mins(mainAppt.end)<=mins(mainAppt.start)) return showToast('Revisá horarios de servicios.');
           if(overlaps(mainAppt,null,bookingId)) return showToast('No se puede crear: hay solapamiento con otro turno.');
-          state.appointments.push(mainAppt);
+          addAppointment(mainAppt);
           apptIndex++;
 
           line.additionals?.forEach(add=>{
@@ -6366,7 +6366,7 @@
                 note:'Adicional',
                 isAdditional:true
               };
-              state.appointments.push(addAppt);
+              addAppointment(addAppt);
               apptIndex++;
             }
           });
@@ -6702,7 +6702,7 @@
       const date=$('deductionDate')?.value||new Date().toISOString().slice(0,10);
       const serviceName=$('deductionServiceName')?.value||'';
       if(!state.payrollDeductions) state.payrollDeductions=[];
-      state.payrollDeductions.push({
+      addDeduction({
         id:'ded'+Date.now(),
         collaboratorId:memberId,
         type,amount,description:desc||serviceName,
@@ -6835,7 +6835,7 @@
         totalDeductions,grossPay,netPay,
         status:'borrador',createdAt:new Date().toISOString()
       };
-      state.liquidations.push(liq);
+      addLiquidation(liq);
       saveState(); renderRrhhLiquidations();
       showRrhhTab('liquidations');
       openLiquidationView(liqId);
@@ -7174,7 +7174,7 @@
       if(!amount||amount<=0) return showToast('Ingresá un monto válido');
       if(!description) return showToast('Ingresá una descripción');
       if(!state.expenses) state.expenses=[];
-      state.expenses.push({id:uid('exp'),date,category,description,amount,paymentMethod});
+      addExpense({id:uid('exp'),date,category,description,amount,paymentMethod});
       if($('expDesc')) $('expDesc').value='';
       if($('expAmount')) $('expAmount').value='';
       saveState();
@@ -7194,6 +7194,109 @@
       renderFinanzasAnalista();
     }
     // === FIN MÓDULO FINANZAS ===
+
+    // === STATE MUTATION FUNCTIONS (centralizadas con validación + saveState) ===
+    // Regla arquitectónica: toda mutación de state pasa por estas funciones
+    function addPayment(payment){
+      if(!payment.id) payment.id='pay'+Date.now()+Math.random();
+      if(!state.payments) state.payments=[];
+      state.payments.push(payment);
+      saveState();
+    }
+    function addAppointment(appt){
+      if(!appt.id) appt.id='appt'+uid('');
+      if(!appt.date) appt.date=dateKey(new Date());
+      if(!state.appointments) state.appointments=[];
+      state.appointments.push(appt);
+      saveState();
+    }
+    function updateAppointment(id, props){
+      const a=state.appointments.find(x=>x.id===id);
+      if(a) Object.assign(a, props);
+      saveState();
+      return a;
+    }
+    function addClient(client){
+      if(!client.id) client.id='cl'+uid('');
+      if(!state.clients) state.clients=[];
+      state.clients.push(client);
+      saveState();
+      return client;
+    }
+    function updateClient(id, props){
+      const idx=state.clients.findIndex(x=>x.id===id);
+      if(idx>-1){
+        state.clients[idx]={...state.clients[idx], ...props};
+        saveState();
+      }
+      return state.clients[idx];
+    }
+    function addCollaborator(collab){
+      if(!collab.id) collab.id='co'+uid('');
+      if(!state.collaborators) state.collaborators=[];
+      state.collaborators.push(collab);
+      saveState();
+      return collab;
+    }
+    function updateCollaborator(id, props){
+      const idx=state.collaborators.findIndex(x=>x.id===id);
+      if(idx>-1){
+        state.collaborators[idx]={...state.collaborators[idx], ...props};
+        saveState();
+      }
+      return state.collaborators[idx];
+    }
+    function addLiquidation(liq){
+      if(!liq.id) liq.id='liq'+uid('');
+      if(!state.liquidations) state.liquidations=[];
+      addLiquidation(liq);
+      saveState();
+      return liq;
+    }
+    function updateLiquidation(id, props){
+      const l=state.liquidations.find(x=>x.id===id);
+      if(l) Object.assign(l, props);
+      saveState();
+      return l;
+    }
+    function addExpense(exp){
+      if(!exp.id) exp.id='exp'+uid('');
+      if(!state.expenses) state.expenses=[];
+      state.expenses.push(exp);
+      saveState();
+      return exp;
+    }
+    function addDeduction(ded){
+      if(!ded.id) ded.id='ded'+uid('');
+      if(!state.payrollDeductions) state.payrollDeductions=[];
+      state.payrollDeductions.push(ded);
+      saveState();
+      return ded;
+    }
+    function addBlocker(blocker){
+      if(!blocker.id) blocker.id='blk'+uid('');
+      if(!state.blockers) state.blockers=[];
+      state.blockers.push(blocker);
+      saveState();
+      return blocker;
+    }
+    function addWithdrawal(withdrawal){
+      if(!withdrawal.id) withdrawal.id='with'+uid('');
+      if(!state.cashSession) state.cashSession={};
+      if(!state.cashSession.withdrawals) state.cashSession.withdrawals=[];
+      state.cashSession.withdrawals.push(withdrawal);
+      saveState();
+      return withdrawal;
+    }
+    function addCashExpense(expense){
+      if(!expense.id) expense.id='cexp'+uid('');
+      if(!state.cashSession) state.cashSession={};
+      if(!state.cashSession.expenses) state.cashSession.expenses=[];
+      state.cashSession.expenses.push(expense);
+      saveState();
+      return expense;
+    }
+    // === FIN STATE MUTATION FUNCTIONS ===
 
     function renderAll(){renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
@@ -7257,7 +7360,7 @@
         const b=state.blockers.find(x=>x.id===editId);
         if(b) Object.assign(b,{memberId,label,date,start,end});
       } else {
-        state.blockers.push({id:'blk'+Date.now(),memberId,label,date,start,end});
+        addBlocker({id:'blk'+Date.now(),memberId,label,date,start,end});
       }
       if(!state.agenda.showBlockers) state.agenda.showBlockers=true;
       closeDrawers(); saveState(); renderAgenda();
@@ -7350,6 +7453,12 @@
 
     // Window bridge: expone al scope global las funciones usadas por onclick= inline
     Object.assign(window, {
+      // State mutation functions
+      addPayment, addAppointment, updateAppointment,
+      addClient, updateClient, addCollaborator, updateCollaborator,
+      addLiquidation, updateLiquidation, addExpense, addDeduction,
+      addBlocker, addWithdrawal, addCashExpense,
+      // Finanzas
       showFinanzasTab, registerExpense, deleteExpense, setFinanzasPeriod,
       addPayrollOverride, addServiceToGroup, addVariantToService,
       calculateAndOpenLiquidation, cancelAppointment, chargeFromAppointment,
