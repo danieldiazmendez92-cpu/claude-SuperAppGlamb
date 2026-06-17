@@ -3655,7 +3655,12 @@
         <div class="help" id="apClientHelp" style="margin-top:8px;">Podés buscar un cliente existente o crear uno nuevo.</div>
       </section>
       <section class="form-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;">
+        <h3>Fecha y horario</h3>
+        <div class="form-grid">
+          <div class="field"><label>Fecha del turno</label><input id="apDate" type="date" value=""></div>
+        </div>
+      </section>
+      <section class="form-card">
           <h3 style="margin:0;">Servicios del turno</h3>
         </div>
         <div id="appointmentServiceLines"></div>
@@ -5679,6 +5684,7 @@
       if($('apDepositAmount')) $('apDepositAmount').value = appointmentDepositAmount(a) || 0;
       if($('apDepositMethod')) $('apDepositMethod').value = a.depositMethod || 'Transferencia';
       if($('apNote')) $('apNote').value = a.note || '';
+      if($('apDate')) $('apDate').value = a.date || dateKey(new Date());
       const related = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId).sort((x,y)=>x.start.localeCompare(y.start)) : [a];
       const mainLines = related.filter(r=>!r.isAdditional);
       const additionalIds = related.filter(r=>r.isAdditional).map(r=>r.variantId).filter(Boolean);
@@ -6199,6 +6205,7 @@
       if(!prefClient && $('apDepositAmount')) $('apDepositAmount').value=0;
       if($('apDepositMethod')) $('apDepositMethod').value='Transferencia';
       if($('apNote')) $('apNote').value='';
+      if($('apDate')) $('apDate').value = dateKey(state.agenda.currentDate);
       if($('appointmentServiceLines')) { $('appointmentServiceLines').innerHTML=''; addAppointmentServiceLine(); }
       $('appointmentDrawerTitle').textContent = 'Nuevo turno';
       $('appointmentDrawerEyebrow').textContent = 'Añadir cita';
@@ -6223,6 +6230,7 @@
       const depositAmount = Number($('apDepositAmount')?.value || 0);
       const depositMethod = $('apDepositMethod')?.value || 'Transferencia';
       const note = $('apNote').value || '';
+      const appointmentDate = $('apDate')?.value || dateKey(state.agenda.currentDate);
 
       const isEditing = !!state.editingAppointmentId;
 
@@ -6255,7 +6263,7 @@
           const mainAppt = {
             id:apptIndex < existingRelated.length ? existingRelated[apptIndex].id : 'a'+Date.now()+lineIdx,
             bookingId:oldBookingId,
-            date:dateKey(state.agenda.currentDate),
+            date:appointmentDate,
             memberId:line.memberId,
             clientId:state.appointmentClient.clientId,
             group:vInfo.groupName || line.groupName,
@@ -6283,7 +6291,7 @@
               addAppointment({
                 id:'a'+Date.now()+'add'+apptIndex,
                 bookingId:oldBookingId,
-                date:dateKey(state.agenda.currentDate),
+                date:appointmentDate,
                 memberId:line.memberId,
                 clientId:state.appointmentClient.clientId,
                 group:addInfo.group,
@@ -6317,7 +6325,7 @@
           const mainAppt = {
             id:'a'+Date.now()+'s'+apptIndex,
             bookingId,
-            date:dateKey(state.agenda.currentDate),
+            date:appointmentDate,
             memberId:line.memberId,
             clientId:state.appointmentClient.clientId,
             group:vInfo.groupName || line.groupName,
@@ -6347,7 +6355,7 @@
               const addAppt = {
                 id:'a'+Date.now()+'a'+apptIndex,
                 bookingId,
-                date:dateKey(state.agenda.currentDate),
+                date:appointmentDate,
                 memberId:line.memberId,
                 clientId:state.appointmentClient.clientId,
                 group:addInfo.group,
