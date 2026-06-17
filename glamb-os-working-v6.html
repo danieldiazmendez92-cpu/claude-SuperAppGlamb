@@ -2942,6 +2942,59 @@
     dialog.glamb-dialog::backdrop { background:rgba(0,0,0,0.35); }
     .glamb-dialog-msg { margin:0 0 16px; font-size:15px; line-height:1.5; color:var(--text); }
     .glamb-dialog-actions { display:flex; gap:8px; justify-content:flex-end; }
+
+    /* === FINANZAS MODULE === */
+    .finanzas-tabs{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+    .finanzas-tab-btn{padding:10px 18px;border:none;background:none;color:var(--text-muted);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:color .15s}
+    .finanzas-tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .finanzas-panel{display:none;padding:24px;overflow-y:auto;height:calc(100% - 90px)}
+    .finanzas-panel.active{display:block}
+    .fin-section{margin-bottom:28px}
+    .fin-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+    .fin-badge{background:var(--accent);color:#fff;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+    .kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:16px}
+    .kpi-card.kpi-danger{border-color:#e74c3c;background:#fff5f5}
+    .kpi-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+    .kpi-value{font-size:22px;font-weight:700;color:var(--text)}
+    .kpi-sub{font-size:12px;color:var(--text-muted);margin-top:4px}
+    .fin-breakeven{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:16px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+    .fin-progress-bar{height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+    .fin-progress-fill{height:100%;border-radius:4px;transition:width .4s}
+    .fin-progress-fill.ok{background:var(--accent)}
+    .fin-progress-fill.warn{background:#f39c12}
+    .fin-progress-label{font-size:12px;color:var(--text-muted)}
+    .fin-alert-card{border-radius:var(--radius-card);padding:14px 16px;font-size:13px;display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+    .fin-alert-ok{background:#f0fff4;border:1px solid #27ae60}
+    .fin-alert-warn{background:#fffbf0;border:1px solid #f39c12}
+    .fin-alert-danger{background:#fff5f5;border:1px solid #e74c3c}
+    .fin-alert-msg{font-weight:600;margin-top:4px}
+    .fin-highlights{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+    .fin-highlight-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:14px}
+    .fin-highlight-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+    .fin-highlight-val{font-size:15px;font-weight:600;color:var(--text)}
+    .fin-highlight-amt{font-size:13px;color:var(--accent);font-weight:600;margin-top:2px}
+    .fin-expense-form{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card);padding:16px}
+    .fin-form-row{display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+    .fin-form-field{flex:1;min-width:160px;display:flex;flex-direction:column;gap:4px}
+    .fin-form-field label{font-size:12px;color:var(--text-muted);font-weight:500}
+    .fin-expense-group{margin-bottom:12px}
+    .fin-expense-group-header{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;margin-bottom:4px}
+    .fin-expense-row{display:flex;justify-content:space-between;align-items:center;padding:8px 4px;border-bottom:1px solid var(--bg);font-size:13px}
+    .fin-expense-desc{display:block;font-weight:500;color:var(--text)}
+    .fin-expense-meta{color:var(--text-muted);font-size:12px}
+    .fin-expense-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+    .fin-expense-amount{font-weight:600;color:var(--text)}
+    .fin-empty{color:var(--text-muted);font-size:14px;padding:32px 0;text-align:center}
+    .fin-period-selector{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+    .fin-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px}
+    .fin-bar-label{width:160px;flex-shrink:0;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .fin-bar-wrap{flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
+    .fin-bar-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .4s}
+    .fin-bar-amount{width:100px;text-align:right;font-weight:600;color:var(--text);flex-shrink:0}
+    .fin-summary-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg);font-size:13px}
+    .fin-summary-row strong{color:var(--text)}
+    .fin-summary-row span{font-weight:600}
   </style>
 </head>
 <body>
@@ -2958,6 +3011,7 @@
         <button data-page="catalog" title="Catálogo">⬡</button>
         <button data-page="team" title="Equipo">✦</button>
         <button data-page="rrhh" title="RRHH">◉</button>
+        <button data-page="finanzas" title="Finanzas">₿</button>
       </nav>
       <button class="side-reset-btn" onclick="resetDemo()" title="Resetear demo">↺</button>
     </aside>
@@ -2971,6 +3025,7 @@
       <button data-page="catalog">Catálogo</button>
       <button data-page="team">Equipo</button>
       <button data-page="rrhh">RRHH</button>
+      <button data-page="finanzas">Finanzas</button>
     </nav>
 
     <main>
@@ -3398,6 +3453,24 @@
         </div>
 
         <div id="catalogContent"></div>
+      </section>
+
+      <section class="page" id="page-finanzas">
+        <div class="topbar">
+          <div>
+            <div class="eyebrow">GLAMB OS</div>
+            <h1>Finanzas</h1>
+            <p class="subtitle">Control financiero, contable e impositivo del negocio.</p>
+          </div>
+        </div>
+        <div class="finanzas-tabs">
+          <button class="finanzas-tab-btn active" data-tab="cfo" onclick="showFinanzasTab('cfo')">CFO</button>
+          <button class="finanzas-tab-btn" data-tab="contador" onclick="showFinanzasTab('contador')">Contador</button>
+          <button class="finanzas-tab-btn" data-tab="analista" onclick="showFinanzasTab('analista')">Analista</button>
+        </div>
+        <div id="finanzas-cfo" class="finanzas-panel active"></div>
+        <div id="finanzas-contador" class="finanzas-panel"></div>
+        <div id="finanzas-analista" class="finanzas-panel"></div>
       </section>
     </main>
   </div>
@@ -3983,14 +4056,18 @@
     cashMode:'admin',
     cashCurrentCollaboratorId:null,
     payrollDeductions:[],
-    liquidations:[]
+    liquidations:[],
+    expenses:[],
+    taxRecords:[],
+    finanzasTab:'cfo',
+    finanzasPeriod:'month'
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const fullName=x=>`${x.first||''} ${x.last||''}`.trim();
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod'];
     function saveState(){
       try{
         const out={};
@@ -6827,7 +6904,298 @@
 
     // ─────────────────────────────────────────────────────────────
 
-    function renderAll(){renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
+    // === MÓDULO FINANZAS ===
+    const EXPENSE_CATS=[
+      {id:'rent',label:'Alquiler',type:'fixed'},
+      {id:'salaries',label:'Sueldos fijos',type:'fixed'},
+      {id:'monotributo',label:'Monotributo',type:'tax'},
+      {id:'utilities',label:'Servicios (luz/gas/internet)',type:'fixed'},
+      {id:'supplies',label:'Insumos',type:'variable'},
+      {id:'advertising',label:'Publicidad',type:'variable'},
+      {id:'bank',label:'Gastos bancarios',type:'variable'},
+      {id:'professional',label:'Honorarios profesionales',type:'variable'},
+      {id:'iibb',label:'Ingresos Brutos',type:'tax'},
+      {id:'other',label:'Otros',type:'other'}
+    ];
+    // Límites Monotributo 2025 prestadores de servicios (verificar en AFIP)
+    const MONO_CATS_2025=[
+      {cat:'A',limit:7500000},{cat:'B',limit:11200000},{cat:'C',limit:16800000},
+      {cat:'D',limit:24000000},{cat:'E',limit:31400000},{cat:'F',limit:40200000},
+      {cat:'G',limit:51000000},{cat:'H',limit:63800000}
+    ];
+    function finDateRange(period){
+      const now=new Date(), today=dateKey(now);
+      if(period==='today') return {from:today,to:today};
+      if(period==='week'){const d=new Date(now);d.setDate(d.getDate()-6);return {from:dateKey(d),to:today};}
+      if(period==='month'){const d=new Date(now.getFullYear(),now.getMonth(),1);return {from:dateKey(d),to:today};}
+      if(period==='year'){const d=new Date(now.getFullYear(),0,1);return {from:dateKey(d),to:today};}
+      return {from:today,to:today};
+    }
+    function finRevenue(from,to){
+      return state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to).reduce((s,t)=>s+(t.total||0),0);
+    }
+    function finExpenses(from,to){
+      return (state.expenses||[]).filter(e=>e.date>=from&&e.date<=to).reduce((s,e)=>s+(e.amount||0),0);
+    }
+    function finPayrollCost(from,to){
+      return (state.liquidations||[]).filter(l=>l.status==='paid'&&l.date&&l.date>=from&&l.date<=to).reduce((s,l)=>s+(l.totalPaid||0),0);
+    }
+    function finTicketCount(from,to){
+      return state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to).length;
+    }
+    function finAvgTicket(from,to){
+      const ts=state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to);
+      return ts.length?ts.reduce((s,t)=>s+(t.total||0),0)/ts.length:0;
+    }
+    function finRevenueByGroup(from,to){
+      const map={};
+      state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to)
+        .forEach(t=>(t.lines||[]).forEach(l=>{const g=l.group||'Sin grupo';map[g]=(map[g]||0)+(l.total||0);}));
+      return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    }
+    function finRevenueByCollaborator(from,to){
+      const map={};
+      state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to)
+        .forEach(t=>(t.lines||[]).forEach(l=>{const m=member(l.collaboratorId);const name=m?fullName(m):'Sin asignar';map[name]=(map[name]||0)+(l.total||0);}));
+      return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    }
+    function finMonotributoCheck(){
+      const {from,to}=finDateRange('year');
+      const annual=finRevenue(from,to);
+      const cat=MONO_CATS_2025.find(c=>annual<=c.limit)||{cat:'> H',limit:0};
+      const nextCat=MONO_CATS_2025.find(c=>c.limit>annual);
+      const pct=nextCat?Math.round((annual/nextCat.limit)*100):100;
+      return {annual,cat,nextCat,pct};
+    }
+    function finBreakEven(){
+      const {from,to}=finDateRange('month');
+      const allExp=state.expenses||[];
+      const fixedExp=allExp.filter(e=>EXPENSE_CATS.find(c=>c.id===e.category)?.type==='fixed').reduce((s,e)=>s+(e.amount||0),0);
+      const varExp=allExp.filter(e=>{const t=EXPENSE_CATS.find(c=>c.id===e.category)?.type;return t==='variable'||t==='tax';}).reduce((s,e)=>s+(e.amount||0),0);
+      const rev=finRevenue(from,to);
+      const payroll=finPayrollCost(from,to);
+      const totalVar=varExp+payroll;
+      const grossMargin=rev>0?Math.max(0,(rev-totalVar)/rev):0;
+      const breakEven=grossMargin>0?Math.round(fixedExp/grossMargin):0;
+      return {fixedExp,varExp,payroll,rev,grossMargin,breakEven};
+    }
+    function showFinanzasTab(tab){
+      state.finanzasTab=tab;
+      document.querySelectorAll('.finanzas-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+      document.querySelectorAll('.finanzas-panel').forEach(p=>p.classList.toggle('active',p.id==='finanzas-'+tab));
+      renderFinanzas();
+    }
+    function renderFinanzas(){
+      const tab=state.finanzasTab||'cfo';
+      if(tab==='cfo') renderFinanzasCFO();
+      else if(tab==='contador') renderFinanzasContador();
+      else if(tab==='analista') renderFinanzasAnalista();
+    }
+    function renderFinanzasCFO(){
+      const panel=$('finanzas-cfo'); if(!panel) return;
+      const {from:mFrom,to:mTo}=finDateRange('month');
+      const {from:tFrom,to:tTo}=finDateRange('today');
+      const rev=finRevenue(mFrom,mTo), exp=finExpenses(mFrom,mTo), payroll=finPayrollCost(mFrom,mTo);
+      const net=rev-exp-payroll, revToday=finRevenue(tFrom,tTo);
+      const tickets=finTicketCount(mFrom,mTo), avg=finAvgTicket(mFrom,mTo);
+      const mono=finMonotributoCheck();
+      const {breakEven,fixedExp,grossMargin}=finBreakEven();
+      const monoAlert=mono.pct>=80?'danger':mono.pct>=60?'warn':'ok';
+      const topGroup=finRevenueByGroup(mFrom,mTo)[0];
+      const topCollab=finRevenueByCollaborator(mFrom,mTo)[0];
+      const monthName=new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+      const beReached=breakEven>0?Math.min(100,Math.round((rev/breakEven)*100)):0;
+      panel.innerHTML=`
+        <div class="fin-section">
+          <div class="fin-section-title">Resumen ${monthName}</div>
+          <div class="kpi-grid">
+            <div class="kpi-card ${net<0?'kpi-danger':''}">
+              <div class="kpi-label">Resultado neto</div>
+              <div class="kpi-value">${money(net)}</div>
+              <div class="kpi-sub">${net>=0?'Positivo ✓':'Negativo — revisá gastos'}</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Ingresos del mes</div>
+              <div class="kpi-value">${money(rev)}</div>
+              <div class="kpi-sub">${tickets} ticket${tickets!==1?'s':''} · Hoy ${money(revToday)}</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Egresos del mes</div>
+              <div class="kpi-value">${money(exp+payroll)}</div>
+              <div class="kpi-sub">Gastos ${money(exp)} · Nómina ${money(payroll)}</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label">Ticket promedio</div>
+              <div class="kpi-value">${money(avg)}</div>
+              <div class="kpi-sub">Margen bruto ${grossMargin>0?(grossMargin*100).toFixed(0)+'%':'sin datos'}</div>
+            </div>
+          </div>
+        </div>
+        ${breakEven>0?`<div class="fin-section">
+          <div class="fin-section-title">Punto de equilibrio mensual</div>
+          <div class="fin-breakeven">
+            <span>Para cubrir costos fijos (${money(fixedExp)}) necesitás facturar <strong>${money(breakEven)}/mes</strong></span>
+            <div class="fin-progress-bar"><div class="fin-progress-fill ${beReached>=100?'ok':'warn'}" style="width:${beReached}%"></div></div>
+            <span class="fin-progress-label">${beReached}% alcanzado — ${beReached>=100?'✓ equilibrio superado':'faltan '+money(breakEven-rev)}</span>
+          </div>
+        </div>`:''}
+        <div class="fin-section">
+          <div class="fin-section-title">Alertas fiscales</div>
+          <div class="fin-alert-card fin-alert-${monoAlert}">
+            <strong>Monotributo 2025</strong>
+            <div>Facturado año corriente: <strong>${money(mono.annual)}</strong> · Categoría proyectada: <strong>${mono.cat.cat||'—'}</strong></div>
+            ${mono.nextCat?`<div>Límite próx. categoría (${mono.nextCat.cat}): ${money(mono.nextCat.limit)} · Uso actual: <strong>${mono.pct}%</strong></div>`:'<div>Revisá con tu contador — posiblemente fuera de Monotributo</div>'}
+            ${mono.pct>=80?`<div class="fin-alert-msg">⚠ Riesgo de recategorización. Consultá con tu contador.</div>`:''}
+          </div>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:6px">* Límites orientativos 2025 — verificar en AFIP. No incluye IVA ni IIBB.</p>
+        </div>
+        ${topGroup||topCollab?`<div class="fin-section">
+          <div class="fin-section-title">Destacados del mes</div>
+          <div class="fin-highlights">
+            ${topGroup?`<div class="fin-highlight-item"><div class="fin-highlight-label">Servicio más rentable</div><div class="fin-highlight-val">${topGroup[0]}</div><div class="fin-highlight-amt">${money(topGroup[1])}</div></div>`:''}
+            ${topCollab?`<div class="fin-highlight-item"><div class="fin-highlight-label">Colaboradora top</div><div class="fin-highlight-val">${topCollab[0]}</div><div class="fin-highlight-amt">${money(topCollab[1])}</div></div>`:''}
+          </div>
+        </div>`:''}
+      `;
+    }
+    function renderFinanzasContador(){
+      const panel=$('finanzas-contador'); if(!panel) return;
+      const expenses=state.expenses||[];
+      const grouped={};
+      expenses.forEach(e=>{
+        const cat=EXPENSE_CATS.find(c=>c.id===e.category)||{label:'Otros'};
+        if(!grouped[cat.label]) grouped[cat.label]=[];
+        grouped[cat.label].push(e);
+      });
+      const total=expenses.reduce((s,e)=>s+(e.amount||0),0);
+      const byType={fixed:0,variable:0,tax:0,other:0};
+      expenses.forEach(e=>{const t=EXPENSE_CATS.find(c=>c.id===e.category)?.type||'other';byType[t]=(byType[t]||0)+(e.amount||0);});
+      panel.innerHTML=`
+        <div class="fin-section">
+          <div class="fin-section-title">Registrar gasto</div>
+          <div class="fin-expense-form">
+            <div class="fin-form-row">
+              <div class="fin-form-field"><label>Fecha</label><input type="date" id="expDate" value="${dateKey(new Date())}" class="input-like"/></div>
+              <div class="fin-form-field"><label>Categoría</label>
+                <select id="expCat" class="select-like">${EXPENSE_CATS.map(c=>`<option value="${c.id}">${c.label}</option>`).join('')}</select>
+              </div>
+            </div>
+            <div class="fin-form-row">
+              <div class="fin-form-field"><label>Descripción</label><input type="text" id="expDesc" placeholder="Ej: Alquiler junio" class="input-like"/></div>
+              <div class="fin-form-field"><label>Monto ($)</label><input type="number" id="expAmount" placeholder="0" class="input-like"/></div>
+            </div>
+            <div class="fin-form-row">
+              <div class="fin-form-field"><label>Forma de pago</label>
+                <select id="expMethod" class="select-like"><option>Transferencia</option><option>Efectivo</option><option>Tarjeta</option><option>Débito automático</option></select>
+              </div>
+              <div class="fin-form-field" style="justify-content:flex-end">
+                <button class="btn primary" onclick="registerExpense()">Guardar gasto</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="fin-section">
+          <div class="fin-section-title">Gastos registrados <span class="fin-badge">${money(total)}</span></div>
+          ${total>0?`<div style="margin-bottom:12px">
+            <div class="fin-summary-row"><strong>Costos fijos</strong><span>${money(byType.fixed)}</span></div>
+            <div class="fin-summary-row"><strong>Costos variables</strong><span>${money(byType.variable)}</span></div>
+            <div class="fin-summary-row"><strong>Impuestos</strong><span>${money(byType.tax)}</span></div>
+            ${byType.other>0?`<div class="fin-summary-row"><strong>Otros</strong><span>${money(byType.other)}</span></div>`:''}
+          </div>`:''}
+          ${Object.keys(grouped).length===0?`<p class="fin-empty">Sin gastos registrados aún.<br>Registrá tu primer gasto arriba.</p>`:''}
+          ${Object.entries(grouped).map(([cat,items])=>`
+            <div class="fin-expense-group">
+              <div class="fin-expense-group-header"><span>${cat}</span><span>${money(items.reduce((s,e)=>s+(e.amount||0),0))}</span></div>
+              ${items.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>`
+                <div class="fin-expense-row">
+                  <div>
+                    <span class="fin-expense-desc">${e.description||'Sin descripción'}</span>
+                    <span class="fin-expense-meta">${e.date} · ${e.paymentMethod||'—'}</span>
+                  </div>
+                  <div class="fin-expense-right">
+                    <span class="fin-expense-amount">${money(e.amount)}</span>
+                    <button class="small-btn danger" onclick="deleteExpense('${e.id}')">✕</button>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+    function renderFinanzasAnalista(){
+      const panel=$('finanzas-analista'); if(!panel) return;
+      const period=state.finanzasPeriod||'month';
+      const {from,to}=finDateRange(period);
+      const rev=finRevenue(from,to), exp=finExpenses(from,to), payroll=finPayrollCost(from,to);
+      const net=rev-exp-payroll;
+      const byGroup=finRevenueByGroup(from,to);
+      const byCollab=finRevenueByCollaborator(from,to);
+      const periodClients=new Set(state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to).map(t=>t.clientId)).size;
+      const labels={today:'Hoy',week:'Últimos 7 días',month:'Este mes',year:'Este año'};
+      panel.innerHTML=`
+        <div class="fin-period-selector">
+          ${['today','week','month','year'].map(p=>`<button class="small-btn ${period===p?'active':''}" onclick="setFinanzasPeriod('${p}')">${{today:'Hoy',week:'Semana',month:'Mes',year:'Año'}[p]}</button>`).join('')}
+        </div>
+        <div class="fin-section">
+          <div class="fin-section-title">${labels[period]||period}</div>
+          <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-label">Ingresos</div><div class="kpi-value">${money(rev)}</div><div class="kpi-sub">${finTicketCount(from,to)} tickets</div></div>
+            <div class="kpi-card"><div class="kpi-label">Egresos</div><div class="kpi-value">${money(exp+payroll)}</div><div class="kpi-sub">Gastos + nómina</div></div>
+            <div class="kpi-card ${net<0?'kpi-danger':''}"><div class="kpi-label">Resultado</div><div class="kpi-value">${money(net)}</div><div class="kpi-sub">${net>=0?'Positivo':'Negativo'}</div></div>
+            <div class="kpi-card"><div class="kpi-label">Clientes atendidas</div><div class="kpi-value">${periodClients}</div><div class="kpi-sub">Ticket prom. ${money(finAvgTicket(from,to))}</div></div>
+          </div>
+        </div>
+        ${byGroup.length?`<div class="fin-section">
+          <div class="fin-section-title">Ingresos por servicio</div>
+          ${byGroup.map(([g,v])=>`<div class="fin-bar-row">
+            <div class="fin-bar-label">${g}</div>
+            <div class="fin-bar-wrap"><div class="fin-bar-fill" style="width:${rev>0?Math.round((v/rev)*100):0}%"></div></div>
+            <div class="fin-bar-amount">${money(v)}</div>
+          </div>`).join('')}
+        </div>`:''}
+        ${byCollab.length?`<div class="fin-section">
+          <div class="fin-section-title">Ranking colaboradoras</div>
+          ${byCollab.map(([name,v],i)=>`<div class="fin-bar-row">
+            <div class="fin-bar-label">${i+1}. ${name}</div>
+            <div class="fin-bar-wrap"><div class="fin-bar-fill" style="width:${rev>0?Math.round((v/rev)*100):0}%"></div></div>
+            <div class="fin-bar-amount">${money(v)}</div>
+          </div>`).join('')}
+        </div>`:''}
+        ${!rev&&!exp?`<p class="fin-empty">Sin datos para el período seleccionado.<br>Registrá ventas en Caja para ver el análisis aquí.</p>`:''}
+      `;
+    }
+    function registerExpense(){
+      const date=$('expDate')?.value||dateKey(new Date());
+      const category=$('expCat')?.value||'other';
+      const description=($('expDesc')?.value||'').trim();
+      const amount=parseFloat($('expAmount')?.value||0);
+      const paymentMethod=$('expMethod')?.value||'Efectivo';
+      if(!amount||amount<=0) return showToast('Ingresá un monto válido');
+      if(!description) return showToast('Ingresá una descripción');
+      if(!state.expenses) state.expenses=[];
+      state.expenses.push({id:uid('exp'),date,category,description,amount,paymentMethod});
+      if($('expDesc')) $('expDesc').value='';
+      if($('expAmount')) $('expAmount').value='';
+      saveState();
+      renderFinanzasContador();
+      showToast('Gasto registrado');
+    }
+    function deleteExpense(id){
+      showConfirm('¿Eliminar este gasto?',()=>{
+        state.expenses=(state.expenses||[]).filter(e=>e.id!==id);
+        saveState();
+        renderFinanzasContador();
+        showToast('Gasto eliminado');
+      });
+    }
+    function setFinanzasPeriod(p){
+      state.finanzasPeriod=p;
+      renderFinanzasAnalista();
+    }
+    // === FIN MÓDULO FINANZAS ===
+
+    function renderAll(){renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
@@ -6982,6 +7350,7 @@
 
     // Window bridge: expone al scope global las funciones usadas por onclick= inline
     Object.assign(window, {
+      showFinanzasTab, registerExpense, deleteExpense, setFinanzasPeriod,
       addPayrollOverride, addServiceToGroup, addVariantToService,
       calculateAndOpenLiquidation, cancelAppointment, chargeFromAppointment,
       closePopover, confirmLiquidationPaid,
