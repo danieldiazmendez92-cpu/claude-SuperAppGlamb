@@ -3075,7 +3075,6 @@
                 <button class="small-btn" id="agendaZoomIn" type="button">+</button>
               </div>
               <button class="small-btn" id="toggleBlockers">Bloqueos</button><button class="small-btn primary" id="addBlockerBtn" title="Agregar bloqueo de tiempo">＋ Bloqueo</button>
-              <button class="small-btn" id="waitlistBtn">Lista de espera</button>
               <button class="small-btn" id="closeDayBtn">Cerrar día</button>
               <select class="select-like" id="roleView">
                 <option value="reception">Vista recepción</option>
@@ -3908,10 +3907,6 @@
     ],blockers:[
       {id:'b1',memberId:'co1',start:'09:00',end:'11:00',label:'No disponible'},
       {id:'b2',memberId:'co2',start:'13:00',end:'13:30',label:'Comida'}
-    ],waitlist:[
-      {clientId:'cl1',group:'Manicuria',service:'Semipermanente',note:'Prefiere tarde'},
-      {clientId:'cl2',group:'Manicuria',service:'Nail art',note:'Acepta huecos premium'},
-      {clientId:'cl3',group:'Eyebrow & Lash',service:'Perfilado de cejas',note:'Disponible hoy'}
     ],agenda:{group:'Todos',member:'Todos',role:'reception',view:'day',showBlockers:true,dragging:null,currentDate:new Date(),colWidth:140},
     payments:[],salesTickets:[],pendingCharges:[],
     cashTab:'register',saleLineSeq:0,paymentLineSeq:0,
@@ -3994,7 +3989,7 @@
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','waitlist','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations'];
     function saveState(){
       try{
         const out={};
@@ -6301,11 +6296,6 @@
         closeDrawers();showPage('agenda');showToast('Turno agregado a la agenda');
       }
     };
-    function openWaitlist(){
-      const pop=$('detailPopover');
-      pop.innerHTML=`<div class="eyebrow">Lista de espera</div><h3>Candidatos para huecos</h3><div class="meta">Katy sugeriría clientes por servicio, horario y probabilidad de respuesta.</div>${state.waitlist.map(w=>{const c=client(w.clientId);return `<div class="detail-section"><strong>${fullName(c)}</strong><span>${w.service} · ${w.note}<br>${c.phone}</span><div class="detail-actions"><button class="btn primary" onclick="fillAppointmentOptions('${c.id}');openDrawer('appointmentDrawer')">Crear turno</button><button class="btn" onclick="showToast('WhatsApp sugerido para ${fullName(c)}')">WhatsApp</button></div></div>`}).join('')}`;
-      pop.style.left='calc(100vw - 410px)'; pop.style.top='120px'; pop.classList.add('open');
-    }
     function closeDay(){
       const total=state.appointments.length;
       const paid=state.appointments.filter(a=>a.deposit==='paid').length;
@@ -6916,7 +6906,6 @@
       const blk=e.target.closest('[data-blocker]');
       if(blk && !e.target.closest('[data-blocker-del]')) openBlockerDrawer(blk.dataset.blocker);
     });
-    if($('waitlistBtn')) $('waitlistBtn').onclick=openWaitlist;
     if($('closeDayBtn')) $('closeDayBtn').onclick=closeDay;
     if($('cashOpenBtn')) $('cashOpenBtn').onclick=openCashSession;
     if($('savePayrollConfigBtn')) $('savePayrollConfigBtn').onclick=savePayrollConfig;
