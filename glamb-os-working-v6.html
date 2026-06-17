@@ -1710,7 +1710,7 @@
       left: 72px;
       right: 0;
       height: 2px;
-      background: #E04F3F;
+      background: var(--accent);
       z-index: 4;
       pointer-events: none;
     }
@@ -1724,7 +1724,7 @@
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: #E04F3F;
+      background: var(--accent);
     }
 
     .now-label {
@@ -1733,12 +1733,12 @@
       transform: translateY(-50%);
       padding: 3px 8px;
       border-radius: var(--radius-pill);
-      background: #E04F3F;
-      color: #fff;
+      background: var(--accent);
+      color: var(--bg);
       font-size: 10px;
       font-weight: 600;
       z-index: 7;
-      box-shadow: 0 1px 4px rgba(224,79,63,0.4);
+      box-shadow: 0 1px 4px rgba(14,14,13,0.25);
     }
 
     .agenda-list-view {
@@ -2935,6 +2935,13 @@
         grid-template-columns: 1fr;
       }
     }
+
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    dialog.glamb-dialog { border:none; border-radius:var(--radius-card); padding:24px; width:min(360px,90vw); box-shadow:0 8px 32px rgba(0,0,0,0.18); background:var(--bg); }
+    dialog.glamb-dialog::backdrop { background:rgba(0,0,0,0.35); }
+    .glamb-dialog-msg { margin:0 0 16px; font-size:15px; line-height:1.5; color:var(--text); }
+    .glamb-dialog-actions { display:flex; gap:8px; justify-content:flex-end; }
   </style>
 </head>
 <body>
@@ -4004,14 +4011,38 @@
       }catch(e){ /* datos corruptos: se ignoran */ }
     }
     function resetDemo(){
-      if(confirm('¿Borrar los datos guardados y volver a la demo inicial?')){
+      showConfirm('¿Borrar los datos guardados y volver a la demo inicial?', ()=>{
         localStorage.removeItem(STORAGE_KEY);
         location.reload();
-      }
+      });
     } const initials=x=>`${(x.first||'N')[0]}${(x.last||'A')[0]}`.toUpperCase();
     const mins=t=>{const[h,m]=t.split(':').map(Number);return h*60+m}; const topFor=t=>(mins(t)-startHour*60)*pxPerMin; const heightFor=(s,e)=>Math.max(24,(mins(e)-mins(s))*pxPerMin-3);
     const client=id=>state.clients.find(c=>c.id===id)||{id:null,code:'—',first:'Cliente',last:'eliminado',phone:'—',email:'',tags:[],note:''}; const member=id=>state.collaborators.find(c=>c.id===id)||{id:null,first:'Sin',last:'profesional',phone:'—',email:'',services:[],groups:[],can:false};
     function showToast(m){toast.textContent=m;toast.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>toast.classList.remove('show'),3000)}
+
+    function showConfirm(msg, onOk, onCancel){
+      const dlg = document.createElement('dialog');
+      dlg.className = 'glamb-dialog';
+      dlg.innerHTML = `<p class="glamb-dialog-msg">${msg}</p><div class="glamb-dialog-actions"><button class="btn secondary glamb-dialog-cancel">Cancelar</button><button class="btn primary glamb-dialog-ok">Confirmar</button></div>`;
+      document.body.appendChild(dlg);
+      dlg.showModal();
+      dlg.querySelector('.glamb-dialog-ok').onclick = () => { dlg.close(); dlg.remove(); onOk && onOk(); };
+      dlg.querySelector('.glamb-dialog-cancel').onclick = () => { dlg.close(); dlg.remove(); onCancel && onCancel(); };
+      dlg.addEventListener('cancel', () => { dlg.remove(); onCancel && onCancel(); });
+    }
+    function showPromptDialog(msg, placeholder, onOk){
+      const dlg = document.createElement('dialog');
+      dlg.className = 'glamb-dialog';
+      dlg.innerHTML = `<p class="glamb-dialog-msg">${msg}</p><input class="glamb-dialog-input" type="text" placeholder="${placeholder||''}" style="width:100%;margin-bottom:12px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);font-size:14px;"><div class="glamb-dialog-actions"><button class="btn secondary glamb-dialog-cancel">Cancelar</button><button class="btn primary glamb-dialog-ok">Confirmar</button></div>`;
+      document.body.appendChild(dlg);
+      dlg.showModal();
+      const inp = dlg.querySelector('.glamb-dialog-input');
+      inp.focus();
+      dlg.querySelector('.glamb-dialog-ok').onclick = () => { const v=inp.value.trim(); dlg.close(); dlg.remove(); onOk && onOk(v); };
+      dlg.querySelector('.glamb-dialog-cancel').onclick = () => { dlg.close(); dlg.remove(); };
+      dlg.addEventListener('cancel', () => dlg.remove());
+    }
+
     function updateDateTitle() {
       const d = state.agenda.currentDate;
       const days = ['dom','lun','mar','mié','jue','vie','sáb'];
@@ -4486,12 +4517,10 @@
 
       if(priceChanged){
         const msg = `Este servicio tiene ${affectedTurns.length} turno(s) agendado(s) con precio $${oldPrice}. ¿Querés actualizar los precios automáticamente?`;
-        if(confirm(msg)){
-          affectedTurns.forEach(a=>a.price=price);
-          showToast(`Precio actualizado en ${affectedTurns.length} turno(s).`);
-        } else {
-          showToast('Precio actualizado. Turnos existentes mantienen precio anterior.');
-        }
+        showConfirm(msg,
+          ()=>{ affectedTurns.forEach(a=>a.price=price); saveState(); renderAgenda(); showToast(`Precio actualizado en ${affectedTurns.length} turno(s).`); },
+          ()=>{ showToast('Precio actualizado. Turnos existentes mantienen precio anterior.'); }
+        );
       }
 
       info.variant.name=name; info.variant.price=price; info.variant.duration=duration;
@@ -4538,16 +4567,12 @@
       if(affectedAppts.length && (priceChanged || nameChanged || durationChanged)){
         const changes = [priceChanged && `precio $${add.price}→$${price}`, nameChanged && `nombre`, durationChanged && `duración`].filter(Boolean).join(', ');
         const msg = `Este adicional aparece en ${affectedAppts.length} turno(s) agendado(s) (${changes}). ¿Actualizar los turnos existentes?`;
-        if(confirm(msg)){
-          affectedAppts.forEach(a=>{
-            if(priceChanged) a.price=price;
-            if(nameChanged) a.service=name;
-            if(durationChanged){ a.duration=duration; a.end=addMinutes(a.start,duration); }
-          });
-          showToast(`Adicional y ${affectedAppts.length} turno(s) actualizados.`);
-        } else {
-          showToast('Catálogo actualizado. Turnos existentes mantienen valores anteriores.');
-        }
+        add.name=name; add.price=price; add.duration=duration; add.group=group;
+        showConfirm(msg,
+          ()=>{ affectedAppts.forEach(a=>{ if(priceChanged) a.price=price; if(nameChanged) a.service=name; if(durationChanged){ a.duration=duration; a.end=addMinutes(a.start,duration); } }); closeDrawers(); saveState(); renderCatalog(); updateServiceGroupFromCatalog(); renderAgenda(); showToast(`Adicional y ${affectedAppts.length} turno(s) actualizados.`); },
+          ()=>{ closeDrawers(); saveState(); renderCatalog(); updateServiceGroupFromCatalog(); renderAgenda(); showToast('Catálogo actualizado. Turnos existentes mantienen valores anteriores.'); }
+        );
+        return;
       } else {
         showToast('Adicional actualizado.');
       }
@@ -4592,9 +4617,10 @@
     }
 
     function deleteServiceGroup(groupId){
-      if(!confirm('¿Eliminar este grupo y todos sus servicios?')) return;
-      state.catalog.groups = state.catalog.groups.filter(g=>g.id!==groupId);
-      closeDrawers();renderCatalog();updateServiceGroupFromCatalog();showToast('Grupo eliminado.');
+      showConfirm('¿Eliminar este grupo y todos sus servicios?', ()=>{
+        state.catalog.groups = state.catalog.groups.filter(g=>g.id!==groupId);
+        closeDrawers(); renderCatalog(); updateServiceGroupFromCatalog(); showToast('Grupo eliminado.');
+      });
     }
 
     function deleteService(svcId){
@@ -4614,26 +4640,27 @@
     }
 
     function deleteCatalogItem(type, id){
-      if(!confirm('¿Eliminar este elemento?')) return;
-      const catalog = state.catalog;
-      if(type==='additional'){ catalog.additionals=catalog.additionals.filter(a=>a.id!==id); showToast('Adicional eliminado.'); }
-      else if(type==='product'){ catalog.products=catalog.products.filter(p=>p.id!==id); showToast('Producto eliminado.'); }
-      else if(type==='variant'){
-        for(const g of catalog.groups){
-          for(const s of g.services){
-            const vi=s.variants.findIndex(v=>v.id===id);
-            if(vi>-1){s.variants.splice(vi,1);showToast('Variante eliminada.');renderCatalog();updateServiceGroupFromCatalog();return;}
+      showConfirm('¿Eliminar este elemento?', ()=>{
+        const catalog = state.catalog;
+        if(type==='additional'){ catalog.additionals=catalog.additionals.filter(a=>a.id!==id); showToast('Adicional eliminado.'); }
+        else if(type==='product'){ catalog.products=catalog.products.filter(p=>p.id!==id); showToast('Producto eliminado.'); }
+        else if(type==='variant'){
+          for(const g of catalog.groups){
+            for(const s of g.services){
+              const vi=s.variants.findIndex(v=>v.id===id);
+              if(vi>-1){s.variants.splice(vi,1);showToast('Variante eliminada.');renderCatalog();updateServiceGroupFromCatalog();return;}
+            }
           }
         }
-      }
-      else if(type==='service'){
-        for(const g of catalog.groups){
-          const si=g.services.findIndex(s=>s.id===id);
-          if(si>-1){g.services.splice(si,1);showToast('Servicio eliminado.');renderCatalog();updateServiceGroupFromCatalog();return;}
+        else if(type==='service'){
+          for(const g of catalog.groups){
+            const si=g.services.findIndex(s=>s.id===id);
+            if(si>-1){g.services.splice(si,1);showToast('Servicio eliminado.');renderCatalog();updateServiceGroupFromCatalog();return;}
+          }
         }
-      }
-      else if(type==='service-group'){ catalog.groups=catalog.groups.filter(g=>g.id!==id); showToast('Grupo eliminado.'); updateServiceGroupFromCatalog(); }
-      renderCatalog();updateServiceGroupFromCatalog();
+        else if(type==='service-group'){ catalog.groups=catalog.groups.filter(g=>g.id!==id); showToast('Grupo eliminado.'); updateServiceGroupFromCatalog(); }
+        renderCatalog(); updateServiceGroupFromCatalog();
+      });
     }
 
     function updateServiceGroupFromCatalog(){
@@ -5119,6 +5146,11 @@
       if(t.payments > t.due + 1) return showToast('El monto ingresado supera el saldo a cobrar.');
       const clientIdForTicket = state.saleClient.clientId || null;
       const sourceAppointment = state.saleSource==='appointment' ? state.appointments.find(a=>a.id===state.saleAppointmentId) : null;
+      const rKey = reservationKey(sourceAppointment);
+      if(rKey){
+        const existing = state.salesTickets.find(tk=>tk.reservationId===rKey && (tk.status==='confirmed'||tk.status==='partial'));
+        if(existing) return showToast('Este turno ya tiene un cobro registrado. Anulá el ticket anterior si querés corregirlo.');
+      }
       const salePayments = collectSalePayments();
       const pendingBalance = Math.max(0, t.due - t.payments);
       const isPartial = pendingBalance > 1;
@@ -5242,7 +5274,7 @@
         return `<div class="mini-row"><strong>${t.clientNameSnapshot} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${t.createdBy||'—'} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" onclick="voidTicket('${t.id}')">Anular ticket</button></div></div>`;
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
-    function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); const reason = prompt('Motivo de anulación'); if(reason===null)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); renderAll(); showToast('Ticket anulado');}
+    function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{ if(!reason)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); renderAll(); showToast('Ticket anulado'); }); }
     function cashClose(){
       if(!isCashAdmin()) return showToast('Solo admin caja puede cerrar caja.');
       if(!state.cashSession.isOpen) return showToast('La caja no está abierta.');
@@ -6616,10 +6648,11 @@
     }
 
     function deleteDeduction(id){
-      if(!confirm('¿Eliminar este descuento?')) return;
-      state.payrollDeductions=state.payrollDeductions.filter(d=>d.id!==id);
-      saveState(); renderRrhhDeductions();
-      showToast('Descuento eliminado');
+      showConfirm('¿Eliminar este descuento?', ()=>{
+        state.payrollDeductions=state.payrollDeductions.filter(d=>d.id!==id);
+        saveState(); renderRrhhDeductions();
+        showToast('Descuento eliminado');
+      });
     }
 
     // ── Liquidaciones ──
@@ -6794,10 +6827,11 @@
     }
 
     function deleteLiquidation(liqId){
-      if(!confirm('¿Eliminar este borrador?')) return;
-      state.liquidations=state.liquidations.filter(l=>l.id!==liqId);
-      saveState(); closeDrawers(); renderRrhhLiquidations();
-      showToast('Borrador eliminado');
+      showConfirm('¿Eliminar este borrador?', ()=>{
+        state.liquidations=state.liquidations.filter(l=>l.id!==liqId);
+        saveState(); closeDrawers(); renderRrhhLiquidations();
+        showToast('Borrador eliminado');
+      });
     }
 
     // ─────────────────────────────────────────────────────────────
