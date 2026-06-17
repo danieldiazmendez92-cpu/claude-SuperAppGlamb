@@ -3054,7 +3054,7 @@
             </section>
           </div>
           <aside class="dark-panel">
-            <div class="eyebrow" style="color:#cbb8a6">Katy</div>
+            <div class="eyebrow" style="color:#cbb8a6">Asistente</div>
             <h2>Oportunidades</h2>
             <div class="muted" id="katySummary"></div>
             <div class="tags">
@@ -4166,7 +4166,7 @@
       const lowCollaborators = state.collaborators.filter(c=>c.can && collaboratorRevenue(c.id)<20000).length;
       const items=[['Venta servicios',money(serviceRevenue),'tickets confirmados'],['Pendiente cobro',money(pendingAmount),'a recuperar'],['Turnos hoy',appts.length,'en agenda'],['Huecos',openSlots,'vendibles'],['Clientes riesgo',clientsAtRisk,'sin turno activo']];
       $('commandKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
-      $('commandAlerts').innerHTML=`<div class="mini-row"><strong>${clientsAtRisk} clientas en riesgo</strong><span>Sin turno activo cargado para hoy. Katy puede priorizar WhatsApp.</span></div><div class="mini-row"><strong>${openSlots} huecos vendibles</strong><span>Revisar lista de espera y servicios de mayor margen.</span></div><div class="mini-row"><strong>${lowCollaborators} colaboradora(s) bajo objetivo</strong><span>Controlar ocupación y facturación por profesional.</span></div><div class="mini-row"><strong>${money(pendingAmount)} pendientes de cobro</strong><span>Caja necesita seguimiento antes del cierre.</span></div>`;
+      $('commandAlerts').innerHTML=`<div class="mini-row"><strong>${clientsAtRisk} clientas en riesgo</strong><span>Sin turno activo cargado para hoy. Priorizar contacto por WhatsApp.</span></div><div class="mini-row"><strong>${openSlots} huecos vendibles</strong><span>Revisar lista de espera y servicios de mayor margen.</span></div><div class="mini-row"><strong>${lowCollaborators} colaboradora(s) bajo objetivo</strong><span>Controlar ocupación y facturación por profesional.</span></div><div class="mini-row"><strong>${money(pendingAmount)} pendientes de cobro</strong><span>Caja necesita seguimiento antes del cierre.</span></div>`;
       $('commandAppointments').innerHTML=appts.slice(0,4).map(a=>`<div class="mini-row"><strong>${a.start} · ${client(a.clientId).first} ${client(a.clientId).last}</strong><span>${a.service} con ${member(a.memberId).first}</span></div>`).join('') || '<div class="mini-row"><strong>Sin turnos activos</strong><span>La agenda está libre para vender huecos.</span></div>';
       $('katySummary').innerHTML=`Buenos días Daniel.<br><br>${clientsAtRisk} clientas en riesgo<br>${openSlots} huecos hoy<br>${lowCollaborators} colaboradora(s) sin llegar a objetivo<br>${money(pendingAmount)} pendientes de cobro`;
     }
@@ -4226,7 +4226,7 @@
       $('clientsList').innerHTML=list.map(c=>{
         const ins = clientInsights(c.id);
         const lastTxt = ins.daysSinceLast!==null ? ` · última hace ${ins.daysSinceLast} día(s)` : '';
-        return `<article class="client-card"><div class="client-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${clientCode(c)} · ${c.phone} · ${c.email||'Sin email'} · ${frequencyLabel(ins)}${lastTxt}</div><div class="tags">${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}${insightTagsHtml(ins)}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="openClientProfile('${c.id}')">Ver perfil</button><button class="small-btn" onclick="fillAppointmentOptions('${c.id}');openDrawer('appointmentDrawer')">Crear turno</button></div></article>`;
+        return `<article class="client-card"><div class="client-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${clientCode(c)} · ${c.phone} · ${c.email||'Sin email'} · ${frequencyLabel(ins)}${lastTxt}</div><div class="tags">${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}${insightTagsHtml(ins)}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="openClientProfile" data-id="${c.id}">Ver perfil</button><button class="small-btn" data-action="openApptForClient" data-client="${c.id}">Crear turno</button></div></article>`;
       }).join('')
     }
     $('clientSearch').oninput=e=>{state.clientSearch=e.target.value;renderClients()};
@@ -4243,7 +4243,7 @@
       $('teamKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
       $('teamList').innerHTML=state.collaborators.map(c=>{
         const groupLabels = (c.groupIds||[]).map(id=>state.catalog.groups.find(g=>g.id===id)?.name||'').filter(Boolean);
-        return `<article class="person-card"><div class="person-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${c.phone}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${g}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${c.days} · ${c.hours}</div></div></div><div class="actions-col"><button class="small-btn primary" onclick="editCollaborator('${c.id}')">Editar</button></div></article>`
+        return `<article class="person-card"><div class="person-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${c.phone}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${g}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${c.days} · ${c.hours}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="editCollaborator" data-id="${c.id}">Editar</button></div></article>`
       }).join('')
     }
 
@@ -4276,7 +4276,7 @@
             <div class="catalog-service-name">
               <span>${s.name}</span>
               <div class="svc-actions">
-                <button class="tiny-btn" onclick="editCatalogItem('service','${s.id}')" title="Editar servicio">✎</button>
+                <button class="tiny-btn" data-action="editCatalogItem" data-type="service" data-id="${s.id}" title="Editar servicio">✎</button>
               </div>
             </div>
             <div class="variant-grid">${s.variants.map(v=>`
@@ -4284,8 +4284,8 @@
                 <div class="variant-chip-top">
                   <span class="variant-chip-name">${v.name}</span>
                   <div class="variant-actions">
-                    <button class="tiny-btn" onclick="editCatalogItem('variant','${v.id}')" title="Editar">✎</button>
-                    <button class="tiny-btn danger" onclick="deleteCatalogItem('variant','${v.id}')" title="Eliminar">✕</button>
+                    <button class="tiny-btn" data-action="editCatalogItem" data-type="variant" data-id="${v.id}" title="Editar">✎</button>
+                    <button class="tiny-btn danger" data-action="deleteCatalogItem" data-type="variant" data-id="${v.id}" title="Eliminar">✕</button>
                   </div>
                 </div>
                 <span class="variant-chip-meta">${v.duration} min</span>
@@ -4300,8 +4300,8 @@
               <div class="catalog-group-name">${g.name}</div>
               <div class="group-head-actions">
                 <span class="catalog-group-type">Servicio</span>
-                <button class="icon-btn" onclick="editCatalogItem('service-group','${g.id}')" title="Editar grupo">✎</button>
-                <button class="icon-btn danger" onclick="deleteCatalogItem('service-group','${g.id}')" title="Eliminar grupo">✕</button>
+                <button class="icon-btn" data-action="editCatalogItem" data-type="service-group" data-id="${g.id}" title="Editar grupo">✎</button>
+                <button class="icon-btn danger" data-action="deleteCatalogItem" data-type="service-group" data-id="${g.id}" title="Eliminar grupo">✕</button>
               </div>
             </div>
             ${items}
@@ -4314,8 +4314,8 @@
           <div><div class="additional-item-name">${a.name}</div><div class="additional-item-meta">${a.duration} min · Grupo: ${a.group}</div></div>
           <div class="item-actions">
             <div class="variant-chip-price">${money(a.price)}</div>
-            <button class="small-btn" onclick="editCatalogItem('additional','${a.id}')">Editar</button>
-            <button class="small-btn danger" onclick="deleteCatalogItem('additional','${a.id}')">✕</button>
+            <button class="small-btn" data-action="editCatalogItem" data-type="additional" data-id="${a.id}">Editar</button>
+            <button class="small-btn danger" data-action="deleteCatalogItem" data-type="additional" data-id="${a.id}">✕</button>
           </div>
         </div>
       `).join('');
@@ -4325,8 +4325,8 @@
           <div><div class="product-item-name">${p.name}</div><div class="product-item-stock">Stock: ${p.stock}</div></div>
           <div class="item-actions">
             <div class="variant-chip-price">${money(p.price)}</div>
-            <button class="small-btn" onclick="editCatalogItem('product','${p.id}')">Editar</button>
-            <button class="small-btn danger" onclick="deleteCatalogItem('product','${p.id}')">✕</button>
+            <button class="small-btn" data-action="editCatalogItem" data-type="product" data-id="${p.id}">Editar</button>
+            <button class="small-btn danger" data-action="deleteCatalogItem" data-type="product" data-id="${p.id}">✕</button>
           </div>
         </div>
       `).join('');
@@ -4368,19 +4368,19 @@
             items.push({type:'product',name:p.name,price:p.price,stock:p.stock,group:'Productos',id:p.id});
           });
         }
-        $('catalogContent').innerHTML = `<div class="catalog-list">${items.map(i=>`<div class="catalog-list-item"><div class="catalog-list-main"><div class="catalog-list-name">${i.name}</div><div class="catalog-list-meta">${i.sub||(i.duration?i.duration+' min · ':'')+money(i.price)+(i.stock!==undefined?' · Stock: '+i.stock:'')}</div><span class="catalog-list-group">${i.group}</span></div><div class="catalog-list-actions"><button class="small-btn" onclick="editCatalogItem('${i.type}','${i.id}')">Editar</button><button class="small-btn danger" onclick="deleteCatalogItem('${i.type}','${i.id}')">✕</button></div></div>`).join('')}</div>`;
+        $('catalogContent').innerHTML = `<div class="catalog-list">${items.map(i=>`<div class="catalog-list-item"><div class="catalog-list-main"><div class="catalog-list-name">${i.name}</div><div class="catalog-list-meta">${i.sub||(i.duration?i.duration+' min · ':'')+money(i.price)+(i.stock!==undefined?' · Stock: '+i.stock:'')}</div><span class="catalog-list-group">${i.group}</span></div><div class="catalog-list-actions"><button class="small-btn" data-action="editCatalogItem" data-type="${i.type}" data-id="${i.id}">Editar</button><button class="small-btn danger" data-action="deleteCatalogItem" data-type="${i.type}" data-id="${i.id}">✕</button></div></div>`).join('')}</div>`;
       } else {
         let sections = [];
         if(filter==='all'||filter==='service'){
           catalog.groups.forEach(g=>{
-            sections.push(`<div class="catalog-compact-section"><div class="catalog-compact-head"><div class="catalog-group-name">${g.name}</div><div class="compact-head-actions"><button class="tiny-btn" onclick="editCatalogItem('service-group','${g.id}')">✎</button><button class="tiny-btn danger" onclick="deleteCatalogItem('service-group','${g.id}')">✕</button><span style="margin-left:8px;cursor:pointer" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▾</span></div></div><div class="catalog-compact-body">${g.services.map(s=>`<div style="margin-bottom:8px"><div class="catalog-service-name" style="font-size:12px;margin-bottom:4px">${s.name}<button class="tiny-btn" onclick="editCatalogItem('service','${s.id}')">✎</button></div>${s.variants.map(v=>`<div class="compact-item"><span class="compact-item-name">${v.name}</span><span class="compact-item-price">${money(v.price)}</span><div class="variant-actions"><button class="tiny-btn" onclick="editCatalogItem('variant','${v.id}')">✎</button><button class="tiny-btn danger" onclick="deleteCatalogItem('variant','${v.id}')">✕</button></div></div>`).join('')}</div>`).join('')}</div></div>`);
+            sections.push(`<div class="catalog-compact-section"><div class="catalog-compact-head"><div class="catalog-group-name">${g.name}</div><div class="compact-head-actions"><button class="tiny-btn" data-action="editCatalogItem" data-type="service-group" data-id="${g.id}">✎</button><button class="tiny-btn danger" data-action="deleteCatalogItem" data-type="service-group" data-id="${g.id}">✕</button><span style="margin-left:8px;cursor:pointer" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▾</span></div></div><div class="catalog-compact-body">${g.services.map(s=>`<div style="margin-bottom:8px"><div class="catalog-service-name" style="font-size:12px;margin-bottom:4px">${s.name}<button class="tiny-btn" data-action="editCatalogItem" data-type="service" data-id="${s.id}">✎</button></div>${s.variants.map(v=>`<div class="compact-item"><span class="compact-item-name">${v.name}</span><span class="compact-item-price">${money(v.price)}</span><div class="variant-actions"><button class="tiny-btn" data-action="editCatalogItem" data-type="variant" data-id="${v.id}">✎</button><button class="tiny-btn danger" data-action="deleteCatalogItem" data-type="variant" data-id="${v.id}">✕</button></div></div>`).join('')}</div>`).join('')}</div></div>`);
           });
         }
         if(filter==='all'||filter==='additional'){
-          sections.push(`<div class="catalog-compact-section"><div class="catalog-compact-head"><div class="catalog-group-name">Adicionales</div><span style="margin-left:8px;cursor:pointer" onclick="this.parentElement.parentElement.classList.toggle('open')">▾</span></div><div class="catalog-compact-body">${catalog.additionals.map(a=>`<div class="compact-item"><span class="compact-item-name">${a.name}</span><span class="compact-item-meta">${a.duration}min</span><span class="compact-item-price">${money(a.price)}</span><div class="variant-actions"><button class="tiny-btn" onclick="editCatalogItem('additional','${a.id}')">✎</button><button class="tiny-btn danger" onclick="deleteCatalogItem('additional','${a.id}')">✕</button></div></div>`).join('')}</div></div>`);
+          sections.push(`<div class="catalog-compact-section"><div class="catalog-compact-head"><div class="catalog-group-name">Adicionales</div><span style="margin-left:8px;cursor:pointer" onclick="this.parentElement.parentElement.classList.toggle('open')">▾</span></div><div class="catalog-compact-body">${catalog.additionals.map(a=>`<div class="compact-item"><span class="compact-item-name">${a.name}</span><span class="compact-item-meta">${a.duration}min</span><span class="compact-item-price">${money(a.price)}</span><div class="variant-actions"><button class="tiny-btn" data-action="editCatalogItem" data-type="additional" data-id="${a.id}">✎</button><button class="tiny-btn danger" data-action="deleteCatalogItem" data-type="additional" data-id="${a.id}">✕</button></div></div>`).join('')}</div></div>`);
         }
         if(filter==='all'||filter==='product'){
-          sections.push(`<div class="catalog-compact-section"><div class="catalog-compact-head"><div class="catalog-group-name">Productos</div><span style="margin-left:8px;cursor:pointer" onclick="this.parentElement.parentElement.classList.toggle('open')">▾</span></div><div class="catalog-compact-body">${catalog.products.map(p=>`<div class="compact-item"><span class="compact-item-name">${p.name}</span><span class="compact-item-meta">Stock: ${p.stock}</span><span class="compact-item-price">${money(p.price)}</span><div class="variant-actions"><button class="tiny-btn" onclick="editCatalogItem('product','${p.id}')">✎</button><button class="tiny-btn danger" onclick="deleteCatalogItem('product','${p.id}')">✕</button></div></div>`).join('')}</div></div>`);
+          sections.push(`<div class="catalog-compact-section"><div class="catalog-compact-head"><div class="catalog-group-name">Productos</div><span style="margin-left:8px;cursor:pointer" onclick="this.parentElement.parentElement.classList.toggle('open')">▾</span></div><div class="catalog-compact-body">${catalog.products.map(p=>`<div class="compact-item"><span class="compact-item-name">${p.name}</span><span class="compact-item-meta">Stock: ${p.stock}</span><span class="compact-item-price">${money(p.price)}</span><div class="variant-actions"><button class="tiny-btn" data-action="editCatalogItem" data-type="product" data-id="${p.id}">✎</button><button class="tiny-btn danger" data-action="deleteCatalogItem" data-type="product" data-id="${p.id}">✕</button></div></div>`).join('')}</div></div>`);
         }
         $('catalogContent').innerHTML = `<div class="catalog-compact">${sections.join('')}</div>`;
       }
@@ -4398,20 +4398,20 @@
       if(!type){
         title='Agregar al catálogo';
         bodyHtml=`<div style="display:flex;flex-direction:column;gap:10px">
-          <button class="btn" onclick="openCatalogDrawer('service-group')" style="text-align:left;padding:14px 16px">
+          <button class="btn" data-action="openCatalogDrawer" data-type="service-group" style="text-align:left;padding:14px 16px">
             <strong>Nuevo grupo de servicios</strong><br><span style="font-size:12px;color:var(--text-muted)">Grupo con servicios y variantes. Ej: Manicuria → Kapping → Gel $8000</span>
           </button>
-          <button class="btn" onclick="openCatalogDrawer('additional')" style="text-align:left;padding:14px 16px">
+          <button class="btn" data-action="openCatalogDrawer" data-type="additional" style="text-align:left;padding:14px 16px">
             <strong>Nuevo adicional agendable</strong><br><span style="font-size:12px;color:var(--text-muted)">Servicio extra rápido. Ej: Diseño francés, esmerilado.</span>
           </button>
-          <button class="btn" onclick="openCatalogDrawer('product')" style="text-align:left;padding:14px 16px">
+          <button class="btn" data-action="openCatalogDrawer" data-type="product" style="text-align:left;padding:14px 16px">
             <strong>Nuevo producto</strong><br><span style="font-size:12px;color:var(--text-muted)">Producto para venta directa. Ej: Aceite cutículas $2500.</span>
           </button>
         </div>`;
         $('catalogSaveBtn').style.display = 'none';
       } else if(type==='service-group'){
         title='Nuevo grupo de servicios';
-        bodyHtml=`<div class="catalog-drawer-section"><h4>Nombre del grupo</h4><input id="catGroupName" placeholder="Ej: Manicuria" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px"></div><div class="catalog-drawer-section"><h4>Servicios con variantes</h4><div id="catServiceList"></div><button class="add-variant-btn" type="button" onclick="addServiceToGroup()">+ Agregar servicio</button></div>`;
+        bodyHtml=`<div class="catalog-drawer-section"><h4>Nombre del grupo</h4><input id="catGroupName" placeholder="Ej: Manicuria" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px"></div><div class="catalog-drawer-section"><h4>Servicios con variantes</h4><div id="catServiceList"></div><button class="add-variant-btn" type="button" data-action="addServiceToGroup">+ Agregar servicio</button></div>`;
       } else if(type==='additional'){
         title='Nuevo adicional';
         bodyHtml=`<div class="catalog-drawer-section"><h4>Nombre</h4><input id="catAddName" placeholder="Ej: Diseño francés" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px"></div><div class="form-grid"><div class="field"><label>Precio</label><input id="catAddPrice" type="number" value="0" min="0"></div><div class="field"><label>Duración (min)</label><input id="catAddDuration" type="number" value="15" min="5"></div></div><div class="catalog-drawer-section"><h4>Grupo</h4><select id="catAddGroup" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px;background:var(--surface)">${catalog.groups.map(g=>`<option value="${g.name}">${g.name}</option>`).join('')}</select></div>`;
@@ -4436,7 +4436,7 @@
         <div class="variant-list-editor" id="varlist-${id}">
           <div class="variant-editor-row"><input placeholder="Nombre variante"><input type="number" placeholder="Precio" min="0"><input type="number" placeholder="Min" min="15" value="60"><button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:0">×</button></div>
         </div>
-        <button type="button" class="add-variant-btn" onclick="addVariantToService('${id}')">+ Agregar variante</button>
+        <button type="button" class="add-variant-btn" data-action="addVariantToService" data-id="${id}">+ Agregar variante</button>
       </div>`;
       list.insertAdjacentHTML('beforeend', html);
     }
@@ -4529,7 +4529,7 @@
         const group = catalog.groups.find(g=>g.id===id);
         if(!group) return showToast('Grupo no encontrado.');
         title = `Editar grupo: ${group.name}`;
-        bodyHtml = `<div class="catalog-drawer-section"><h4>Nombre del grupo</h4><input id="editGroupName" value="${group.name}" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px"></div><div class="catalog-drawer-section"><h4>Servicios y variantes</h4><div id="editSvcList"></div><button class="add-variant-btn" type="button" onclick="addServiceToGroup()">+ Agregar servicio</button></div><div style="margin-top:16px;padding-top:12px;border-top:0.5px solid var(--line)"><button class="small-btn danger" onclick="deleteServiceGroup('${id}')">Eliminar grupo y servicios</button></div>`;
+        bodyHtml = `<div class="catalog-drawer-section"><h4>Nombre del grupo</h4><input id="editGroupName" value="${group.name}" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px"></div><div class="catalog-drawer-section"><h4>Servicios y variantes</h4><div id="editSvcList"></div><button class="add-variant-btn" type="button" data-action="addServiceToGroup">+ Agregar servicio</button></div><div style="margin-top:16px;padding-top:12px;border-top:0.5px solid var(--line)"><button class="small-btn danger" data-action="deleteServiceGroup" data-id="${id}">Eliminar grupo y servicios</button></div>`;
         $('catalogSaveBtn').onclick = ()=>updateServiceGroup(id);
         $('catalogSaveHint').textContent = '';
         $('catalogDrawerBody').innerHTML = bodyHtml;
@@ -4538,12 +4538,12 @@
         openDrawer('catalogDrawer');
         group.services.forEach(svc=>{
           const html = `<div class="variant-editor-row" data-svc="${svc.id}" style="margin-bottom:8px;background:var(--surface-2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px">
-            <div style="display:flex;justify-content:space-between;align-items:center"><input value="${svc.name}" placeholder="Nombre del servicio" style="flex:1;padding:6px 8px;border:0.5px solid var(--line);border-radius:6px;font-size:12px"><button type="button" onclick="deleteService('${svc.id}')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 8px;font-size:12px">✕</button></div>
+            <div style="display:flex;justify-content:space-between;align-items:center"><input value="${svc.name}" placeholder="Nombre del servicio" style="flex:1;padding:6px 8px;border:0.5px solid var(--line);border-radius:6px;font-size:12px"><button type="button" data-action="deleteService" data-id="${svc.id}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:4px 8px;font-size:12px">✕</button></div>
             <div style="font-size:10px;color:var(--text-muted)">Variantes:</div>
             <div class="variant-list-editor" id="varlist-${svc.id}">
-              ${svc.variants.map(v=>`<div class="variant-editor-row"><input value="${v.name}" placeholder="Nombre"><input type="number" value="${v.price}" min="0"><input type="number" value="${v.duration}" min="15"><button type="button" onclick="deleteVariant('${v.id}')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:0">×</button></div>`).join('')}
+              ${svc.variants.map(v=>`<div class="variant-editor-row"><input value="${v.name}" placeholder="Nombre"><input type="number" value="${v.price}" min="0"><input type="number" value="${v.duration}" min="15"><button type="button" data-action="deleteVariant" data-id="${v.id}" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:16px;padding:0">×</button></div>`).join('')}
             </div>
-            <button type="button" class="add-variant-btn" onclick="addVariantToService('${svc.id}')">+ Agregar variante</button>
+            <button type="button" class="add-variant-btn" data-action="addVariantToService" data-id="${svc.id}">+ Agregar variante</button>
           </div>`;
           $('editSvcList').insertAdjacentHTML('beforeend', html);
         });
@@ -4816,7 +4816,7 @@
       if(!$('cashStatus')) return;
       const session = state.cashSession;
       if(!session.isOpen){
-        $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja cerrada</strong><span>Para registrar ventas del día, primero abrí caja con monto inicial obligatorio.</span><div style="margin-top:8px"><button class="small-btn primary" onclick="openCashSession()">Abrir caja</button></div></div>`;
+        $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja cerrada</strong><span>Para registrar ventas del día, primero abrí caja con monto inicial obligatorio.</span><div style="margin-top:8px"><button class="small-btn primary" data-action="openCashSession">Abrir caja</button></div></div>`;
         return;
       }
       const cashSales = state.payments.filter(p=>p.method==='Efectivo'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
@@ -5294,7 +5294,7 @@
     function renderPendingCharges(){
       if(!$('pendingChargesList')) return;
       const list = state.pendingCharges.filter(p=>p.status==='pending');
-      $('pendingChargesList').innerHTML = list.length ? list.map(p=>`<div class="mini-row"><strong>${p.clientNameSnapshot}</strong><span>${p.service} · ${p.serviceOf||fullName(member(p.collaboratorId))} · ${money(p.finalPrice)}<br>Creado por: ${p.createdBy||'—'} · ${new Date(p.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span><div style="margin-top:8px"><button class="small-btn primary" onclick="injectPending('${p.id}')">Cobrar</button><button class="small-btn" onclick="voidPending('${p.id}')">Anular</button></div></div>`).join('') : '<div class="mini-row"><strong>Sin pendientes</strong><span>No hay servicios pendientes de cobro.</span></div>';
+      $('pendingChargesList').innerHTML = list.length ? list.map(p=>`<div class="mini-row"><strong>${p.clientNameSnapshot}</strong><span>${p.service} · ${p.serviceOf||fullName(member(p.collaboratorId))} · ${money(p.finalPrice)}<br>Creado por: ${p.createdBy||'—'} · ${new Date(p.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span><div style="margin-top:8px"><button class="small-btn primary" data-action="injectPending" data-id="${p.id}">Cobrar</button><button class="small-btn" data-action="voidPending" data-id="${p.id}">Anular</button></div></div>`).join('') : '<div class="mini-row"><strong>Sin pendientes</strong><span>No hay servicios pendientes de cobro.</span></div>';
     }
     function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
     function renderCashDaily(){
@@ -5344,7 +5344,7 @@
         const statusLabel = t.status==='partial'?'Pago parcial':t.status==='confirmed'?'Confirmado':'Anulado';
         const statusColor = t.status==='partial'?'warn':t.status==='confirmed'?'ok':'';
         const breakdown = `Total: ${money(t.grossTotal)}${t.depositAppliedTotal>0?' · Seña: −'+money(t.depositAppliedTotal):''}${t.pendingBalance>0?' · <strong style="color:#8a5a14;">Saldo pendiente: '+money(t.pendingBalance)+'</strong>':''}`;
-        return `<div class="mini-row"><strong>${t.clientNameSnapshot} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${t.createdBy||'—'} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" onclick="voidTicket('${t.id}')">Anular ticket</button></div></div>`;
+        return `<div class="mini-row"><strong>${t.clientNameSnapshot} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${t.createdBy||'—'} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button></div></div>`;
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
     function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{ if(!reason)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); renderAll(); showToast('Ticket anulado'); }); }
@@ -5491,7 +5491,7 @@
     }
     function renderAgendaList(mode){
       const title = 'Vista lista del día';
-      const rows = visibleAppointments().sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`<div class="agenda-list-row" id="list-row-${a.id}"><div><strong>${a.start}</strong><br><span>${a.end}</span></div><div><strong>${fullName(client(a.clientId))}</strong><br><span>${a.service} · ${fullName(member(a.memberId))}</span></div><button class="small-btn" onclick="openPopover({currentTarget:document.getElementById('list-row-${a.id}')??this},'${a.id}')">Detalle</button></div>`).join('');
+      const rows = visibleAppointments().sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`<div class="agenda-list-row" id="list-row-${a.id}"><div><strong>${a.start}</strong><br><span>${a.end}</span></div><div><strong>${fullName(client(a.clientId))}</strong><br><span>${a.service} · ${fullName(member(a.memberId))}</span></div><button class="small-btn" data-action="openPopoverForRow" data-id="${a.id}" data-rowid="list-row-${a.id}">Detalle</button></div>`).join('');
       $('agendaListView').innerHTML = `<div class="mini-row"><strong>${title}</strong><span>Ideal para recepción cuando no necesita grilla visual. La vista semana completa queda para la siguiente iteración.</span></div>${rows}`;
     }
     function renderBlockers(memberId){
@@ -5616,7 +5616,7 @@
       const related = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId).sort((x,y)=>x.start.localeCompare(y.start)) : [a];
       const isCombined = related.length > 1;
       const statuses=[{key:'confirmed',label:'Conf.'},{key:'in_progress',label:'En curso'},{key:'completed',label:'Fin.'},{key:'cancelled',label:'Canc.'},{key:'no_show',label:'No show'}];
-      const statusHtml=`<div class="detail-section"><strong>Estado</strong><div class="status-chips">${statuses.map(s=>`<button class="small-btn ${a.status===s.key?'primary':''}" onclick="updateApptStatus('${a.id}','${s.key}')">${s.label}</button>`).join('')}</div></div>`;
+      const statusHtml=`<div class="detail-section"><strong>Estado</strong><div class="status-chips">${statuses.map(s=>`<button class="small-btn ${a.status===s.key?'primary':''}" data-action="updateApptStatus" data-id="${a.id}" data-status="${s.key}">${s.label}</button>`).join('')}</div></div>`;
       const combinedHtml = isCombined ? `<div class="detail-section"><strong>Servicios del turno</strong>${related.map(r=>`<div class="mini-row"><strong>${r.start} - ${r.end}</strong><br><span>${r.service} · ${fullName(member(r.memberId))}${currentApptPrice(r)?` · ${money(currentApptPrice(r))}`:''}</span></div>`).join('')}</div>` : '';
       const servicesList = isCombined ? related.map(r=>r.service).join(', ') : a.service;
       const depositAmt = appointmentDepositAmount(a);
@@ -5625,7 +5625,7 @@
         <div class="popover-body">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;">
             <div class="eyebrow" style="margin:0;">${isCombined?'Turno combinado':'Turno'}</div>
-            <button onclick="closePopover()" style="background:var(--surface-2);border:0;border-radius:8px;width:28px;height:28px;font-size:16px;color:var(--text-muted);cursor:pointer;flex-shrink:0;">×</button>
+            <button data-action="closePopover" style="background:var(--surface-2);border:0;border-radius:8px;width:28px;height:28px;font-size:16px;color:var(--text-muted);cursor:pointer;flex-shrink:0;">×</button>
           </div>
           <h3 style="margin:2px 0 1px;">${fullName(c)}</h3>
           <div class="meta" style="margin-bottom:10px;">${c.phone}</div>
@@ -5637,10 +5637,10 @@
           ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${a.note||c.note}</span></div>`:''}
         </div>
         <div class="popover-footer">
-          <button class="small-btn primary" onclick="chargeFromAppointment('${a.id}')">Cobrar visita</button>
-          <button class="small-btn" onclick="editAppointment('${a.id}');closePopover()">Editar turno</button>
-          <button class="small-btn ${a.deposit==='paid'?'primary':''}" onclick="togglePaid('${a.id}')">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
-          <button class="small-btn" onclick="cancelAppointment('${a.id}','cancelled')">Cancelar</button>
+          <button class="small-btn primary" data-action="chargeFromAppointment" data-id="${a.id}">Cobrar visita</button>
+          <button class="small-btn" data-action="editApptAndClose" data-id="${a.id}">Editar turno</button>
+          <button class="small-btn ${a.deposit==='paid'?'primary':''}" data-action="togglePaid" data-id="${a.id}">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
+          <button class="small-btn" data-action="cancelAppointment" data-id="${a.id}">Cancelar</button>
         </div>`;
       const r=e.currentTarget.getBoundingClientRect?e.currentTarget.getBoundingClientRect():{right:300,top:120};
       const popW=380;
@@ -6027,7 +6027,7 @@
         <input class="appt-group-display" type="hidden" value="${firstSvc.groupName||''}">
         <input class="appt-variant-id-display" type="hidden" value="${firstVar.id||''}">
         <div class="appt-additional-row">
-          <button class="small-btn" type="button" onclick="toggleApptAdditionals('${id}')">+ Agregar adicional</button>
+          <button class="small-btn" type="button" data-action="toggleApptAdditionals" data-id="${id}">+ Agregar adicional</button>
           <div class="appt-additionals-panel" id="addPanel-${id}" style="display:none;margin-top:8px;padding:10px;background:var(--surface-2);border-radius:12px;">
             ${state.catalog.additionals.map(a=>`<label style="display:flex;align-items:center;gap:6px;padding:4px 0;cursor:pointer;font-size:12px"><input type="checkbox" class="appt-add-chk" data-add="${a.id}" data-price="${a.price}" data-duration="${a.duration}"> ${a.name} <span style="color:var(--text-muted)">${money(a.price)} · ${a.duration}min</span></label>`).join('')}
           </div>
@@ -6380,7 +6380,7 @@
       const pending=state.appointments.filter(a=>a.deposit!=='paid').length;
       const byGroup=Object.keys(serviceGroups).map(g=>`${g}: ${state.appointments.filter(a=>a.group===g).length}`).join(' · ');
       const pop=$('detailPopover');
-      pop.innerHTML=`<div class="eyebrow">Cierre del día</div><h3>Resumen operativo</h3><div class="meta">Turnos: ${total}<br>Pagos/señas OK: ${paid}<br>Pendientes: ${pending}</div><div class="detail-section"><strong>Por grupo</strong><span>${byGroup}</span></div><div class="detail-section"><strong>Próximas acciones</strong><span>Revisar pendientes de pago, confirmar próximos turnos y usar Katy para llenar huecos.</span></div>`;
+      pop.innerHTML=`<div class="eyebrow">Cierre del día</div><h3>Resumen operativo</h3><div class="meta">Turnos: ${total}<br>Pagos/señas OK: ${paid}<br>Pendientes: ${pending}</div><div class="detail-section"><strong>Por grupo</strong><span>${byGroup}</span></div><div class="detail-section"><strong>Próximas acciones</strong><span>Revisar pendientes de pago, confirmar próximos turnos y contactar clientes para llenar huecos.</span></div>`;
       pop.style.left='calc(100vw - 410px)'; pop.style.top='120px'; pop.classList.add('open');
     }
 
@@ -6549,7 +6549,7 @@
             <div style="font-size:11px;color:var(--text-soft);margin-top:6px;">${commSummary}</div>
           </div>
           <div class="payroll-card-actions">
-            <button class="small-btn primary" onclick="openPayrollConfigDrawer('${m.id}')">Configurar</button>
+            <button class="small-btn primary" data-action="openPayrollConfigDrawer" data-id="${m.id}">Configurar</button>
           </div>
         </div>`;
       }).join('');
@@ -6585,13 +6585,13 @@
               return `<div class="override-row" data-group="${g.id}" data-oi="${oi}">
                 <select class="ov-svc-select" style="font-size:11px;padding:3px 6px">${g.services.map(s=>`<option value="${s.id}"${s.id===ov.serviceId?' selected':''}>${s.name}</option>`).join('')}</select>
                 <input type="number" class="pct-input ov-pct-input" value="${ov.pct}" min="0" max="100" style="width:55px">
-                <button class="override-del" onclick="removePayrollOverride('${memberId}','${g.id}',${oi})">×</button>
+                <button class="override-del" data-action="removePayrollOverride" data-member="${memberId}" data-gid="${g.id}" data-oi="${oi}">×</button>
               </div>`;
             }).join('');
             return `<tr data-group-row="${g.id}">
               <td><strong style="font-size:13px">${g.name}</strong><div class="override-list" id="overrides-${g.id}">${overrideHtml}</div></td>
               <td style="text-align:right"><input type="number" class="pct-input group-pct-input" data-group-id="${g.id}" value="${existing.pct||0}" min="0" max="100"></td>
-              <td><button class="small-btn" style="font-size:10px" onclick="addPayrollOverride('${memberId}','${g.id}')">+ Servicio</button></td>
+              <td><button class="small-btn" style="font-size:10px" data-action="addPayrollOverride" data-member="${memberId}" data-gid="${g.id}">+ Servicio</button></td>
             </tr>`;
           }).join('')}</tbody>
         </table>`;
@@ -6672,7 +6672,7 @@
           <div class="dr-amount">${money(d.amount)}</div>
           <div class="dr-date">${d.date||'—'}</div>
           <div class="dr-status ${applied}">${applied==='applied'?'Aplicado':'Pendiente'}</div>
-          ${applied==='pending'?`<button class="small-btn" onclick="deleteDeduction('${d.id}')" style="font-size:10px">×</button>`:''}
+          ${applied==='pending'?`<button class="small-btn" data-action="deleteDeduction" data-id="${d.id}" style="font-size:10px">×</button>`:''}
         </div>`;
       }).join('');
     }
@@ -6743,8 +6743,8 @@
             <div class="liq-card-status ${statusCls}">${statusLabel}</div>
           </div>
           <div style="margin-left:16px;display:flex;flex-direction:column;gap:6px">
-            <button class="small-btn primary" onclick="openLiquidationView('${liq.id}')">Ver</button>
-            ${liq.status!=='paid'?`<button class="small-btn" onclick="confirmLiquidationPaid('${liq.id}')">Marcar pagado</button>`:''}
+            <button class="small-btn primary" data-action="openLiquidationView" data-id="${liq.id}">Ver</button>
+            ${liq.status!=='paid'?`<button class="small-btn" data-action="confirmLiquidationPaid" data-id="${liq.id}">Marcar pagado</button>`:''}
           </div>
         </div>`;
       }).join('');
@@ -6788,7 +6788,7 @@
         </div>
         <div style="display:flex;gap:10px;margin-top:24px;justify-content:flex-end">
           <button class="btn" onclick="document.getElementById('liqWizardOverlay').remove()">Cancelar</button>
-          <button class="btn primary" onclick="calculateAndOpenLiquidation()">Calcular</button>
+          <button class="btn primary" data-action="calculateAndOpenLiq">Calcular</button>
         </div>
       </div>`;
       document.body.appendChild(panel);
@@ -6876,7 +6876,7 @@
       `;
       if($('liqViewFooter')) $('liqViewFooter').innerHTML=liq.status==='paid'
         ?`<button class="btn" data-close>Cerrar</button>`
-        :`<button class="btn" data-close>Cerrar</button><button class="btn" onclick="deleteLiquidation('${liqId}')">Eliminar borrador</button><button class="btn primary" onclick="confirmLiquidationPaid('${liqId}')">Marcar como pagado</button>`;
+        :`<button class="btn" data-close>Cerrar</button><button class="btn" data-action="deleteLiquidation" data-id="${liqId}">Eliminar borrador</button><button class="btn primary" data-action="confirmLiquidationPaid" data-id="${liqId}">Marcar como pagado</button>`;
       openDrawer('liquidationViewDrawer');
     }
 
@@ -7089,7 +7089,7 @@
                 <select id="expMethod" class="select-like"><option>Transferencia</option><option>Efectivo</option><option>Tarjeta</option><option>Débito automático</option></select>
               </div>
               <div class="fin-form-field" style="justify-content:flex-end">
-                <button class="btn primary" onclick="registerExpense()">Guardar gasto</button>
+                <button class="btn primary" data-action="registerExpense">Guardar gasto</button>
               </div>
             </div>
           </div>
@@ -7114,7 +7114,7 @@
                   </div>
                   <div class="fin-expense-right">
                     <span class="fin-expense-amount">${money(e.amount)}</span>
-                    <button class="small-btn danger" onclick="deleteExpense('${e.id}')">✕</button>
+                    <button class="small-btn danger" data-action="deleteExpense" data-id="${e.id}">✕</button>
                   </div>
                 </div>
               `).join('')}
@@ -7135,7 +7135,7 @@
       const labels={today:'Hoy',week:'Últimos 7 días',month:'Este mes',year:'Este año'};
       panel.innerHTML=`
         <div class="fin-period-selector">
-          ${['today','week','month','year'].map(p=>`<button class="small-btn ${period===p?'active':''}" onclick="setFinanzasPeriod('${p}')">${{today:'Hoy',week:'Semana',month:'Mes',year:'Año'}[p]}</button>`).join('')}
+          ${['today','week','month','year'].map(p=>`<button class="small-btn ${period===p?'active':''}" data-action="setFinanzasPeriod" data-period="${p}">${{today:'Hoy',week:'Semana',month:'Mes',year:'Año'}[p]}</button>`).join('')}
         </div>
         <div class="fin-section">
           <div class="fin-section-title">${labels[period]||period}</div>
@@ -7412,20 +7412,25 @@
       togglePaid:              el => togglePaid(el.dataset.id),
       voidPending:             el => voidPending(el.dataset.id),
       voidTicket:              el => voidTicket(el.dataset.id),
-      addPayrollOverride:      el => addPayrollOverride(el.dataset.id),
-      addServiceToGroup:       el => addServiceToGroup(el.dataset.id),
-      calculateAndOpenLiq:     el => calculateAndOpenLiquidation(el.dataset.id),
-      fillApptOptions:         el => fillAppointmentOptions(el.dataset.id),
+      addPayrollOverride:      el => addPayrollOverride(el.dataset.member, el.dataset.gid),
+      addServiceToGroup:       () => addServiceToGroup(),
+      calculateAndOpenLiq:     () => calculateAndOpenLiquidation(),
+      fillApptOptions:         el => fillAppointmentOptions(el.dataset.client),
       toggleApptAdditionals:   el => toggleApptAdditionals(el.dataset.id),
       openPopover:             (el,e) => openPopover({currentTarget:el}, el.dataset.id),
       // Con múltiples data attrs
       editCatalogItem:         el => editCatalogItem(el.dataset.type, el.dataset.id),
       deleteCatalogItem:       el => deleteCatalogItem(el.dataset.type, el.dataset.id),
-      addVariantToService:     el => addVariantToService(el.dataset.gid, el.dataset.sid),
-      deleteService:           el => deleteService(el.dataset.gid, el.dataset.sid),
-      deleteVariant:           el => deleteVariant(el.dataset.gid, el.dataset.sid, el.dataset.vid),
-      removePayrollOverride:   el => removePayrollOverride(el.dataset.id, parseInt(el.dataset.idx)),
+      addVariantToService:     el => addVariantToService(el.dataset.id),
+      deleteService:           el => deleteService(el.dataset.id),
+      deleteVariant:           el => deleteVariant(el.dataset.id),
+      openCatalogDrawer:       el => openCatalogDrawer(el.dataset.type, el.dataset.id),
+      removePayrollOverride:   el => removePayrollOverride(el.dataset.member, el.dataset.gid, parseInt(el.dataset.oi)),
       updateApptStatus:        el => updateApptStatus(el.dataset.id, el.dataset.status),
+      // Acciones compuestas semánticas (nueva convención)
+      openApptForClient:       el => { fillAppointmentOptions(el.dataset.client); openDrawer('appointmentDrawer'); },
+      editApptAndClose:        el => { editAppointment(el.dataset.id); closePopover(); },
+      openPopoverForRow:       (el,e) => openPopover({currentTarget:document.getElementById(el.dataset.rowid)||el}, el.dataset.id),
     };
     document.addEventListener('click', e => {
       const el = e.target.closest('[data-action]');
