@@ -3881,6 +3881,8 @@
   <div class="toast" id="toast">Listo.</div>
 
   <script>
+(function() {
+'use strict';
 
     const serviceGroups = {
       'Manicuria':['Semipermanente','Kapping','Soft gel','Esculpidas','Belleza de manos','Nail art'],
@@ -6970,7 +6972,36 @@
     buildCollaboratorForm();fillAppointmentOptions();renderAll();
     setInterval(saveState, 5000);
     window.addEventListener('beforeunload', saveState);
-  
+
+    // setState: centraliza mutaciones de state con validación básica
+    window.setState = function(key, value) {
+      if (!(key in state)) { console.warn('[GLAMB] setState: clave desconocida "' + key + '"'); return; }
+      state[key] = value;
+      saveState();
+    };
+
+    // Window bridge: expone al scope global las funciones usadas por onclick= inline
+    Object.assign(window, {
+      addPayrollOverride, addServiceToGroup, addVariantToService,
+      calculateAndOpenLiquidation, cancelAppointment, chargeFromAppointment,
+      closePopover, confirmLiquidationPaid,
+      deleteCatalogItem, deleteDeduction, deleteLiquidation,
+      deleteService, deleteServiceGroup, deleteVariant,
+      editAppointment, editCatalogItem, editCollaborator,
+      fillAppointmentOptions, injectPending,
+      onGroupFilterChange,
+      openCashSession, openCatalogDrawer, openClientProfile,
+      openDeductionDrawer, openLiquidationView, openNewLiquidation,
+      openPayrollConfigDrawer, openPopover,
+      removePayrollOverride, resetDemo,
+      setCatalogFilter, setCatalogView,
+      showPage, showRrhhTab, showToast,
+      toggleAgendaFilters, toggleApptAdditionals, togglePaid,
+      updateApptStatus, voidPending, voidTicket,
+      wizGoTo, wizSetPayMode
+    });
+
+})();
   </script>
 <script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
