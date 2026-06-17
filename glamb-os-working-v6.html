@@ -3013,7 +3013,7 @@
         <button data-page="rrhh" title="RRHH">◉</button>
         <button data-page="finanzas" title="Finanzas">₿</button>
       </nav>
-      <button class="side-reset-btn" onclick="resetDemo()" title="Resetear demo">↺</button>
+      <button class="side-reset-btn" data-action="resetDemo" title="Resetear demo">↺</button>
     </aside>
 
     <div id="apptTooltip"></div>
@@ -3088,7 +3088,7 @@
             <h1>Agenda del salón</h1>
           </div>
           <div class="top-actions">
-            <button class="btn" onclick="showPage('mobileAgenda')">Vista móvil</button>
+            <button class="btn" data-action="showPage" data-page="mobileAgenda">Vista móvil</button>
             <button class="btn" data-open-collaborator>Colaboradora</button>
             <button class="btn primary" data-open-appointment>Nuevo turno</button>
           </div>
@@ -3106,11 +3106,11 @@
                 <button class="icon-btn" id="nextDay">›</button>
               </div>
               <button class="btn primary toolbar-spacer" data-open-appointment>+ Nuevo turno</button>
-              <button class="small-btn" id="agendaFiltersToggle" onclick="toggleAgendaFilters()" title="Filtros de agenda">⚙ Filtros</button>
+              <button class="small-btn" id="agendaFiltersToggle" data-action="toggleAgendaFilters" title="Filtros de agenda">⚙ Filtros</button>
             </div>
             <div class="toolbar-row" id="agendaFiltersRow" style="display:none;">
               <select class="select-like" id="memberFilter"><option value="Todos">Todos los profesionales</option></select>
-              <select class="select-like" id="groupFilter" onchange="onGroupFilterChange()">
+              <select class="select-like" id="groupFilter">
                 <option value="Todos">Todos los grupos</option>
               </select>
               <div class="toolbar-separator"></div>
@@ -3200,11 +3200,11 @@
         <section class="cash-section active" id="cash-register">
           <!-- Stepper -->
           <div class="wiz-stepper">
-            <div class="wiz-step now" id="wizStepTab1" onclick="wizGoTo(1)"><span class="wiz-n" id="wizN1">1</span>Cliente</div>
+            <div class="wiz-step now" id="wizStepTab1" data-action="wizGoTo" data-step="1"><span class="wiz-n" id="wizN1">1</span>Cliente</div>
             <div class="wiz-step-line"></div>
-            <div class="wiz-step" id="wizStepTab2" onclick="wizGoTo(2)"><span class="wiz-n" id="wizN2">2</span>Servicios</div>
+            <div class="wiz-step" id="wizStepTab2" data-action="wizGoTo" data-step="2"><span class="wiz-n" id="wizN2">2</span>Servicios</div>
             <div class="wiz-step-line"></div>
-            <div class="wiz-step" id="wizStepTab3" onclick="wizGoTo(3)"><span class="wiz-n" id="wizN3">3</span>Cobro</div>
+            <div class="wiz-step" id="wizStepTab3" data-action="wizGoTo" data-step="3"><span class="wiz-n" id="wizN3">3</span>Cobro</div>
           </div>
 
           <!-- PASO 1: Cliente -->
@@ -3244,7 +3244,7 @@
             </section>
             <div class="wiz-nav">
               <div></div>
-              <button class="btn primary wiz-nav right" onclick="wizGoTo(2)">Continuar a servicios →</button>
+              <button class="btn primary wiz-nav right" data-action="wizGoTo" data-step="2">Continuar a servicios →</button>
             </div>
           </div>
 
@@ -3268,8 +3268,8 @@
                   </div>
                 </section>
                 <div class="wiz-nav">
-                  <button class="btn" onclick="wizGoTo(1)">← Cambiar cliente</button>
-                  <button class="btn primary" onclick="wizGoTo(3)">Continuar a cobro →</button>
+                  <button class="btn" data-action="wizGoTo" data-step="1">← Cambiar cliente</button>
+                  <button class="btn primary" data-action="wizGoTo" data-step="3">Continuar a cobro →</button>
                 </div>
               </div>
 
@@ -3278,15 +3278,15 @@
                 <section class="card">
                   <h2 class="section-title" style="margin-bottom:14px;">¿Cómo paga?</h2>
                   <div class="wiz-pay-options">
-                    <div class="wiz-pay-option active" id="wizPayFull" onclick="wizSetPayMode('full')">
+                    <div class="wiz-pay-option active" id="wizPayFull" data-action="wizSetPayMode" data-mode="full">
                       <div><div class="ttl">💵 Paga todo hoy</div><div class="sub">Cobra el saldo completo: <strong id="wizPayFullAmt">$0</strong></div></div>
                       <div class="radio"></div>
                     </div>
-                    <div class="wiz-pay-option" id="wizPayPartial" onclick="wizSetPayMode('partial')">
+                    <div class="wiz-pay-option" id="wizPayPartial" data-action="wizSetPayMode" data-mode="partial">
                       <div><div class="ttl">➗ Pago parcial</div><div class="sub">Cobra una parte y guarda el saldo como pendiente</div></div>
                       <div class="radio"></div>
                     </div>
-                    <div class="wiz-pay-option" id="wizPayPending" onclick="wizSetPayMode('pending')">
+                    <div class="wiz-pay-option" id="wizPayPending" data-action="wizSetPayMode" data-mode="pending">
                       <div><div class="ttl">📋 Todo pendiente</div><div class="sub">Guardar la venta para cobrar otro día</div></div>
                       <div class="radio"></div>
                     </div>
@@ -3327,7 +3327,7 @@
                   <div class="summary-warning" id="summaryWarning" style="margin-top:8px;">El monto ingresado supera el saldo a cobrar.</div>
                 </section>
                 <div class="wiz-nav">
-                  <button class="btn" onclick="wizGoTo(2)">← Servicios</button>
+                  <button class="btn" data-action="wizGoTo" data-step="2">← Servicios</button>
                   <div style="display:flex;gap:8px;">
                     <button class="btn" id="savePendingSaleBtn">Guardar pendiente</button>
                     <button class="btn primary" id="registerSaleBtn" style="padding:11px 28px;">Confirmar venta →</button>
@@ -3406,14 +3406,14 @@
             <p class="subtitle">Configuración de sueldos, comisiones, descuentos y liquidaciones por colaboradora.</p>
           </div>
           <div class="top-actions">
-            <button class="btn" onclick="openDeductionDrawer()">Registrar descuento</button>
-            <button class="btn primary" onclick="openNewLiquidation()">Nueva liquidación</button>
+            <button class="btn" data-action="openDeductionDrawer">Registrar descuento</button>
+            <button class="btn primary" data-action="openNewLiquidation">Nueva liquidación</button>
           </div>
         </div>
         <div class="rrhh-tabs">
-          <button class="rrhh-tab-btn active" onclick="showRrhhTab('config')">Configuración</button>
-          <button class="rrhh-tab-btn" onclick="showRrhhTab('deductions')">Descuentos del período</button>
-          <button class="rrhh-tab-btn" onclick="showRrhhTab('liquidations')">Liquidaciones</button>
+          <button class="rrhh-tab-btn active" data-action="showRrhhTab" data-tab="config">Configuración</button>
+          <button class="rrhh-tab-btn" data-action="showRrhhTab" data-tab="deductions">Descuentos del período</button>
+          <button class="rrhh-tab-btn" data-action="showRrhhTab" data-tab="liquidations">Liquidaciones</button>
         </div>
         <div id="rrhh-config" class="rrhh-panel active"></div>
         <div id="rrhh-deductions" class="rrhh-panel"></div>
@@ -3428,27 +3428,27 @@
             <p class="subtitle">Servicios con variantes, adicionales agendables y productos. Todo lo que impacta en agenda, caja y parte contable.</p>
           </div>
           <div class="top-actions">
-            <button class="btn primary" onclick="openCatalogDrawer()">+ Agregar</button>
+            <button class="btn primary" data-action="openCatalogDrawer">+ Agregar</button>
           </div>
         </div>
 
         <div class="catalog-controls">
           <div class="view-switcher">
-            <button class="view-btn active" data-view="grid" onclick="setCatalogView('grid')">
+            <button class="view-btn active" data-view="grid" data-action="setCatalogView" data-view="grid">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             </button>
-            <button class="view-btn" data-view="list" onclick="setCatalogView('list')">
+            <button class="view-btn" data-view="list" data-action="setCatalogView" data-view="list">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
             </button>
-            <button class="view-btn" data-view="compact" onclick="setCatalogView('compact')">
+            <button class="view-btn" data-view="compact" data-action="setCatalogView" data-view="compact">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="5" rx="1"/><rect x="3" y="10" width="18" height="5" rx="1"/><rect x="3" y="17" width="18" height="5" rx="1"/></svg>
             </button>
           </div>
           <div class="catalog-filters" id="catalogFilters">
-            <button class="filter-btn active" data-filter="all" onclick="setCatalogFilter('all')">Todos</button>
-            <button class="filter-btn" data-filter="service" onclick="setCatalogFilter('service')">Servicios</button>
-            <button class="filter-btn" data-filter="additional" onclick="setCatalogFilter('additional')">Adicionales</button>
-            <button class="filter-btn" data-filter="product" onclick="setCatalogFilter('product')">Productos</button>
+            <button class="filter-btn active" data-filter="all" data-action="setCatalogFilter" data-filter="all">Todos</button>
+            <button class="filter-btn" data-filter="service" data-action="setCatalogFilter" data-filter="service">Servicios</button>
+            <button class="filter-btn" data-filter="additional" data-action="setCatalogFilter" data-filter="additional">Adicionales</button>
+            <button class="filter-btn" data-filter="product" data-action="setCatalogFilter" data-filter="product">Productos</button>
           </div>
         </div>
 
@@ -3464,9 +3464,9 @@
           </div>
         </div>
         <div class="finanzas-tabs">
-          <button class="finanzas-tab-btn active" data-tab="cfo" onclick="showFinanzasTab('cfo')">CFO</button>
-          <button class="finanzas-tab-btn" data-tab="contador" onclick="showFinanzasTab('contador')">Contador</button>
-          <button class="finanzas-tab-btn" data-tab="analista" onclick="showFinanzasTab('analista')">Analista</button>
+          <button class="finanzas-tab-btn active" data-tab="cfo" data-action="showFinanzasTab" data-tab="cfo">CFO</button>
+          <button class="finanzas-tab-btn" data-tab="contador" data-action="showFinanzasTab" data-tab="contador">Contador</button>
+          <button class="finanzas-tab-btn" data-tab="analista" data-action="showFinanzasTab" data-tab="analista">Analista</button>
         </div>
         <div id="finanzas-cfo" class="finanzas-panel active"></div>
         <div id="finanzas-contador" class="finanzas-panel"></div>
@@ -3543,7 +3543,7 @@
       <section class="profile-section">
         <h3>Contacto</h3>
         <div class="mini-row"><strong>WhatsApp</strong><span id="profileWhatsapp">—</span></div>
-        <button class="small-btn primary" onclick="showToast('Abriendo WhatsApp...')">WhatsApp</button>
+        <button class="small-btn primary" data-action="showToast" data-msg="Abriendo WhatsApp...">WhatsApp</button>
         <div class="mini-row"><strong>Email</strong><span id="profileEmail">—</span></div>
       </section>
       <section class="profile-section">
@@ -7369,6 +7369,77 @@
       updateApptStatus, voidPending, voidTicket,
       wizGoTo, wizSetPayMode
     });
+
+    // === EVENT DELEGATOR ===
+    // Regla arquitectónica: todo handler nuevo usa data-action, no onclick=
+    const ACTION_MAP = {
+      // Sin argumentos
+      resetDemo:               () => resetDemo(),
+      openDeductionDrawer:     () => openDeductionDrawer(),
+      openNewLiquidation:      () => openNewLiquidation(),
+      openCatalogDrawer:       () => openCatalogDrawer(),
+      toggleAgendaFilters:     () => toggleAgendaFilters(),
+      closePopover:            () => closePopover(),
+      registerExpense:         () => registerExpense(),
+      // Con data-page
+      showPage:                el => showPage(el.dataset.page),
+      // Con data-tab
+      showRrhhTab:             el => showRrhhTab(el.dataset.tab),
+      showFinanzasTab:         el => showFinanzasTab(el.dataset.tab),
+      // Con data-step
+      wizGoTo:                 el => wizGoTo(parseInt(el.dataset.step)),
+      // Con data-mode
+      wizSetPayMode:           el => wizSetPayMode(el.dataset.mode),
+      // Con data-view / data-filter / data-period / data-msg
+      setCatalogView:          el => setCatalogView(el.dataset.view),
+      setCatalogFilter:        el => setCatalogFilter(el.dataset.filter),
+      setFinanzasPeriod:       el => setFinanzasPeriod(el.dataset.period),
+      showToast:               el => showToast(el.dataset.msg),
+      // Con data-id (un argumento)
+      cancelAppointment:       el => cancelAppointment(el.dataset.id),
+      chargeFromAppointment:   el => chargeFromAppointment(el.dataset.id),
+      confirmLiquidationPaid:  el => confirmLiquidationPaid(el.dataset.id),
+      deleteDeduction:         el => deleteDeduction(el.dataset.id),
+      deleteLiquidation:       el => deleteLiquidation(el.dataset.id),
+      deleteExpense:           el => deleteExpense(el.dataset.id),
+      deleteServiceGroup:      el => deleteServiceGroup(el.dataset.id),
+      editAppointment:         el => editAppointment(el.dataset.id),
+      editCollaborator:        el => editCollaborator(el.dataset.id),
+      injectPending:           el => injectPending(el.dataset.id),
+      openClientProfile:       el => openClientProfile(el.dataset.id),
+      openLiquidationView:     el => openLiquidationView(el.dataset.id),
+      openPayrollConfigDrawer: el => openPayrollConfigDrawer(el.dataset.id),
+      togglePaid:              el => togglePaid(el.dataset.id),
+      voidPending:             el => voidPending(el.dataset.id),
+      voidTicket:              el => voidTicket(el.dataset.id),
+      addPayrollOverride:      el => addPayrollOverride(el.dataset.id),
+      addServiceToGroup:       el => addServiceToGroup(el.dataset.id),
+      calculateAndOpenLiq:     el => calculateAndOpenLiquidation(el.dataset.id),
+      fillApptOptions:         el => fillAppointmentOptions(el.dataset.id),
+      toggleApptAdditionals:   el => toggleApptAdditionals(el.dataset.id),
+      openPopover:             (el,e) => openPopover({currentTarget:el}, el.dataset.id),
+      // Con múltiples data attrs
+      editCatalogItem:         el => editCatalogItem(el.dataset.type, el.dataset.id),
+      deleteCatalogItem:       el => deleteCatalogItem(el.dataset.type, el.dataset.id),
+      addVariantToService:     el => addVariantToService(el.dataset.gid, el.dataset.sid),
+      deleteService:           el => deleteService(el.dataset.gid, el.dataset.sid),
+      deleteVariant:           el => deleteVariant(el.dataset.gid, el.dataset.sid, el.dataset.vid),
+      removePayrollOverride:   el => removePayrollOverride(el.dataset.id, parseInt(el.dataset.idx)),
+      updateApptStatus:        el => updateApptStatus(el.dataset.id, el.dataset.status),
+    };
+    document.addEventListener('click', e => {
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+      const fn = ACTION_MAP[el.dataset.action];
+      if (fn) fn(el, e);
+    });
+    document.addEventListener('change', e => {
+      const el = e.target.closest('[data-action]');
+      if (!el) return;
+      const fn = ACTION_MAP[el.dataset.action];
+      if (fn) fn(el, e);
+    });
+    // === FIN EVENT DELEGATOR ===
 
 })();
   </script>
