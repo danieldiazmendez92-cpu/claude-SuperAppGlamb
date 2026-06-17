@@ -3067,7 +3067,6 @@
               <select class="select-like" id="agendaView">
                 <option value="day">Día</option>
                 <option value="list">Lista</option>
-                <option value="week">Semana</option>
               </select>
               <div class="agenda-zoom-control" aria-label="Zoom de columnas">
                 <button class="small-btn" id="agendaZoomOut" type="button">−</button>
@@ -5360,7 +5359,7 @@
       state.agenda.view = $('agendaView')?.value || 'day';
       refreshAgendaFilters();
       const members=visibleMembers();
-      if(state.agenda.view === 'list' || state.agenda.view === 'week'){
+      if(state.agenda.view === 'list'){
         $('calendarWrap').style.display='none'; $('agendaListView').style.display='block'; renderAgendaList(state.agenda.view); return;
       }
       $('calendarWrap').style.display='block'; $('agendaListView').style.display='none';
@@ -5412,7 +5411,7 @@
       document.querySelectorAll('[data-slot]').forEach(el=>el.onclick=()=>{fillAppointmentOptions();const first=document.querySelector('[data-appt-line]');if(first){first.querySelector('.appt-member-select').value=el.dataset.member;first.querySelector('.appt-start-input').value=el.dataset.time;first.querySelector('.appt-duration-input').value=60;const start=el.dataset.time;first.querySelector('.appointment-line-summary').textContent=`Finaliza ${addMinutes(start,60)}`;}updateApPreview();openDrawer('appointmentDrawer')});
     }
     function renderAgendaList(mode){
-      const title = mode === 'week' ? 'Vista semana simplificada' : 'Vista lista del día';
+      const title = 'Vista lista del día';
       const rows = visibleAppointments().sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`<div class="agenda-list-row" id="list-row-${a.id}"><div><strong>${a.start}</strong><br><span>${a.end}</span></div><div><strong>${fullName(client(a.clientId))}</strong><br><span>${a.service} · ${fullName(member(a.memberId))}</span></div><button class="small-btn" onclick="openPopover({currentTarget:document.getElementById('list-row-${a.id}')??this},'${a.id}')">Detalle</button></div>`).join('');
       $('agendaListView').innerHTML = `<div class="mini-row"><strong>${title}</strong><span>Ideal para recepción cuando no necesita grilla visual. La vista semana completa queda para la siguiente iteración.</span></div>${rows}`;
     }
@@ -6830,7 +6829,7 @@
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
-    ['groupFilter','memberFilter','roleView','agendaView'].forEach(id=>{ if($(id)) $(id).onchange=()=>{renderAgenda(); if(id==='agendaView' && $(id).value==='week') showToast('Vista semana simplificada activada.');}; });
+    ['groupFilter','memberFilter','roleView','agendaView'].forEach(id=>{ if($(id)) $(id).onchange=()=>renderAgenda(); });
     if($('toggleBlockers')) $('toggleBlockers').onclick=()=>{state.agenda.showBlockers=!state.agenda.showBlockers;renderAgenda();};
 
     // ── Blocker drawer ──────────────────────────────────────────────
