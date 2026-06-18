@@ -4895,8 +4895,17 @@
       }
     }
     function isCashAdmin(){ return state.cashMode === 'admin'; }
+    // Efectivo cobrado SOLO en la sesión de caja actual (desde openedAt). Evita que,
+    // al reabrir caja el mismo día, los cobros de la sesión anterior se sumen otra vez
+    // sobre el monto de apertura (que ya incluye esa plata físicamente).
+    function sessionCashIn(){
+      const since = state.cashSession.openedAt || '';
+      return state.payments
+        .filter(p=>p.method==='Efectivo'&&!p.voided&&(p.createdAt||'')>=since)
+        .reduce((sum,p)=>sum+Number(p.amount||0),0);
+    }
     function cashExpectedAmount(){
-      const cashIn = state.payments.filter(p=>p.method==='Efectivo'&&!p.voided).reduce((sum,p)=>sum+Number(p.amount||0),0);
+      const cashIn = sessionCashIn();
       const withdrawals = (state.cashSession.withdrawals||[]).reduce((sum,w)=>sum+Number(w.amount||0),0);
       const cashExpenses = (state.cashSession.expenses||[]).filter(e=>e.method==='Efectivo').reduce((sum,e)=>sum+Number(e.amount||0),0);
       return Number(state.cashSession.openingAmount||0) + cashIn - withdrawals - cashExpenses;
@@ -4909,7 +4918,7 @@
         $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja cerrada</strong><span>Para registrar ventas del día, primero abrí caja con monto inicial obligatorio.</span><div style="margin-top:8px"><button class="small-btn primary" data-action="openCashSession">Abrir caja</button></div></div>`;
         return;
       }
-      const cashSales = state.payments.filter(p=>p.method==='Efectivo'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      const cashSales = sessionCashIn();
       const withdrawals = session.withdrawals.reduce((s,w)=>s+Number(w.amount||0),0);
       const expected = Number(session.openingAmount||0) + cashSales - withdrawals;
       $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja abierta</strong><span>Apertura: ${money(session.openingAmount)} · Efectivo esperado ahora: ${money(expected)} · Abrió: ${session.openedBy||'Admin caja'}</span></div>`;
@@ -7346,6 +7355,7 @@
     // Regla arquitectónica: toda mutación de state pasa por estas funciones
     function addPayment(payment){
       if(!payment.id) payment.id='pay'+Date.now()+Math.random();
+      if(!payment.createdAt) payment.createdAt=new Date().toISOString();
       if(!state.payments) state.payments=[];
       state.payments.push(payment);
       saveState();
