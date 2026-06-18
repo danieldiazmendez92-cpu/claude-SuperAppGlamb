@@ -3070,6 +3070,22 @@
     .week-day-head span{font-size:11px;color:var(--text-muted)}
     .week-day-head.today strong{color:var(--primary,#0E0E0D);text-decoration:underline;text-underline-offset:3px}
     .week-today-col{background:color-mix(in srgb,var(--surface) 94%,#B8963E 6%) !important}
+    .member-head-top{display:flex;align-items:center;gap:8px;width:100%}
+    .member-role{font-size:10.5px;color:var(--text-muted);display:block;margin-top:1px;line-height:1.3}
+    .occupancy-bar{width:100%;height:3px;background:var(--line);border-radius:2px;margin-top:8px;overflow:hidden}
+    .occupancy-fill{height:100%;background:var(--primary,#0E0E0D);border-radius:2px;transition:width 0.3s ease}
+    .appt-header-row{display:flex;align-items:center;justify-content:space-between;gap:4px;min-height:16px}
+    .appt-time-label{font-size:10px;font-weight:600;color:var(--text-muted);white-space:nowrap;flex-shrink:0}
+    .appt-status-pill{font-size:9px;font-weight:600;padding:1px 5px;border-radius:10px;white-space:nowrap;flex-shrink:0}
+    .appt-status-pill.confirmed{background:#E0DED8;color:#3a3a38}
+    .appt-status-pill.in_progress{background:#D4EBDA;color:#2d6b40}
+    .appt-status-pill.completed{background:#E8E8E4;color:#7a7a76;opacity:0.9}
+    .appt-status-pill.cancelled{background:#F5E0E0;color:#a04040}
+    .appt-status-pill.no_show{background:#F5EAD8;color:#8a5c20}
+    .appt-status-pill.pay-pending{background:#FFF0D6;color:#9a6010;border:1px dashed #C2935A}
+    .appt-footer-row{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:2px}
+    .appt-seña{font-size:9.5px;font-weight:600;color:#3f7d4f}
+    .appt-bkid{font-size:9px;color:var(--text-muted);font-variant-numeric:tabular-nums}
     .fin-summary-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg);font-size:13px}
     .fin-summary-row strong{color:var(--text)}
     .fin-summary-row span{font-weight:600}
@@ -5623,7 +5639,7 @@
       if(calendarGrid) calendarGrid.style.width = totalGridWidth + 'px';
       $('membersHeader').style.gridTemplateColumns=cols;
       $('calendarBody').style.gridTemplateColumns=cols;
-      $('membersHeader').innerHTML='<div class="corner-cell"></div>'+members.map(m=>`<div class="member-head"><div class="member-avatar">${initials(m)}</div><div class="member-copy"><strong>${fullName(m)}</strong><span>${m.groups.join(' · ')}</span></div></div>`).join('');
+      $('membersHeader').innerHTML='<div class="corner-cell"></div>'+members.map(m=>{const occ=memberOccupancy(m);const grp=(m.groups||[]).join(' · ')||m.type||'';return `<div class="member-head"><div class="member-head-top"><div class="member-avatar">${initials(m)}</div><div class="member-copy"><strong>${fullName(m)}</strong><span class="member-role">${grp} · ${occ}% ocupación</span></div></div><div class="occupancy-bar"><div class="occupancy-fill" style="width:${occ}%"></div></div></div>`;}).join('');
       const axis=renderTimeAxis();
       const colsHtml=members.map(m=>`<div class="member-column" data-member-col="${m.id}">${renderUnavailableCol(m)}${state.agenda.showBlockers ? renderBlockers(m.id) : ''}${visibleAppointments().filter(a=>a.memberId===m.id).map(renderAppt).join('')}${renderGaps(m.id)}</div>`).join('');
       $('calendarBody').innerHTML=axis+colsHtml;
@@ -5701,31 +5717,42 @@
       if(wEndM<gridEnd) html+=`<div class="col-unavailable" style="top:${topFor(wEnd)}px;height:${(gridEnd-wEndM)*pxPerMin}px"></div>`;
       return html;
     }
+    function memberOccupancy(m){
+      const appts=visibleAppointments().filter(a=>a.memberId===m.id&&!a.isAdditional);
+      const apptMins=appts.reduce((s,a)=>s+mins(a.end)-mins(a.start),0);
+      const todayName=['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][state.agenda.currentDate.getDay()];
+      const daySched=m.schedule&&m.schedule[todayName];
+      let wMins=8*60;
+      if(daySched&&daySched.start&&daySched.end){wMins=mins(daySched.end)-mins(daySched.start);}
+      else if(m.hours){const p=m.hours.split(' - ');if(p.length===2)wMins=mins(p[1].trim())-mins(p[0].trim());}
+      return wMins>0?Math.min(100,Math.round(apptMins/wMins*100)):0;
+    }
     function renderAppt(a){
       const c = client(a.clientId);
       const m = member(a.memberId);
       const paid = a.deposit==='paid'?'paid':a.deposit==='pending'?'pending':'none';
       const depositAmount = appointmentDepositAmount(a);
       const blockH = heightFor(a.start, a.end);
-      const price = currentApptPrice(a) || 0;
-      // Hierarchy thresholds (client → service → professional → time·price)
-      const showClient  = blockH >= 28 && !a.isAdditional;
-      const showService = blockH >= 44;
-      const showPro     = blockH >= 62;
-      const showMeta    = blockH >= 78;
-      const clientRow  = showClient  ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
-      const serviceRow = showService ? `<div class="appt-service">${a.service}</div>` : '';
-      const proRow     = showPro     ? `<div class="appt-professional">${fullName(m)}</div>` : '';
-      const metaRow    = showMeta
-        ? `<div class="appt-meta"><span class="status-dot ${a.status||'confirmed'}"></span>${a.start}–${a.end}${price ? ` · ${money(price)}` : ''}</div>`
-        : (blockH < 28 ? `<div class="appt-meta-tiny">${a.start}</div>` : '');
-      const depositDot = depositAmount > 0 && !a.isAdditional
-        ? `<span class="appt-deposit-dot" title="Seña ${money(depositAmount)}"></span>` : '';
-      const statusClass = `status-${(a.status||'confirmed').replace(/\s+/g,'_')}`;
+      const statusKey = (a.status||'confirmed').replace(/\s+/g,'_');
+      const statusClass = `status-${statusKey}`;
       const vipClass = c.tags.includes('VIP') ? 'vip' : '';
       const pendingClass = paid==='pending' ? 'pending' : '';
       const additionalClass = a.isAdditional ? 'additional' : '';
-      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${depositDot}${clientRow}${serviceRow}${proRow}${metaRow}</div>`;
+      const durationMins = mins(a.end) - mins(a.start);
+      if(blockH < 28){
+        return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px"><div class="appt-meta-tiny">${a.start}${!a.isAdditional?' '+fullName(c):''}</div></div>`;
+      }
+      const STATUS_LABELS={confirmed:'Confirmado',in_progress:'En curso',completed:'Completado',cancelled:'Cancelado',no_show:'No vino'};
+      const isPendingPay = paid==='pending';
+      const pillLabel = isPendingPay ? 'Pago pendiente' : (STATUS_LABELS[statusKey]||statusKey);
+      const pillCls = isPendingPay ? 'pay-pending' : statusKey;
+      const headerRow = `<div class="appt-header-row"><span class="appt-time-label">${a.start}${durationMins>=30?' · '+durationMins+' min':''}</span>${blockH>=44?`<span class="appt-status-pill ${pillCls}">${pillLabel}</span>`:''}</div>`;
+      const clientRow = !a.isAdditional ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
+      const serviceRow = blockH>=56 ? `<div class="appt-service">${a.service}</div>` : '';
+      const bkId = 'BK-'+(a.id||'').slice(-4).toUpperCase();
+      const hasFooter = blockH>=82;
+      const footerRow = hasFooter ? `<div class="appt-footer-row">${depositAmount>0?`<span class="appt-seña">Seña ${money(depositAmount)}</span>`:'<span></span>'}<span class="appt-bkid">${bkId}</span></div>` : '';
+      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${headerRow}${clientRow}${serviceRow}${footerRow}</div>`;
     }
     function renderWeekView(){
       const d = new Date(state.agenda.currentDate);
