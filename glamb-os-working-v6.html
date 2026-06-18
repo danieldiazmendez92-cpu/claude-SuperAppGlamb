@@ -5660,16 +5660,24 @@
       calBody.appendChild(label);
     }
     function renderGaps(memberId){
-      const appts = visibleAppointments().filter(a => a.memberId === memberId).sort((a,b) => mins(a.start) - mins(b.start));
+      const today = dateKey(state.agenda.currentDate);
+      // Los huecos "Agendar" deben respetar tanto turnos como bloqueos visibles;
+      // si no, un empty-slot se dibuja encima del bloqueo y le roba el click.
+      const busy = visibleAppointments().filter(a => a.memberId === memberId).map(a => ({start: mins(a.start), end: mins(a.end)}));
+      if(state.agenda.showBlockers){
+        state.blockers
+          .filter(b => b.memberId === memberId && (!b.date || b.date === today))
+          .forEach(b => busy.push({start: mins(b.start), end: mins(b.end)}));
+      }
+      busy.sort((a,b) => a.start - b.start);
       let cursor = startHour * 60;
       let html = '';
-      appts.forEach(a => {
-        const aStart = mins(a.start);
-        if (aStart - cursor >= 30) {
+      busy.forEach(iv => {
+        if (iv.start - cursor >= 30) {
           const time = `${String(Math.floor(cursor/60)).padStart(2,'0')}:${String(cursor%60).padStart(2,'0')}`;
-          html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" title="Agendar ${time}" style="top:${topFor(time)}px;height:${(aStart - cursor) * pxPerMin}px"></div>`;
+          html += `<div class="empty-slot" data-slot data-member="${memberId}" data-time="${time}" title="Agendar ${time}" style="top:${topFor(time)}px;height:${(iv.start - cursor) * pxPerMin}px"></div>`;
         }
-        cursor = Math.max(cursor, mins(a.end));
+        cursor = Math.max(cursor, iv.end);
       });
       const dayEnd = endHour * 60;
       if (dayEnd - cursor >= 30) {
