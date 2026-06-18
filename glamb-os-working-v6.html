@@ -4350,7 +4350,7 @@
       if(!appt) return 0;
       if(typeof appt.bookingDepositAmount === 'number') return appt.bookingDepositAmount;
       if(typeof appt.depositAmount === 'number') return appt.depositAmount;
-      return appt.deposit === 'paid' ? 5000 : 0;
+      return 0;
     }
     function renderCatalog(){
       const view = state.catalogView || 'grid';
@@ -4871,7 +4871,9 @@
     }
     function renderCashKpis(){
       const confirmed = state.salesTickets.filter(t=>t.status==='confirmed');
-      const ingresos = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      // Ingreso = dinero efectivamente recibido: cobros de servicio + señas recibidas.
+      // NO se cuenta 'deposit_applied' (es reutilizar una seña ya contada al recibirla).
+      const ingresos = state.payments.filter(p=>(p.type==='service'||p.type==='deposit_received')&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
       const transferTotal = state.payments.filter(p=>p.type==='service'&&!p.voided&&p.method==='Transf').reduce((s,p)=>s+Number(p.amount||0),0);
       const expenses = (state.cashSession.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
       const cashExpected = cashExpectedAmount();
@@ -5329,7 +5331,17 @@
       const isPartial = pendingBalance > 1;
       const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:isPartial?'partial':'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.payments,pendingBalance,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
       state.salesTickets.unshift(ticket);
-      if(t.depositApplied>0) addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
+      if(t.depositApplied>0){
+        // Si la seña que se está aplicando no tiene respaldo de dinero recibido
+        // (p.ej. se cargó en el turno y nunca se registró), registrar el ingreso ahora
+        // para que la seña sea dinero real y los totales cuadren.
+        const availableBefore = clientAvailableDeposit(clientIdForTicket);
+        const unbacked = Math.max(0, t.depositApplied - Math.max(0, availableBefore));
+        if(unbacked>0 && clientIdForTicket){
+          addPayment({id:uid('deprec'),ticketId:ticket.id,clientId:clientIdForTicket,amount:unbacked,method:(sourceAppointment&&sourceAppointment.depositMethod)||'Transferencia',type:'deposit_received',reference:'Seña de reserva',note:'Seña cargada en el turno (registrada al cobrar)'});
+        }
+        addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
+      }
       salePayments.forEach(p=>addPayment({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
       if(isPartial){
         state.pendingCharges.unshift({id:'pending'+Date.now(),clientId:clientIdForTicket,clientNameSnapshot:clientName,status:'pending',service:'Saldo de visita',group:'',finalPrice:pendingBalance,depositAmount:0,ticketId:ticket.id,reservationId:ticket.reservationId,createdBy:ticket.createdBy,serviceOf:'—',createdAt:new Date().toISOString()});
@@ -7607,6 +7619,25 @@
     setInterval(renderNowLine, 60000);
     loadState();
     state.appointments.forEach(a=>{ if(!a.date) a.date=dateKey(new Date()); });
+    // Migración: balancear señas aplicadas sin respaldo recibido (señas cargadas en el
+    // turno que nunca se registraron como dinero). Crea el deposit_received faltante por
+    // cliente para que ingresos = servicios y no quede "plata fantasma".
+    (function balanceClientDeposits(){
+      let changed=false;
+      const net={};
+      (state.payments||[]).forEach(p=>{
+        if(p.voided||!p.clientId) return;
+        if(p.type==='deposit_received') net[p.clientId]=(net[p.clientId]||0)+Number(p.amount||0);
+        else if(p.type==='deposit_applied') net[p.clientId]=(net[p.clientId]||0)-Number(p.amount||0);
+      });
+      Object.keys(net).forEach(clientId=>{
+        if(net[clientId] < 0){
+          state.payments.push({id:uid('depmig'),type:'deposit_received',clientId,ticketId:null,amount:-net[clientId],method:'Transferencia',reference:'Seña de reserva',note:'Ajuste: seña cargada en turno no registrada como recibida',createdAt:new Date().toISOString()});
+          changed=true;
+        }
+      });
+      if(changed) saveState();
+    })();
     buildCollaboratorForm();fillAppointmentOptions();renderAll();
     setInterval(saveState, 5000);
     window.addEventListener('beforeunload', saveState);
