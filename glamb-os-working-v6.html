@@ -2948,8 +2948,32 @@
       }
     }
 
+    /* Botón flotante "Nuevo turno" (visible solo en celular) */
+    .agenda-fab {
+      display: none;
+      position: fixed;
+      right: 18px;
+      bottom: 22px;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      border: 0;
+      background: var(--accent);
+      color: #F6F6F4;
+      font-size: 30px;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 29;
+      box-shadow: 0 6px 20px rgba(14,14,13,0.28);
+      align-items: center;
+      justify-content: center;
+      padding: 0 0 3px;
+    }
+    .agenda-fab:active { transform: scale(0.94); }
+
     /* === Agenda compacta en celular (referencia: Fresha) === */
     @media (max-width: 768px) {
+      .agenda-fab { display: flex; }
       /* Cabecera de página: una línea, sin título serif gigante */
       .agenda-topbar { gap: 8px; margin-bottom: 8px; align-items: center; }
       .agenda-topbar .eyebrow { display: none; }
@@ -3183,6 +3207,7 @@
           </div>
           <div class="agenda-list-view" id="agendaListView"></div>
         </section>
+        <button class="agenda-fab" data-open-appointment type="button" aria-label="Nuevo turno" title="Nuevo turno">+</button>
       </section>
 
       <section class="page" id="page-mobileAgenda">
@@ -5493,7 +5518,15 @@
         $('calendarWrap').style.display='none'; $('agendaListView').style.display='block'; renderAgendaList(state.agenda.view); return;
       }
       $('calendarWrap').style.display='block'; $('agendaListView').style.display='none';
-      const columnWidth = state.agenda.colWidth || 140;
+      let columnWidth = state.agenda.colWidth || 140;
+      if(window.innerWidth <= 768 && members.length){
+        // En celular las columnas llenan el ancho (entran ~3, el resto hace scroll), como Fresha.
+        // Se respeta el zoom mediante el factor relativo al ancho base (140px).
+        const zoomFactor = (state.agenda.colWidth || 140) / 140;
+        const avail = window.innerWidth - 72 - 8;
+        const fit = Math.floor(avail / Math.min(members.length, 3));
+        columnWidth = Math.max(96, Math.round(fit * zoomFactor));
+      }
       const totalGridWidth = 72 + (members.length * columnWidth);
       const cols=`72px repeat(${members.length}, ${columnWidth}px)`;
       const calendarGrid = document.querySelector('#calendarWrap .calendar-grid');
@@ -7378,6 +7411,8 @@
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
+    let _agendaResizeT;
+    window.addEventListener('resize', ()=>{ clearTimeout(_agendaResizeT); _agendaResizeT=setTimeout(()=>{ if($('page-agenda')?.classList.contains('active')) renderAgenda(); }, 180); });
     ['groupFilter','memberFilter','roleView','agendaView'].forEach(id=>{ if($(id)) $(id).onchange=()=>renderAgenda(); });
     if($('toggleBlockers')) $('toggleBlockers').onclick=()=>{state.agenda.showBlockers=!state.agenda.showBlockers;renderAgenda();};
 
