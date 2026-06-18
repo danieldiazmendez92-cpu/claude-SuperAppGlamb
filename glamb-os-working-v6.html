@@ -3060,6 +3060,11 @@
     .fin-bar-wrap{flex:1;height:8px;background:var(--bg);border-radius:4px;overflow:hidden}
     .fin-bar-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .4s}
     .fin-bar-amount{width:100px;text-align:right;font-weight:600;color:var(--text);flex-shrink:0}
+    .fin-count{font-weight:400;font-size:11px;color:var(--text-muted)}
+    .fin-daterange{display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+    .fin-daterange label{font-size:12px;color:var(--text-muted);white-space:nowrap}
+    .fin-daterange input[type=date]{padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface);color:var(--text)}
+    .fin-method-total{padding-top:10px;margin-top:8px;border-top:1px solid var(--border);font-size:13px;font-weight:600;display:flex;justify-content:space-between;color:var(--text)}
     .fin-summary-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg);font-size:13px}
     .fin-summary-row strong{color:var(--text)}
     .fin-summary-row span{font-weight:600}
@@ -4146,14 +4151,16 @@
     expenses:[],
     taxRecords:[],
     finanzasTab:'cfo',
-    finanzasPeriod:'month'
+    finanzasPeriod:'month',
+    finanzasCustomFrom:'',
+    finanzasCustomTo:''
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const fullName=x=>`${x.first||''} ${x.last||''}`.trim();
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo'];
     function saveState(){
       try{
         const out={};
@@ -7111,6 +7118,7 @@
       if(period==='week'){const d=new Date(now);d.setDate(d.getDate()-6);return {from:dateKey(d),to:today};}
       if(period==='month'){const d=new Date(now.getFullYear(),now.getMonth(),1);return {from:dateKey(d),to:today};}
       if(period==='year'){const d=new Date(now.getFullYear(),0,1);return {from:dateKey(d),to:today};}
+      if(period==='custom'){return {from:state.finanzasCustomFrom||today,to:state.finanzasCustomTo||today};}
       return {from:today,to:today};
     }
     // Los tickets no guardan campo `date`: la fecha real surge de createdAt (ISO).
@@ -7145,6 +7153,13 @@
       state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to)
         .forEach(t=>(t.lines||[]).forEach(l=>{const m=member(l.collaboratorId);const name=m?fullName(m):'Sin asignar';map[name]=(map[name]||0)+(l.finalPrice||0);}));
       return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    }
+    function finPaymentsByMethod(from,to){
+      const map={};
+      (state.payments||[])
+        .filter(p=>!p.voided&&(p.type==='service'||p.type==='deposit_received')&&(p.createdAt||'').slice(0,10)>=from&&(p.createdAt||'').slice(0,10)<=to)
+        .forEach(p=>{const m=p.method||'Sin método';if(!map[m])map[m]={amount:0,count:0};map[m].amount+=Number(p.amount||0);map[m].count++;});
+      return Object.entries(map).sort((a,b)=>b[1].amount-a[1].amount);
     }
     function finMonotributoCheck(){
       const {from,to}=finDateRange('year');
@@ -7318,11 +7333,21 @@
       const net=rev-exp-payroll;
       const byGroup=finRevenueByGroup(from,to);
       const byCollab=finRevenueByCollaborator(from,to);
+      const byMethod=finPaymentsByMethod(from,to);
+      const methodTotal=byMethod.reduce((s,[,v])=>s+v.amount,0);
+      const methodOps=byMethod.reduce((s,[,v])=>s+v.count,0);
       const periodClients=new Set(state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).map(t=>t.clientId)).size;
-      const labels={today:'Hoy',week:'Últimos 7 días',month:'Este mes',year:'Este año'};
+      const labels={today:'Hoy',week:'Últimos 7 días',month:'Este mes',year:'Este año',custom:`${from} → ${to}`};
       panel.innerHTML=`
         <div class="fin-period-selector">
           ${['today','week','month','year'].map(p=>`<button class="small-btn ${period===p?'active':''}" data-action="setFinanzasPeriod" data-period="${p}">${{today:'Hoy',week:'Semana',month:'Mes',year:'Año'}[p]}</button>`).join('')}
+        </div>
+        <div class="fin-daterange">
+          <label>De</label>
+          <input type="date" id="finFromDate" value="${from}">
+          <label>a</label>
+          <input type="date" id="finToDate" value="${to}">
+          <button class="small-btn ${period==='custom'?'active':''}" data-action="applyFinanzasCustomRange">Aplicar</button>
         </div>
         <div class="fin-section">
           <div class="fin-section-title">${labels[period]||period}</div>
@@ -7349,6 +7374,17 @@
             <div class="fin-bar-amount">${money(v)}</div>
           </div>`).join('')}
         </div>`:''}
+        <div class="fin-section">
+          <div class="fin-section-title">Flujo por método de pago</div>
+          ${byMethod.length?`
+            ${byMethod.map(([m,v])=>`<div class="fin-bar-row">
+              <div class="fin-bar-label">${m}</div>
+              <div class="fin-bar-wrap"><div class="fin-bar-fill" style="width:${methodTotal>0?Math.round((v.amount/methodTotal)*100):0}%"></div></div>
+              <div class="fin-bar-amount">${money(v.amount)}<span class="fin-count"> · ${v.count}</span></div>
+            </div>`).join('')}
+            <div class="fin-method-total"><span>Total cobrado</span><span>${money(methodTotal)} · ${methodOps} operaci${methodOps===1?'ón':'ones'}</span></div>
+          `:`<p class="fin-empty" style="padding:12px 0">Sin cobros registrados en este período.</p>`}
+        </div>
         ${!rev&&!exp?`<p class="fin-empty">Sin datos para el período seleccionado.<br>Registrá ventas en Caja para ver el análisis aquí.</p>`:''}
       `;
     }
@@ -7378,6 +7414,16 @@
     }
     function setFinanzasPeriod(p){
       state.finanzasPeriod=p;
+      renderFinanzasAnalista();
+    }
+    function applyFinanzasCustomRange(){
+      const f=$('finFromDate')?.value, t=$('finToDate')?.value;
+      if(!f||!t) return showToast('Ingresá ambas fechas.');
+      if(f>t) return showToast('La fecha inicial debe ser anterior a la final.');
+      state.finanzasCustomFrom=f;
+      state.finanzasCustomTo=t;
+      state.finanzasPeriod='custom';
+      saveState();
       renderFinanzasAnalista();
     }
     // === FIN MÓDULO FINANZAS ===
@@ -7724,6 +7770,7 @@
       setCatalogView:          el => setCatalogView(el.dataset.view),
       setCatalogFilter:        el => setCatalogFilter(el.dataset.filter),
       setFinanzasPeriod:       el => setFinanzasPeriod(el.dataset.period),
+      applyFinanzasCustomRange: () => applyFinanzasCustomRange(),
       showToast:               el => showToast(el.dataset.msg),
       // Con data-id (un argumento)
       cancelAppointment:       el => cancelAppointment(el.dataset.id),
