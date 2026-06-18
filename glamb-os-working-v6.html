@@ -6700,7 +6700,7 @@
     // ─── RRHH Module ───────────────────────────────────────────────
 
     function showRrhhTab(tab){
-      document.querySelectorAll('.rrhh-tab-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('onclick')&&b.getAttribute('onclick').includes("'"+tab+"'")));
+      document.querySelectorAll('.rrhh-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
       document.querySelectorAll('.rrhh-panel').forEach(p=>p.classList.remove('active'));
       const panel=$('rrhh-'+tab);
       if(panel) panel.classList.add('active');
@@ -7483,7 +7483,7 @@
     function addLiquidation(liq){
       if(!liq.id) liq.id='liq'+uid('');
       if(!state.liquidations) state.liquidations=[];
-      addLiquidation(liq);
+      state.liquidations.push(liq);
       saveState();
       return liq;
     }
