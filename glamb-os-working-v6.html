@@ -2109,6 +2109,12 @@
     .ap-client-chip-sub { font-size:11px; color:var(--text-muted); margin-top:2px;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
+    .ap-blocker-shortcut { display:flex; align-items:center; justify-content:space-between;
+      gap:10px; padding:10px 14px; margin-bottom:14px; background:var(--surface-2);
+      border:0.5px solid var(--line-strong); border-radius:12px; font-size:12.5px;
+      color:var(--text-muted); }
+    .ap-blocker-shortcut .link-btn { flex-shrink:0; white-space:nowrap; font-weight:600; }
+
     .sale-line {
       background: var(--surface-2);
       border: 0.5px solid var(--line);
@@ -3708,6 +3714,10 @@
       <button class="close" data-close>×</button>
     </header>
     <div class="drawer-body">
+      <div id="apBlockerShortcut" class="ap-blocker-shortcut" style="display:none;">
+        <span>¿Bloquear este horario en lugar de agendar un turno?</span>
+        <button class="link-btn" id="apBlockerShortcutBtn" type="button">🚫 Crear bloqueo</button>
+      </div>
       <section class="form-card">
         <h3>Cliente</h3>
         <div id="apClientSearchWrap">
@@ -5571,7 +5581,7 @@
         el.addEventListener('mouseleave',()=>{ const tip=$('apptTooltip'); if(tip) tip.style.display='none'; });
       });
       document.querySelectorAll('[data-member-col]').forEach(col=>{col.ondragover=e=>{e.preventDefault(); col.classList.add('drop-target')}; col.ondragleave=()=>col.classList.remove('drop-target'); col.ondrop=e=>dropAppointment(e,col)});
-      document.querySelectorAll('[data-slot]').forEach(el=>el.onclick=()=>{fillAppointmentOptions();const first=document.querySelector('[data-appt-line]');if(first){first.querySelector('.appt-member-select').value=el.dataset.member;first.querySelector('.appt-start-input').value=el.dataset.time;first.querySelector('.appt-duration-input').value=60;const start=el.dataset.time;first.querySelector('.appointment-line-summary').textContent=`Finaliza ${addMinutes(start,60)}`;}updateApPreview();openDrawer('appointmentDrawer')});
+      document.querySelectorAll('[data-slot]').forEach(el=>el.onclick=()=>{fillAppointmentOptions();const first=document.querySelector('[data-appt-line]');if(first){first.querySelector('.appt-member-select').value=el.dataset.member;first.querySelector('.appt-start-input').value=el.dataset.time;first.querySelector('.appt-duration-input').value=60;const start=el.dataset.time;first.querySelector('.appointment-line-summary').textContent=`Finaliza ${addMinutes(start,60)}`;}updateApPreview();if($('apBlockerShortcut')) $('apBlockerShortcut').style.display='flex';openDrawer('appointmentDrawer')});
     }
     function renderAgendaList(mode){
       const title = 'Vista lista del día';
@@ -5803,6 +5813,7 @@
       $('appointmentDrawerTitle').textContent = 'Editar turno';
       $('appointmentDrawerEyebrow').textContent = 'Modificá los datos del turno';
       $('saveAppointment').textContent = 'Guardar cambios';
+      if($('apBlockerShortcut')) $('apBlockerShortcut').style.display='none';
       openDrawer('appointmentDrawer');
     }
     function updateApptStatus(id, status) {
@@ -6319,6 +6330,7 @@
       $('appointmentDrawerTitle').textContent = 'Nuevo turno';
       $('appointmentDrawerEyebrow').textContent = 'Añadir cita';
       $('saveAppointment').textContent = 'Guardar';
+      if($('apBlockerShortcut')) $('apBlockerShortcut').style.display='none';
       initAppointmentClientSearch();
       updateApPreview();
     }
@@ -7433,7 +7445,7 @@
       const opts=[15,30,45,60,90,120,150,180,240];
       return opts.reduce((a,b)=>Math.abs(b-durationMins)<Math.abs(a-durationMins)?b:a, 60);
     }
-    function openBlockerDrawer(blockerId){
+    function openBlockerDrawer(blockerId, prefill){
       buildBlockerMemberSelect();
       $('blockerDrawerTitle').textContent = blockerId ? 'Editar bloqueo' : 'Nuevo bloqueo';
       $('blockerDeleteBtn').style.display = blockerId ? 'inline-flex' : 'none';
@@ -7451,15 +7463,23 @@
           if(preset) preset.classList.add('active');
         }
       } else {
-        $('blockerMember').value=state.collaborators[0]?.id||'';
+        $('blockerMember').value=(prefill&&prefill.memberId)||state.collaborators[0]?.id||'';
         $('blockerLabel').value='';
-        $('blockerDate').value=dateKey(state.agenda.currentDate);
-        $('blockerStart').value='13:00';
+        $('blockerDate').value=(prefill&&prefill.date)||dateKey(state.agenda.currentDate);
+        $('blockerStart').value=(prefill&&prefill.start)||'13:00';
         $('blockerDuration').value='60';
       }
       openDrawer('blockerDrawer');
     }
     if($('addBlockerBtn')) $('addBlockerBtn').onclick=()=>openBlockerDrawer(null);
+    if($('apBlockerShortcutBtn')) $('apBlockerShortcutBtn').onclick=()=>{
+      const line=document.querySelector('[data-appt-line]');
+      const memberId=line?.querySelector('.appt-member-select')?.value||state.collaborators[0]?.id||'';
+      const start=line?.querySelector('.appt-start-input')?.value||'13:00';
+      const date=$('apDate')?.value||dateKey(state.agenda.currentDate);
+      closeDrawers();
+      openBlockerDrawer(null,{memberId,start,date});
+    };
     if($('blockerPresets')){
       $('blockerPresets').querySelectorAll('[data-preset]').forEach(btn=>{
         btn.onclick=()=>{$('blockerLabel').value=btn.dataset.preset; $('blockerPresets').querySelectorAll('[data-preset]').forEach(b=>b.classList.remove('active')); btn.classList.add('active');};
