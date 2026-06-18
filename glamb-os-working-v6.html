@@ -4877,15 +4877,21 @@
       const serviceIncome = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
       const depositsApplied = state.payments.filter(p=>p.type==='deposit_applied'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
       const ingresos = serviceIncome + depositsApplied;
-      const transferTotal = state.payments.filter(p=>p.type==='service'&&!p.voided&&p.method==='Transf').reduce((s,p)=>s+Number(p.amount||0),0);
+      // Por transferencia = dinero acreditado por transferencia: cobros de servicio +
+      // señas recibidas por ese medio (no el aplicado, que no es dinero nuevo).
+      const transferTotal = state.payments.filter(p=>(p.type==='service'||p.type==='deposit_received')&&!p.voided&&/transf/i.test(p.method||'')).reduce((s,p)=>s+Number(p.amount||0),0);
+      // Señas en haber (pasivo): dinero de señas recibido que todavía no se aplicó a una venta.
+      const depositsReceived = state.payments.filter(p=>p.type==='deposit_received'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      const depositLiability = Math.max(0, depositsReceived - depositsApplied);
       const expenses = (state.cashSession.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
       const cashExpected = cashExpectedAmount();
       const pending = state.pendingCharges.filter(p=>p.status==='pending').length;
       const items = [
         ['Ingresó hoy', money(ingresos), 'servicios + señas aplicadas'],
         ['En efectivo', money(cashExpected), 'esperado en caja'],
-        ['Por transferencia', money(transferTotal), 'acreditado'],
+        ['Por transferencia', money(transferTotal), 'acreditado (incl. señas)'],
         ['Señas aplicadas', money(depositsApplied), 'seña convertida en ingreso'],
+        ['Señas en haber', money(depositLiability), 'pasivo · sin aplicar'],
         ['Gastos', money(expenses), 'egresos del día'],
         ['Pendientes', pending, 'por cobrar']
       ];
@@ -7628,6 +7634,10 @@
     // cliente para que ingresos = servicios y no quede "plata fantasma".
     (function balanceClientDeposits(){
       let changed=false;
+      // Backfill de createdAt en pagos viejos (previos al timestamping). Si hay una sesión
+      // de caja abierta, se les asigna su openedAt para no perderlos del efectivo actual.
+      const stamp = (state.cashSession && state.cashSession.openedAt) ? state.cashSession.openedAt : new Date(0).toISOString();
+      (state.payments||[]).forEach(p=>{ if(!p.createdAt){ p.createdAt=stamp; changed=true; } });
       const net={};
       (state.payments||[]).forEach(p=>{
         if(p.voided||!p.clientId) return;
