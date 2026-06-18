@@ -5041,7 +5041,7 @@
       closeDrawers(); renderAll();
       showToast(`Seña de ${money(amount)} registrada${c?' para '+fullName(c):''}`);
     }
-    function registerExpense(){
+    function openCashExpenseDrawer(){
       if(!isCashAdmin()) return showToast('Solo admin caja puede registrar gastos.');
       if(!state.cashSession.isOpen) return showToast('Primero abrí caja.');
       if($('expenseAmount')) $('expenseAmount').value = 0;
@@ -7628,7 +7628,7 @@
     if($('saveDeductionBtn')) $('saveDeductionBtn').onclick=saveDeduction;
     if($('cashDepositBtn')) $('cashDepositBtn').onclick=registerDeposit;
     if($('cashWithdrawalBtn')) $('cashWithdrawalBtn').onclick=registerWithdrawal;
-    if($('cashExpenseBtn')) $('cashExpenseBtn').onclick=registerExpense;
+    if($('cashExpenseBtn')) $('cashExpenseBtn').onclick=openCashExpenseDrawer;
     if($('confirmDepositBtn')) $('confirmDepositBtn').onclick=confirmDeposit;
     if($('cashCloseBtn')) $('cashCloseBtn').onclick=cashClose;
     if($('confirmCashOpenBtn')) $('confirmCashOpenBtn').onclick=confirmCashOpen;
@@ -7825,6 +7825,6 @@
 
 })();
   </script>
-<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v833ccba57c9e4d2798f2e76cebdd09a11778172276447" integrity="sha512-57MDmcccJXYtNnH+ZiBwzC4jb2rvgVCEokYN+L/nLlmO8rfYT/gIpW2A569iJ/3b+0UEasghjuZH/ma3wIs/EQ==" data-cf-beacon='{"version":"2024.11.0","token":"1954b47c125f43f8b4338b3c4f804e4f","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+
 </body>
 </html>
