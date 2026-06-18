@@ -4231,6 +4231,10 @@
 
     function activeAppointments(){ return state.appointments.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)); }
     function reservationKey(appt){ return appt?.bookingId || appt?.id || null; }
+    // Un turno ya tiene cobro si existe un ticket (confirmado o parcial) para su reserva.
+    function reservationCharged(key){
+      return !!key && state.salesTickets.some(tk=>tk.reservationId===key && (tk.status==='confirmed'||tk.status==='partial'));
+    }
     function reservationAppointments(appt){
       const key = reservationKey(appt);
       if(!key) return [];
@@ -5073,6 +5077,7 @@
         const key = reservationKey(a);
         if(seen.has(key)) return;
         seen.add(key);
+        if(reservationCharged(key)) return; // ya cobrado: no ofrecerlo de nuevo
         const related = reservationAppointments(a);
         const services = related.map(r=>r.service).join(' + ');
         const total = related.reduce((sum,r)=>sum+Number(currentApptPrice(r)||estimateAmount(r)||0),0);
@@ -5739,7 +5744,9 @@
           ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${a.note||c.note}</span></div>`:''}
         </div>
         <div class="popover-footer">
-          <button class="small-btn primary" data-action="chargeFromAppointment" data-id="${a.id}">Cobrar visita</button>
+          ${reservationCharged(reservationKey(a))
+            ? `<button class="small-btn" disabled style="opacity:.6;cursor:default;">✓ Ya cobrado</button>`
+            : `<button class="small-btn primary" data-action="chargeFromAppointment" data-id="${a.id}">Cobrar visita</button>`}
           <button class="small-btn" data-action="editApptAndClose" data-id="${a.id}">Editar turno</button>
           <button class="small-btn ${a.deposit==='paid'?'primary':''}" data-action="togglePaid" data-id="${a.id}">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
           <button class="small-btn" data-action="cancelAppointment" data-id="${a.id}">Cancelar</button>
@@ -5762,6 +5769,12 @@
       $('detailPopover').classList.remove('open');
     }
     function chargeFromAppointment(id){
+      const appt = state.appointments.find(a=>a.id===id);
+      if(appt && reservationCharged(reservationKey(appt))){
+        closePopover();
+        showToast('Este turno ya fue cobrado. Anulá el ticket si querés corregirlo.');
+        return;
+      }
       closePopover();
       showPage('cash');
       setCashTab('register');
