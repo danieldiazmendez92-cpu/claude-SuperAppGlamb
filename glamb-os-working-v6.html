@@ -6480,6 +6480,12 @@
           });
         });
 
+        if(!reservationCharged(oldBookingId)){
+          state.payments=state.payments.filter(p=>!(p.bookingId===oldBookingId&&p.type==='deposit_received'&&!p.voided));
+          if(depositAmount>0&&state.appointmentClient.clientId){
+            addPayment({id:uid('dep'),bookingId:oldBookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',reference:'Seña de reserva',note:'Seña recibida al agendar'});
+          }else{saveState();}
+        }
         state.editingAppointmentId = null;
         closeDrawers();showPage('agenda');showToast('Turno actualizado');
       } else {
@@ -6544,6 +6550,9 @@
             }
           });
         });
+        if(depositAmount>0&&state.appointmentClient.clientId){
+          addPayment({id:uid('dep'),bookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',reference:'Seña de reserva',note:'Seña recibida al agendar'});
+        }
         closeDrawers();showPage('agenda');showToast('Turno agregado a la agenda');
       }
     };
