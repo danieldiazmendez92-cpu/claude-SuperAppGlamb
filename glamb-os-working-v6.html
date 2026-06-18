@@ -3659,6 +3659,7 @@
       <button class="btn accent" id="profileMessage">Enviar mensaje</button>
       <button class="btn" id="profileEditClient">Editar datos</button>
       <button class="btn" id="profileVip">Marcar VIP</button>
+      <button class="btn danger" id="profileDeleteClient">Eliminar</button>
     </footer>
   </aside>
 
@@ -4340,8 +4341,23 @@
       $('teamKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
       $('teamList').innerHTML=state.collaborators.map(c=>{
         const groupLabels = (c.groupIds||[]).map(id=>state.catalog.groups.find(g=>g.id===id)?.name||'').filter(Boolean);
-        return `<article class="person-card"><div class="person-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${c.phone}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${g}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${c.days} · ${c.hours}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="editCollaborator" data-id="${c.id}">Editar</button></div></article>`
+        return `<article class="person-card"><div class="person-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${c.phone}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${g}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${c.days} · ${c.hours}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="editCollaborator" data-id="${c.id}">Editar</button><button class="small-btn danger" data-action="deleteCollaborator" data-id="${c.id}">Eliminar</button></div></article>`
       }).join('')
+    }
+
+    function deleteCollaborator(id){
+      const col = state.collaborators.find(c=>c.id===id);
+      if(!col) return;
+      const apptCount = state.appointments.filter(a=>a.memberId===id).length;
+      const msg = apptCount > 0
+        ? `¿Eliminar a ${fullName(col)}? Tiene ${apptCount} turno(s) asignado(s) que quedarán sin profesional.`
+        : `¿Eliminar a ${fullName(col)}? Esta acción no se puede deshacer.`;
+      showConfirm(msg, ()=>{
+        state.collaborators = state.collaborators.filter(c=>c.id!==id);
+        saveState();
+        renderTeam();
+        showToast('Colaborador/a eliminado/a.');
+      });
     }
 
     function money(n){return '$'+Number(n||0).toLocaleString('es-AR')}
@@ -5046,6 +5062,8 @@
       if(!state.cashSession.isOpen) return showToast('Primero abrí caja.');
       if($('expenseAmount')) $('expenseAmount').value = 0;
       if($('expenseNote')) $('expenseNote').value = '';
+      if($('expenseCategory')) $('expenseCategory').selectedIndex = 0;
+      if($('expenseMethod')) $('expenseMethod').selectedIndex = 0;
       openDrawer('cashExpenseDrawer');
     }
     function confirmExpense(){
@@ -6607,7 +6625,23 @@
       $('profileMessage').onclick = ()=>showToast('Abriendo WhatsApp...');
       $('profileVip').onclick = ()=>{ if(!c.tags.includes('VIP')) c.tags.push('VIP'); renderClients(); openClientProfile(c.id); showToast('Cliente marcado como VIP.'); };
       $('profileEditClient').onclick = ()=>{ closeDrawers(); editClient(c.id); };
+      $('profileDeleteClient').onclick = ()=>deleteClient(c.id);
       openDrawer('clientProfileDrawer');
+    }
+
+    function deleteClient(id){
+      const c = client(id);
+      const apptCount = state.appointments.filter(a=>a.clientId===id).length;
+      const msg = apptCount > 0
+        ? `¿Eliminar a ${fullName(c)}? Tiene ${apptCount} turno(s) en agenda que quedarán sin cliente asignado.`
+        : `¿Eliminar a ${fullName(c)}? Esta acción no se puede deshacer.`;
+      showConfirm(msg, ()=>{
+        state.clients = state.clients.filter(x=>x.id!==id);
+        saveState();
+        closeDrawers();
+        renderClients();
+        showToast('Cliente eliminado.');
+      });
     }
 
     const agendaZoomSteps = [100, 120, 140, 160, 190];
@@ -7782,6 +7816,7 @@
       deleteServiceGroup:      el => deleteServiceGroup(el.dataset.id),
       editAppointment:         el => editAppointment(el.dataset.id),
       editCollaborator:        el => editCollaborator(el.dataset.id),
+      deleteCollaborator:      el => deleteCollaborator(el.dataset.id),
       injectPending:           el => injectPending(el.dataset.id),
       openClientProfile:       el => openClientProfile(el.dataset.id),
       openLiquidationView:     el => openLiquidationView(el.dataset.id),
