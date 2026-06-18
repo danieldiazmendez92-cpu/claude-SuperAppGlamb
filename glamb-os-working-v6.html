@@ -4871,17 +4871,21 @@
     }
     function renderCashKpis(){
       const confirmed = state.salesTickets.filter(t=>t.status==='confirmed');
-      // Ingreso = dinero efectivamente recibido: cobros de servicio + señas recibidas.
-      // NO se cuenta 'deposit_applied' (es reutilizar una seña ya contada al recibirla).
-      const ingresos = state.payments.filter(p=>(p.type==='service'||p.type==='deposit_received')&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      // INGRESO = servicios cobrados + señas aplicadas. La seña, al recibirse, es dinero
+      // pero un PASIVO (no ingreso); recién al concretarse la venta (deposit_applied) se
+      // reconoce como ingreso. La seña recibida (deposit_received) NO suma a ingresos.
+      const serviceIncome = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      const depositsApplied = state.payments.filter(p=>p.type==='deposit_applied'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      const ingresos = serviceIncome + depositsApplied;
       const transferTotal = state.payments.filter(p=>p.type==='service'&&!p.voided&&p.method==='Transf').reduce((s,p)=>s+Number(p.amount||0),0);
       const expenses = (state.cashSession.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
       const cashExpected = cashExpectedAmount();
       const pending = state.pendingCharges.filter(p=>p.status==='pending').length;
       const items = [
-        ['Ingresó hoy', money(ingresos), 'cobrado en el día'],
+        ['Ingresó hoy', money(ingresos), 'servicios + señas aplicadas'],
         ['En efectivo', money(cashExpected), 'esperado en caja'],
         ['Por transferencia', money(transferTotal), 'acreditado'],
+        ['Señas aplicadas', money(depositsApplied), 'seña convertida en ingreso'],
         ['Gastos', money(expenses), 'egresos del día'],
         ['Pendientes', pending, 'por cobrar']
       ];
