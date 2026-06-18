@@ -7060,8 +7060,13 @@
       if(period==='year'){const d=new Date(now.getFullYear(),0,1);return {from:dateKey(d),to:today};}
       return {from:today,to:today};
     }
+    // Los tickets no guardan campo `date`: la fecha real surge de createdAt (ISO).
+    function finTicketDay(t){ return t.date || (t.createdAt ? t.createdAt.slice(0,10) : ''); }
+    // Ingreso del ticket = servicios (sin propinas, que son pass-through a la colaboradora);
+    // coincide con la suma de finalPrice por línea usada en los desgloses.
+    function finTicketRevenue(t){ return t.servicesTotal != null ? t.servicesTotal : (t.lines||[]).reduce((s,l)=>s+(l.finalPrice||0),0); }
     function finRevenue(from,to){
-      return state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to).reduce((s,t)=>s+(t.total||0),0);
+      return state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).reduce((s,t)=>s+finTicketRevenue(t),0);
     }
     function finExpenses(from,to){
       return (state.expenses||[]).filter(e=>e.date>=from&&e.date<=to).reduce((s,e)=>s+(e.amount||0),0);
@@ -7070,22 +7075,22 @@
       return (state.liquidations||[]).filter(l=>l.status==='paid'&&l.date&&l.date>=from&&l.date<=to).reduce((s,l)=>s+(l.totalPaid||0),0);
     }
     function finTicketCount(from,to){
-      return state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to).length;
+      return state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).length;
     }
     function finAvgTicket(from,to){
-      const ts=state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to);
-      return ts.length?ts.reduce((s,t)=>s+(t.total||0),0)/ts.length:0;
+      const ts=state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to);
+      return ts.length?ts.reduce((s,t)=>s+finTicketRevenue(t),0)/ts.length:0;
     }
     function finRevenueByGroup(from,to){
       const map={};
-      state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to)
-        .forEach(t=>(t.lines||[]).forEach(l=>{const g=l.group||'Sin grupo';map[g]=(map[g]||0)+(l.total||0);}));
+      state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to)
+        .forEach(t=>(t.lines||[]).forEach(l=>{const g=l.group||'Sin grupo';map[g]=(map[g]||0)+(l.finalPrice||0);}));
       return Object.entries(map).sort((a,b)=>b[1]-a[1]);
     }
     function finRevenueByCollaborator(from,to){
       const map={};
-      state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to)
-        .forEach(t=>(t.lines||[]).forEach(l=>{const m=member(l.collaboratorId);const name=m?fullName(m):'Sin asignar';map[name]=(map[name]||0)+(l.total||0);}));
+      state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to)
+        .forEach(t=>(t.lines||[]).forEach(l=>{const m=member(l.collaboratorId);const name=m?fullName(m):'Sin asignar';map[name]=(map[name]||0)+(l.finalPrice||0);}));
       return Object.entries(map).sort((a,b)=>b[1]-a[1]);
     }
     function finMonotributoCheck(){
@@ -7260,7 +7265,7 @@
       const net=rev-exp-payroll;
       const byGroup=finRevenueByGroup(from,to);
       const byCollab=finRevenueByCollaborator(from,to);
-      const periodClients=new Set(state.salesTickets.filter(t=>t.status!=='voided'&&t.date>=from&&t.date<=to).map(t=>t.clientId)).size;
+      const periodClients=new Set(state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).map(t=>t.clientId)).size;
       const labels={today:'Hoy',week:'Últimos 7 días',month:'Este mes',year:'Este año'};
       panel.innerHTML=`
         <div class="fin-period-selector">
