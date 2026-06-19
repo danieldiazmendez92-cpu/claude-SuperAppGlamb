@@ -5854,7 +5854,28 @@
         el.addEventListener('mouseleave',()=>{ const tip=$('apptTooltip'); if(tip) tip.style.display='none'; });
       });
       document.querySelectorAll('[data-member-col]').forEach(col=>{col.ondragover=e=>{e.preventDefault(); col.classList.add('drop-target')}; col.ondragleave=()=>col.classList.remove('drop-target'); col.ondrop=e=>dropAppointment(e,col)});
-      document.querySelectorAll('[data-slot]').forEach(el=>el.onclick=()=>{fillAppointmentOptions();const first=document.querySelector('[data-appt-line]');if(first){first.querySelector('.appt-member-select').value=el.dataset.member;first.querySelector('.appt-start-input').value=el.dataset.time;first.querySelector('.appt-duration-input').value=60;const start=el.dataset.time;first.querySelector('.appointment-line-summary').textContent=`Finaliza ${addMinutes(start,60)}`;}updateApPreview();if($('apBlockerShortcut')) $('apBlockerShortcut').style.display='flex';openDrawer('appointmentDrawer')});
+      document.querySelectorAll('[data-slot]').forEach(el=>el.onclick=ev=>{
+        // Calcular la hora exacta del click dentro del slot
+        const interval = parseInt($('slotInterval')?.value||30);
+        const slotStartMins = mins(el.dataset.time);
+        const rawMins = slotStartMins + ev.offsetY / pxPerMin;
+        const rounded = Math.round(rawMins / interval) * interval;
+        const clamped = Math.max(startHour*60, Math.min(endHour*60 - interval, rounded));
+        const hh = String(Math.floor(clamped/60)).padStart(2,'0');
+        const mm = String(clamped%60).padStart(2,'0');
+        const clickedTime = `${hh}:${mm}`;
+        fillAppointmentOptions();
+        const first=document.querySelector('[data-appt-line]');
+        if(first){
+          first.querySelector('.appt-member-select').value=el.dataset.member;
+          first.querySelector('.appt-start-input').value=clickedTime;
+          first.querySelector('.appt-duration-input').value=60;
+          first.querySelector('.appointment-line-summary').textContent=`Finaliza ${addMinutes(clickedTime,60)}`;
+        }
+        updateApPreview();
+        if($('apBlockerShortcut')) $('apBlockerShortcut').style.display='flex';
+        openDrawer('appointmentDrawer');
+      });
     }
     function renderAgendaList(mode){
       const title = 'Vista lista del día';
