@@ -954,6 +954,76 @@
       user-select: none;
     }
 
+    .datepicker-popup {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface);
+      border: 1px solid var(--line-strong);
+      border-radius: 14px;
+      box-shadow: 0 12px 40px rgba(14,14,13,0.15);
+      padding: 12px;
+      z-index: 200;
+      width: 248px;
+    }
+    .dp-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .dp-title {
+      font-family: 'Cormorant', serif;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text);
+      display: flex;
+      gap: 6px;
+    }
+    .dp-clickable {
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: 5px;
+    }
+    .dp-clickable:hover { background: var(--surface-2); }
+    .dp-days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+    }
+    .dp-day-name {
+      text-align: center;
+      font-size: 9px;
+      color: var(--text-soft);
+      padding: 2px 0 5px;
+      letter-spacing: 0.05em;
+    }
+    .dp-day {
+      text-align: center;
+      padding: 5px 0;
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text);
+      background: none;
+      border: none;
+      cursor: pointer;
+      width: 100%;
+    }
+    .dp-day:hover { background: var(--surface-2); }
+    .dp-day.dp-other { color: var(--text-soft); }
+    .dp-day.dp-today { font-weight: 700; background: var(--surface-2); }
+    .dp-day.dp-sel { background: var(--accent) !important; color: #fff; font-weight: 700; }
+    .dp-months-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .dp-years-grid  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    .dp-month-btn, .dp-year-btn {
+      background: none; border: none; border-radius: 8px;
+      padding: 9px 4px; font-size: 13px; color: var(--text); cursor: pointer; width: 100%;
+    }
+    .dp-month-btn:hover, .dp-year-btn:hover { background: var(--surface-2); }
+    .dp-month-btn.dp-sel, .dp-year-btn.dp-sel { background: var(--accent) !important; color: #fff; font-weight: 700; }
+    .dp-year-range { font-family: 'Cormorant', serif; font-size: 16px; color: var(--text); }
+
     .col-unavailable {
       position: absolute;
       left: 0;
@@ -3209,8 +3279,8 @@
               <div class="date-control">
                 <button class="icon-btn" id="prevDay">‹</button>
                 <div style="position:relative;display:inline-flex;align-items:center;">
-                  <div class="date-title" id="dateTitle" title="Ir a una fecha">sáb 6 jun</div>
-                  <input type="date" id="agendaDatePicker" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border:none;padding:0;">
+                  <div class="date-title" id="dateTitle" title="Abrir calendario" data-action="toggleDatePicker">sáb 6 jun</div>
+                  <div id="datepickerPopup" class="datepicker-popup" style="display:none;"></div>
                 </div>
                 <button class="icon-btn" id="nextDay">›</button>
               </div>
@@ -7824,6 +7894,8 @@
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
     let _agendaResizeT;
+    let _dpViewDate = null;
+    let _dpMode = 'days';
     window.addEventListener('resize', ()=>{ clearTimeout(_agendaResizeT); _agendaResizeT=setTimeout(()=>{ if($('page-agenda')?.classList.contains('active')) renderAgenda(); }, 180); });
     ['groupFilter','memberFilter','roleView','agendaView'].forEach(id=>{ if($(id)) $(id).onchange=()=>renderAgenda(); });
     if($('toggleBlockers')) $('toggleBlockers').onclick=()=>{state.agenda.showBlockers=!state.agenda.showBlockers;renderAgenda();};
@@ -7960,14 +8032,110 @@
     if($('prevDay')) $('prevDay').onclick = () => { const d=state.agenda.view==='week'?-7:-1; state.agenda.currentDate.setDate(state.agenda.currentDate.getDate()+d); updateDateTitle(); renderAgenda(); };
     if($('nextDay')) $('nextDay').onclick = () => { const d=state.agenda.view==='week'?7:1; state.agenda.currentDate.setDate(state.agenda.currentDate.getDate()+d); updateDateTitle(); renderAgenda(); };
     if($('todayBtn')) $('todayBtn').onclick = () => { state.agenda.currentDate = new Date(); updateDateTitle(); renderAgenda(); };
-    if($('agendaDatePicker')) $('agendaDatePicker').onchange = () => {
-      const val = $('agendaDatePicker').value;
-      if(!val) return;
-      const [y,mo,d] = val.split('-').map(Number);
+    // === MINI-CALENDARIO (date picker) ===
+    const DP_MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+    function toggleDatePicker() {
+      const popup = $('datepickerPopup');
+      if (!popup) return;
+      if (popup.style.display !== 'none') { popup.style.display = 'none'; return; }
+      _dpViewDate = new Date(state.agenda.currentDate.getFullYear(), state.agenda.currentDate.getMonth(), 1);
+      _dpMode = 'days';
+      renderDpGrid();
+      popup.style.display = 'block';
+    }
+
+    function renderDpGrid() {
+      const popup = $('datepickerPopup');
+      if (!popup) return;
+      const y = _dpViewDate.getFullYear(), m = _dpViewDate.getMonth();
+      const selKey = dateKey(state.agenda.currentDate);
+      const todayKey = dateKey(new Date());
+
+      if (_dpMode === 'years') {
+        const base = y - Math.floor(y % 12);
+        const years = Array.from({length:12}, (_,i) => base + i);
+        popup.innerHTML = `
+          <div class="dp-header">
+            <button class="icon-btn" data-action="dpNavYears" data-dir="-1">‹</button>
+            <span class="dp-year-range">${base} – ${base+11}</span>
+            <button class="icon-btn" data-action="dpNavYears" data-dir="1">›</button>
+          </div>
+          <div class="dp-years-grid">
+            ${years.map(yr => `<button class="dp-year-btn${yr===state.agenda.currentDate.getFullYear()?' dp-sel':''}" data-action="dpPickYear" data-year="${yr}">${yr}</button>`).join('')}
+          </div>`;
+        return;
+      }
+
+      if (_dpMode === 'months') {
+        popup.innerHTML = `
+          <div class="dp-header">
+            <button class="icon-btn" data-action="dpNavYear" data-dir="-1">‹</button>
+            <span class="dp-title"><span class="dp-clickable" data-action="dpToggleYears">${y}</span></span>
+            <button class="icon-btn" data-action="dpNavYear" data-dir="1">›</button>
+          </div>
+          <div class="dp-months-grid">
+            ${DP_MONTHS.map((mn,i) => {
+              const isSel = i===state.agenda.currentDate.getMonth() && y===state.agenda.currentDate.getFullYear();
+              return `<button class="dp-month-btn${isSel?' dp-sel':''}" data-action="dpPickMonth" data-month="${i}">${mn.slice(0,3)}</button>`;
+            }).join('')}
+          </div>`;
+        return;
+      }
+
+      // days mode
+      let startDow = (new Date(y, m, 1).getDay() + 6) % 7; // Mon=0
+      const cells = [];
+      for (let i = 0; i < startDow; i++) {
+        cells.push({ date: new Date(y, m, 1 - (startDow - i)), other: true });
+      }
+      const dim = new Date(y, m+1, 0).getDate();
+      for (let i = 1; i <= dim; i++) cells.push({ date: new Date(y, m, i), other: false });
+      while (cells.length % 7 !== 0) {
+        const nxt = new Date(cells[cells.length-1].date);
+        nxt.setDate(nxt.getDate()+1);
+        cells.push({ date: nxt, other: true });
+      }
+
+      popup.innerHTML = `
+        <div class="dp-header">
+          <button class="icon-btn" data-action="dpPrevMonth">‹</button>
+          <span class="dp-title">
+            <span class="dp-clickable" data-action="dpToggleMonths">${DP_MONTHS[m]}</span>
+            <span class="dp-clickable" data-action="dpToggleYears">${y}</span>
+          </span>
+          <button class="icon-btn" data-action="dpNextMonth">›</button>
+        </div>
+        <div class="dp-days-grid">
+          ${['L','M','M','J','V','S','D'].map(n=>`<span class="dp-day-name">${n}</span>`).join('')}
+          ${cells.map(c => {
+            const k = dateKey(c.date);
+            const cls = ['dp-day', c.other?'dp-other':'', k===todayKey?'dp-today':'', k===selKey?'dp-sel':''].filter(Boolean).join(' ');
+            return `<button class="${cls}" data-action="dpPickDay" data-date="${k}">${c.date.getDate()}</button>`;
+          }).join('')}
+        </div>`;
+    }
+
+    function dpPrevMonth()  { _dpViewDate.setMonth(_dpViewDate.getMonth()-1); renderDpGrid(); }
+    function dpNextMonth()  { _dpViewDate.setMonth(_dpViewDate.getMonth()+1); renderDpGrid(); }
+    function dpPickDay(el)  {
+      const [y,mo,d] = el.dataset.date.split('-').map(Number);
       state.agenda.currentDate = new Date(y, mo-1, d);
-      updateDateTitle();
-      renderAgenda();
-    };
+      updateDateTitle(); renderAgenda();
+      $('datepickerPopup').style.display = 'none';
+    }
+    function dpPickMonth(el) { _dpViewDate.setMonth(parseInt(el.dataset.month)); _dpMode='days'; renderDpGrid(); }
+    function dpNavYear(el)   { _dpViewDate.setFullYear(_dpViewDate.getFullYear()+parseInt(el.dataset.dir)); renderDpGrid(); }
+    function dpNavYears(el)  { _dpViewDate.setFullYear(_dpViewDate.getFullYear()+parseInt(el.dataset.dir)*12); renderDpGrid(); }
+    function dpPickYear(el)  { _dpViewDate.setFullYear(parseInt(el.dataset.year)); _dpMode='months'; renderDpGrid(); }
+    function dpToggleMonths(){ _dpMode = _dpMode==='months'?'days':'months'; renderDpGrid(); }
+    function dpToggleYears() { _dpMode = _dpMode==='years' ?'days':'years';  renderDpGrid(); }
+
+    document.addEventListener('click', e => {
+      const popup = $('datepickerPopup');
+      if (!popup || popup.style.display==='none') return;
+      if (!popup.contains(e.target) && !e.target.closest('#dateTitle')) popup.style.display = 'none';
+    }, true);
     setInterval(renderNowLine, 60000);
     loadState();
     state.appointments.forEach(a=>{ if(!a.date) a.date=dateKey(new Date()); });
@@ -8042,6 +8210,16 @@
       openNewLiquidation:      () => openNewLiquidation(),
       openCatalogDrawer:       () => openCatalogDrawer(),
       toggleAgendaFilters:     () => toggleAgendaFilters(),
+      toggleDatePicker:        () => toggleDatePicker(),
+      dpPrevMonth:             () => dpPrevMonth(),
+      dpNextMonth:             () => dpNextMonth(),
+      dpToggleMonths:          () => dpToggleMonths(),
+      dpToggleYears:           () => dpToggleYears(),
+      dpPickDay:               el => dpPickDay(el),
+      dpPickMonth:             el => dpPickMonth(el),
+      dpPickYear:              el => dpPickYear(el),
+      dpNavYear:               el => dpNavYear(el),
+      dpNavYears:              el => dpNavYears(el),
       closePopover:            () => closePopover(),
       registerExpense:         () => registerExpense(),
       // Con data-page
