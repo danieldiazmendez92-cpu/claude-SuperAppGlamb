@@ -3094,6 +3094,18 @@
     .fin-budget-spent{min-width:80px;text-align:right;font-weight:500;color:var(--text)}
     .fin-budget-sep{color:var(--text-muted)}
     .fin-budget-limit{min-width:80px;text-align:left;color:var(--text-muted)}
+    .katy-greeting{font-size:13px;color:#cbb8a6;margin-bottom:14px;line-height:1.5}
+    .katy-section{margin-bottom:16px}
+    .katy-section-label{font-size:10px;font-weight:600;letter-spacing:0.06em;color:#9a8870;text-transform:uppercase;margin-bottom:8px}
+    .katy-card{background:rgba(255,255,255,0.06);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+    .katy-card-title{font-size:13px;font-weight:600;color:#f0ebe3;margin-bottom:3px}
+    .katy-card-body{font-size:11.5px;color:#b0a090;line-height:1.4;margin-bottom:8px}
+    .katy-copy-btn{font-size:11px;background:rgba(255,255,255,0.1);border:0;border-radius:6px;color:#e0d8cc;padding:4px 10px;cursor:pointer;width:100%}
+    .katy-copy-btn:hover{background:rgba(255,255,255,0.18)}
+    .katy-slot{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#b0a090;padding:5px 0;border-bottom:0.5px solid rgba(255,255,255,0.07)}
+    .katy-slot:last-child{border-bottom:none}
+    .katy-slot strong{color:#e0d8cc}
+    .katy-empty{font-size:12px;color:#7a6e62;font-style:italic}
     .fin-summary-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg);font-size:13px}
     .fin-summary-row strong{color:var(--text)}
     .fin-summary-row span{font-weight:600}
@@ -3157,13 +3169,8 @@
           </div>
           <aside class="dark-panel">
             <div class="eyebrow" style="color:#cbb8a6">Asistente</div>
-            <h2>Oportunidades</h2>
-            <div class="muted" id="katySummary"></div>
-            <div class="tags">
-              <span class="tag white">Huecos</span>
-              <span class="tag white">WhatsApp</span>
-              <span class="tag white">Reactivación</span>
-            </div>
+            <h2>Katy</h2>
+            <div id="katySummary"></div>
           </aside>
         </div>
       </section>
@@ -4318,7 +4325,72 @@
       $('commandKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
       $('commandAlerts').innerHTML=`<div class="mini-row"><strong>${clientsAtRisk} clientas en riesgo</strong><span>Sin turno activo cargado para hoy. Priorizar contacto por WhatsApp.</span></div><div class="mini-row"><strong>${openSlots} huecos vendibles</strong><span>Revisar lista de espera y servicios de mayor margen.</span></div><div class="mini-row"><strong>${lowCollaborators} colaboradora(s) bajo objetivo</strong><span>Controlar ocupación y facturación por profesional.</span></div><div class="mini-row"><strong>${money(pendingAmount)} pendientes de cobro</strong><span>Caja necesita seguimiento antes del cierre.</span></div>`;
       $('commandAppointments').innerHTML=appts.slice(0,4).map(a=>`<div class="mini-row"><strong>${a.start} · ${client(a.clientId).first} ${client(a.clientId).last}</strong><span>${a.service} con ${member(a.memberId).first}</span></div>`).join('') || '<div class="mini-row"><strong>Sin turnos activos</strong><span>La agenda está libre para vender huecos.</span></div>';
-      $('katySummary').innerHTML=`Buenos días Daniel.<br><br>${clientsAtRisk} clientas en riesgo<br>${openSlots} huecos hoy<br>${lowCollaborators} colaboradora(s) sin llegar a objetivo<br>${money(pendingAmount)} pendientes de cobro`;
+      renderKaty({appts, pendingAmount, openSlots, lowCollaborators});
+    }
+
+    function renderKaty({appts, pendingAmount, openSlots, lowCollaborators}){
+      const el = $('katySummary'); if(!el) return;
+      const today = dateKey(new Date());
+      const dayNames = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+      const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      const now = new Date();
+      const greeting = `Buen${now.getHours()<13?'os días':'as tardes'}, Daniel. Hoy es ${dayNames[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]}.`;
+
+      // At-risk clients: last visit >= 30 days ago, not in today's agenda
+      const activeClientIds = new Set(appts.map(a=>a.clientId));
+      const atRisk = state.clients
+        .map(c=>({c, ins: clientInsights(c.id)}))
+        .filter(({c, ins})=>!activeClientIds.has(c.id) && ins.daysSinceLast!==null && ins.daysSinceLast>=28)
+        .sort((a,b)=>b.ins.daysSinceLast-a.ins.daysSinceLast)
+        .slice(0,3);
+
+      // Build reactivation cards
+      const reactivationHtml = atRisk.length
+        ? atRisk.map(({c, ins})=>{
+            const service = ins.topService || 'servicios';
+            const msg = encodeURIComponent(`Hola ${c.first} 🌸 Te extrañamos en GLAMB. ¿Agendamos para ${service}? Tenemos turnos disponibles esta semana.`);
+            const rawMsg = `Hola ${c.first} 🌸 Te extrañamos en GLAMB. ¿Agendamos para ${service}? Tenemos turnos disponibles esta semana.`;
+            return `<div class="katy-card">
+              <div class="katy-card-title">${c.first} ${c.last}</div>
+              <div class="katy-card-body">Sin visita hace ${ins.daysSinceLast} días · ${service}</div>
+              <button class="katy-copy-btn" data-action="katyCopy" data-msg="${rawMsg.replace(/"/g,'&quot;')}">📋 Copiar mensaje WhatsApp</button>
+            </div>`;
+          }).join('')
+        : `<div class="katy-empty">Sin clientas en riesgo hoy.</div>`;
+
+      // Huecos por profesional
+      const pros = state.collaborators.filter(c=>c.can);
+      const slotsHtml = pros.map(m=>{
+        const todayAppts = appts.filter(a=>a.memberId===m.id&&(!a.date||a.date===today));
+        const busyMins = todayAppts.reduce((s,a)=>s+mins(a.end)-mins(a.start),0);
+        const dayMap={0:'Domingo',1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
+        const todayName = dayMap[now.getDay()];
+        const workDays = (m.days||'').split(',').map(d=>d.trim()).filter(Boolean);
+        if(workDays.length && !workDays.includes(todayName)) return '';
+        const parts = (m.hours||'09:00 - 19:00').split(' - ');
+        const workMins = parts.length===2 ? mins(parts[1].trim())-mins(parts[0].trim()) : 480;
+        const freeMins = Math.max(0, workMins - busyMins);
+        return freeMins>=30 ? `<div class="katy-slot"><strong>${m.first}</strong><span>${Math.floor(freeMins/60)}h ${freeMins%60>0?freeMins%60+'min':''} libre</span></div>` : '';
+      }).filter(Boolean).join('');
+
+      // Cobros pendientes alert
+      const pendingHtml = pendingAmount>0
+        ? `<div class="katy-section"><div class="katy-section-label">💸 Cobros pendientes</div><div class="katy-card"><div class="katy-card-title">${money(pendingAmount)} sin cobrar</div><div class="katy-card-body">Verificar antes del cierre de caja.</div><button class="katy-copy-btn" data-action="showPage" data-page="caja">Ir a Caja</button></div></div>`
+        : '';
+
+      el.innerHTML = `
+        <div class="katy-greeting">${greeting}</div>
+        <div class="katy-section">
+          <div class="katy-section-label">🔁 Reactivación</div>
+          ${reactivationHtml}
+        </div>
+        ${slotsHtml ? `<div class="katy-section"><div class="katy-section-label">📅 Huecos del día</div>${slotsHtml}</div>` : ''}
+        ${pendingHtml}
+      `;
+    }
+
+    function katyCopy(msg){
+      navigator.clipboard?.writeText(msg).then(()=>showToast('Mensaje copiado al portapapeles.')).catch(()=>showToast('Copiá manualmente: '+msg));
     }
     function clientCode(c){ return c.code || `GL-${String(state.clients.indexOf(c)+1).padStart(6,'0')}`; }
     function nextClientCode(){ return `GL-${String(state.clients.length+1).padStart(6,'0')}`; }
@@ -4360,7 +4432,11 @@
       }
       if(frequency!==null && frequency<=21 && visits>=3) tags.push({label:'Frecuente',cls:'good'});
       if(avgTicket>0 && salonAvg>0 && avgTicket>=salonAvg*1.4) tags.push({label:'Alto valor',cls:'gold'});
-      return {visits,totalSpent,avgTicket,frequency,daysSinceLast,tags};
+      const svcCount={};
+      state.appointments.filter(a=>a.clientId===clientId&&!['cancelled','cancelado','voided'].includes(a.status)).forEach(a=>{if(a.service)svcCount[a.service]=(svcCount[a.service]||0)+1;});
+      tickets.forEach(t=>(t.lines||[]).forEach(l=>{if(l.service)svcCount[l.service]=(svcCount[l.service]||0)+1;}));
+      const topService=Object.entries(svcCount).sort((a,b)=>b[1]-a[1])[0]?.[0]||null;
+      return {visits,totalSpent,avgTicket,frequency,daysSinceLast,tags,topService};
     }
     function insightTagsHtml(ins){ return ins.tags.map(t=>`<span class="tag ${t.cls}">${t.label}</span>`).join(''); }
     function frequencyLabel(ins){
@@ -7984,6 +8060,7 @@
       applyFinanzasCustomRange: () => applyFinanzasCustomRange(),
       showToast:               el => showToast(el.dataset.msg),
       // Con data-id (un argumento)
+      katyCopy:                el => katyCopy(el.dataset.msg),
       cancelAppointment:       el => cancelAppointment(el.dataset.id),
       deleteAppointment:       el => deleteAppointment(el.dataset.id),
       chargeFromAppointment:   el => chargeFromAppointment(el.dataset.id),
