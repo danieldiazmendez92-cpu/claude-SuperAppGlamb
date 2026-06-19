@@ -3086,6 +3086,14 @@
     .appt-footer-row{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:2px}
     .appt-seña{font-size:9.5px;font-weight:600;color:#3f7d4f}
     .appt-bkid{font-size:9px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+    .fin-budget-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--line);font-size:12px}
+    .fin-budget-row:last-child{border-bottom:none}
+    .fin-budget-cat{min-width:160px;color:var(--text);flex-shrink:0}
+    .fin-budget-bar-wrap{flex:1;height:5px;background:var(--line);border-radius:3px;overflow:hidden;min-width:40px}
+    .fin-budget-bar{height:100%;border-radius:3px;transition:width 0.3s ease}
+    .fin-budget-spent{min-width:80px;text-align:right;font-weight:500;color:var(--text)}
+    .fin-budget-sep{color:var(--text-muted)}
+    .fin-budget-limit{min-width:80px;text-align:left;color:var(--text-muted)}
     .fin-summary-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg);font-size:13px}
     .fin-summary-row strong{color:var(--text)}
     .fin-summary-row span{font-weight:600}
@@ -3672,7 +3680,17 @@
         <div class="key-note" id="profileNote">—</div>
       </section>
       <section class="profile-section">
-        <h3>Historial</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <h3 style="margin:0">Historial</h3>
+          <select id="profileHistoryFilter" class="select-like" style="font-size:12px;padding:3px 8px">
+            <option value="all">Todos</option>
+            <option value="confirmed">Confirmados</option>
+            <option value="completed">Completados</option>
+            <option value="in_progress">En curso</option>
+            <option value="cancelled">Cancelados</option>
+            <option value="no_show">No show</option>
+          </select>
+        </div>
         <div id="profileHistory"></div>
       </section>
     </div>
@@ -3978,6 +3996,7 @@
         <h3>Resumen de cierre</h3>
         <div class="mini-row"><strong>Efectivo esperado</strong><span id="closeExpectedCash">$0</span></div>
         <div class="field"><label>Efectivo contado</label><input id="closeCountedCash" type="number" value="0" min="0"></div>
+        <div id="cashCloseDiff" style="display:none;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;margin-bottom:4px;text-align:center"></div>
         <div class="field full"><label>Nota de cierre</label><textarea id="closeCashNote" placeholder="Diferencias, aclaraciones o pendientes"></textarea></div>
       </section>
     </div>
@@ -4176,14 +4195,15 @@
     finanzasTab:'cfo',
     finanzasPeriod:'month',
     finanzasCustomFrom:'',
-    finanzasCustomTo:''
+    finanzasCustomTo:'',
+    budgets:{}
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const fullName=x=>`${x.first||''} ${x.last||''}`.trim();
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets'];
     function saveState(){
       try{
         const out={};
@@ -5534,6 +5554,17 @@
       if($('closeExpectedCash')) $('closeExpectedCash').textContent = money(expectedCash);
       if($('closeCountedCash')) $('closeCountedCash').value = expectedCash;
       if($('closeCashNote')) $('closeCashNote').value = '';
+      const updateDiff = () => {
+        const diff = Number($('closeCountedCash')?.value||0) - expectedCash;
+        const el = $('cashCloseDiff');
+        if(!el) return;
+        el.style.display = 'block';
+        if(diff === 0) { el.style.background='#E8F5E9'; el.style.color='#1B5E20'; el.textContent='Sin diferencia — cuadra perfecto'; }
+        else if(diff > 0) { el.style.background='#E8F5E9'; el.style.color='#1B5E20'; el.textContent=`Sobrante: +${money(diff)}`; }
+        else { el.style.background='#FDECEA'; el.style.color='#B71C1C'; el.textContent=`Faltante: ${money(diff)}`; }
+      };
+      if($('closeCountedCash')) $('closeCountedCash').oninput = updateDiff;
+      updateDiff();
       openDrawer('cashCloseDrawer');
     }
     function confirmCashClose(){
@@ -5864,6 +5895,12 @@
     function resizeAppointment(id,delta){const a=state.appointments.find(x=>x.id===id); if(!a)return; const old=a.end; a.end=toTime(mins(a.end)+delta); if(mins(a.end)<=mins(a.start)+15 || overlaps(a,a.id)){a.end=old; showToast('No se puede ajustar duración.'); return;} renderAgenda(); showToast('Duración actualizada.');}
     function togglePaid(id){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.deposit = a.deposit==='paid'?'pending':'paid'; renderAgenda(); showToast(a.deposit==='paid'?'Pago/seña marcado OK.':'Pago/seña pendiente.');}
     function cancelAppointment(id,status='cancelado'){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.status=status; showToast(`Turno marcado como ${status}.`); openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();}
+    function deleteAppointment(id){
+      showConfirm('¿Eliminar este turno permanentemente? No se puede deshacer.', ()=>{
+        state.appointments = state.appointments.filter(a=>a.id!==id);
+        saveState(); closePopover(); renderAgenda(); showToast('Turno eliminado.');
+      });
+    }
     function openPopover(e,id){
       const a=state.appointments.find(x=>x.id===id);
       if(!a) return;
@@ -5898,6 +5935,7 @@
           <button class="small-btn" data-action="editApptAndClose" data-id="${a.id}">Editar turno</button>
           <button class="small-btn ${a.deposit==='paid'?'primary':''}" data-action="togglePaid" data-id="${a.id}">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
           <button class="small-btn" data-action="cancelAppointment" data-id="${a.id}">Cancelar</button>
+          <button class="small-btn danger" data-action="deleteAppointment" data-id="${a.id}">Eliminar</button>
         </div>`;
       const r=e.currentTarget.getBoundingClientRect?e.currentTarget.getBoundingClientRect():{right:300,top:120};
       const popW=380;
@@ -6711,8 +6749,17 @@
       else insightText = `Ritmo de visita normal${ins.frequency?` (cada ${ins.frequency} días aprox.)`:''}. Mantener experiencia habitual.`;
       if(ins.tags.some(t=>t.label==='Alto valor')) insightText += ' Ticket promedio por encima de la media del salón: priorizar su experiencia.';
       $('profileInsightText').textContent = insightText;
-      const history = state.appointments.filter(a=>a.clientId===c.id);
-      $('profileHistory').innerHTML = history.length ? history.map(a=>`<div class="history-item"><strong>${a.service}</strong><span>${fullName(member(a.memberId))} · ${a.start} - ${a.end} · ${a.status || 'confirmado'}</span></div>`).join('') : '<div class="history-item"><strong>Sin turnos</strong><span>Todavía no tiene historial en agenda.</span></div>';
+      const renderProfileHistory = () => {
+        const filt = $('profileHistoryFilter')?.value || 'all';
+        const history = state.appointments
+          .filter(a=>a.clientId===c.id && (filt==='all'||a.status===filt))
+          .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.start||'').localeCompare(a.start||''));
+        $('profileHistory').innerHTML = history.length
+          ? history.map(a=>`<div class="history-item"><strong>${a.service}</strong><span>${a.date||'—'} · ${a.start}–${a.end} · ${fullName(member(a.memberId))} · <em>${a.status||'confirmado'}</em></span></div>`).join('')
+          : '<div class="history-item"><strong>Sin turnos</strong><span>No hay turnos con este filtro.</span></div>';
+      };
+      renderProfileHistory();
+      if($('profileHistoryFilter')) $('profileHistoryFilter').onchange = renderProfileHistory;
       $('profileCreateAppointment').onclick = ()=>{ closeDrawers(); fillAppointmentOptions(c.id); openDrawer('appointmentDrawer'); };
       $('profileMessage').onclick = ()=>showToast('Abriendo WhatsApp...');
       $('profileVip').onclick = ()=>{ if(!c.tags.includes('VIP')) c.tags.push('VIP'); renderClients(); openClientProfile(c.id); showToast('Cliente marcado como VIP.'); };
@@ -7169,9 +7216,10 @@
         :'<div style="font-size:13px;color:var(--text-muted);padding:8px 0">Sin descuentos.</div>';
       if($('liqViewBody')) $('liqViewBody').innerHTML=`
         <section class="form-card liq-section">
-          <h4>Fijos del período</h4>
-          <div class="liq-fixed-row"><span>Presentismo</span><strong>${money(liq.presentismo)}</strong></div>
-          <div class="liq-fixed-row"><span>Viático</span><strong>${money(liq.viatico)}</strong></div>
+          <h4>Fijos del período${liq.status!=='paid'?` <span style="font-size:10px;color:var(--text-muted);text-transform:none;font-weight:400">— editables</span>`:''}</h4>
+          <div class="liq-fixed-row"><span>Presentismo</span>${liq.status==='paid'?`<strong>${money(liq.presentismo)}</strong>`:`<input id="liqEditPresentismo" type="number" value="${liq.presentismo}" class="input-like" style="width:120px;text-align:right;padding:4px 8px;font-size:13px">`}</div>
+          <div class="liq-fixed-row"><span>Viático</span>${liq.status==='paid'?`<strong>${money(liq.viatico)}</strong>`:`<input id="liqEditViatico" type="number" value="${liq.viatico}" class="input-like" style="width:120px;text-align:right;padding:4px 8px;font-size:13px">`}</div>
+          ${liq.status!=='paid'?`<button class="small-btn primary" style="margin-top:10px" data-action="saveLiqFixedEdit" data-id="${liqId}">Guardar cambios</button>`:''}
         </section>
         <section class="form-card liq-section">
           <h4>Comisiones (${liq.commissionLines.length} servicio${liq.commissionLines.length!==1?'s':''})</h4>
@@ -7195,6 +7243,16 @@
       openDrawer('liquidationViewDrawer');
     }
 
+    function saveLiqFixedEdit(liqId){
+      const liq=state.liquidations.find(l=>l.id===liqId);
+      if(!liq||liq.status==='paid') return;
+      const p=Number($('liqEditPresentismo')?.value||0);
+      const v=Number($('liqEditViatico')?.value||0);
+      liq.presentismo=p; liq.viatico=v;
+      liq.grossPay=p+v+liq.totalCommissions;
+      liq.netPay=liq.grossPay-liq.totalDeductions;
+      saveState(); openLiquidationView(liqId); showToast('Liquidación actualizada.');
+    }
     function confirmLiquidationPaid(liqId){
       const liq=state.liquidations.find(l=>l.id===liqId);
       if(!liq) return;
@@ -7449,6 +7507,22 @@
             </div>
           `).join('')}
         </div>
+        <div class="fin-section">
+          <div class="fin-section-title">Presupuesto mensual <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— hacé clic en el monto para editar</span></div>
+          ${EXPENSE_CATS.filter(c=>c.id!=='other').map(c=>{
+            const spent=expenses.filter(e=>e.category===c.id).reduce((s,e)=>s+(e.amount||0),0);
+            const budget=Number((state.budgets||{})[c.id]||0);
+            const pct=budget>0?Math.min(150,Math.round(spent/budget*100)):0;
+            const barColor=pct>=100?'#c46a6a':pct>=80?'#C2935A':'#3f7d4f';
+            return `<div class="fin-budget-row">
+              <span class="fin-budget-cat">${c.label}</span>
+              <div class="fin-budget-bar-wrap"><div class="fin-budget-bar" style="width:${Math.min(100,pct)}%;background:${barColor}"></div></div>
+              <span class="fin-budget-spent">${money(spent)}</span>
+              <span class="fin-budget-sep">/</span>
+              <span class="fin-budget-limit" title="Clic para editar presupuesto" style="cursor:pointer;text-decoration:underline dotted" data-action="editBudget" data-cat="${c.id}">${budget>0?money(budget):'—'}</span>
+            </div>`;
+          }).join('')}
+        </div>
       `;
     }
     function renderFinanzasAnalista(){
@@ -7513,6 +7587,17 @@
         </div>
         ${!rev&&!exp?`<p class="fin-empty">Sin datos para el período seleccionado.<br>Registrá ventas en Caja para ver el análisis aquí.</p>`:''}
       `;
+    }
+    function editBudget(catId){
+      const cat=EXPENSE_CATS.find(c=>c.id===catId);
+      if(!cat) return;
+      showPrompt(`Presupuesto mensual para "${cat.label}"`,current=>{
+        const v=parseFloat(current);
+        if(isNaN(v)||v<0) return showToast('Monto inválido.');
+        if(!state.budgets) state.budgets={};
+        state.budgets[catId]=v;
+        saveState(); renderFinanzasContador(); showToast('Presupuesto actualizado.');
+      }, String((state.budgets||{})[catId]||''));
     }
     function registerExpense(){
       const date=$('expDate')?.value||dateKey(new Date());
@@ -7900,6 +7985,7 @@
       showToast:               el => showToast(el.dataset.msg),
       // Con data-id (un argumento)
       cancelAppointment:       el => cancelAppointment(el.dataset.id),
+      deleteAppointment:       el => deleteAppointment(el.dataset.id),
       chargeFromAppointment:   el => chargeFromAppointment(el.dataset.id),
       confirmLiquidationPaid:  el => confirmLiquidationPaid(el.dataset.id),
       deleteDeduction:         el => deleteDeduction(el.dataset.id),
@@ -7909,6 +7995,8 @@
       editAppointment:         el => editAppointment(el.dataset.id),
       editCollaborator:        el => editCollaborator(el.dataset.id),
       deleteCollaborator:      el => deleteCollaborator(el.dataset.id),
+      saveLiqFixedEdit:        el => saveLiqFixedEdit(el.dataset.id),
+      editBudget:              el => editBudget(el.dataset.cat),
       injectPending:           el => injectPending(el.dataset.id),
       openClientProfile:       el => openClientProfile(el.dataset.id),
       openLiquidationView:     el => openLiquidationView(el.dataset.id),
