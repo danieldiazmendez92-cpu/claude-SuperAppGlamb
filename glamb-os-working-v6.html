@@ -3179,6 +3179,18 @@
     .fin-summary-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg);font-size:13px}
     .fin-summary-row strong{color:var(--text)}
     .fin-summary-row span{font-weight:600}
+    .fin-type-badge{display:inline-block;font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px;letter-spacing:.03em;vertical-align:middle}
+    .fin-type-fixed{background:#E6EEF8;color:#1a56db}
+    .fin-type-variable{background:#FEF3E8;color:#b45309}
+    .fin-type-tax{background:#EDFAED;color:#166534}
+    .fin-type-other{background:var(--surface-2);color:var(--text-muted)}
+    .fin-type-help{font-size:12px;color:var(--text-muted);line-height:1.8;padding:10px 14px;background:var(--bg);border-radius:8px;margin-bottom:12px}
+    .fin-cat-list{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+    .fin-cat-row{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--line);border-radius:8px;font-size:13px}
+    .fin-cat-name{flex:1;color:var(--text)}
+    .fin-cat-system{font-size:10px;color:var(--text-soft);flex-shrink:0;padding:1px 6px;border-radius:8px;background:var(--surface-2)}
+    .fin-cat-add{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--line)}
+    .fin-cat-add input{flex:1;min-width:140px}
   </style>
 </head>
 <body>
@@ -4273,14 +4285,15 @@
     finanzasPeriod:'month',
     finanzasCustomFrom:'',
     finanzasCustomTo:'',
-    budgets:{}
+    budgets:{},
+    expenseCategories:null
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const fullName=x=>`${x.first||''} ${x.last||''}`.trim();
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories'];
     function saveState(){
       try{
         const out={};
@@ -7445,18 +7458,20 @@
     // ─────────────────────────────────────────────────────────────
 
     // === MÓDULO FINANZAS ===
-    const EXPENSE_CATS=[
-      {id:'rent',label:'Alquiler',type:'fixed'},
-      {id:'salaries',label:'Sueldos fijos',type:'fixed'},
-      {id:'monotributo',label:'Monotributo',type:'tax'},
-      {id:'utilities',label:'Servicios (luz/gas/internet)',type:'fixed'},
-      {id:'supplies',label:'Insumos',type:'variable'},
-      {id:'advertising',label:'Publicidad',type:'variable'},
-      {id:'bank',label:'Gastos bancarios',type:'variable'},
-      {id:'professional',label:'Honorarios profesionales',type:'variable'},
-      {id:'iibb',label:'Ingresos Brutos',type:'tax'},
-      {id:'other',label:'Otros',type:'other'}
+    const DEFAULT_EXPENSE_CATS=[
+      {id:'rent',label:'Alquiler',type:'fixed',system:true},
+      {id:'salaries',label:'Sueldos fijos',type:'fixed',system:true},
+      {id:'monotributo',label:'Monotributo',type:'tax',system:true},
+      {id:'utilities',label:'Servicios (luz/gas/internet)',type:'fixed',system:true},
+      {id:'supplies',label:'Insumos',type:'variable',system:true},
+      {id:'advertising',label:'Publicidad',type:'variable',system:true},
+      {id:'bank',label:'Gastos bancarios',type:'variable',system:true},
+      {id:'professional',label:'Honorarios profesionales',type:'variable',system:true},
+      {id:'iibb',label:'Ingresos Brutos',type:'tax',system:true},
+      {id:'other',label:'Otros',type:'other',system:true}
     ];
+    const TYPE_LABELS={fixed:'Fijo',variable:'Variable',tax:'Impuesto',other:'Otro'};
+    const expenseCats=()=>state.expenseCategories&&state.expenseCategories.length?state.expenseCategories:DEFAULT_EXPENSE_CATS;
     // Límites Monotributo 2025 prestadores de servicios (verificar en AFIP)
     const MONO_CATS_2025=[
       {cat:'A',limit:7500000},{cat:'B',limit:11200000},{cat:'C',limit:16800000},
@@ -7523,8 +7538,8 @@
     function finBreakEven(){
       const {from,to}=finDateRange('month');
       const allExp=state.expenses||[];
-      const fixedExp=allExp.filter(e=>EXPENSE_CATS.find(c=>c.id===e.category)?.type==='fixed').reduce((s,e)=>s+(e.amount||0),0);
-      const varExp=allExp.filter(e=>{const t=EXPENSE_CATS.find(c=>c.id===e.category)?.type;return t==='variable'||t==='tax';}).reduce((s,e)=>s+(e.amount||0),0);
+      const fixedExp=allExp.filter(e=>expenseCats().find(c=>c.id===e.category)?.type==='fixed').reduce((s,e)=>s+(e.amount||0),0);
+      const varExp=allExp.filter(e=>{const t=expenseCats().find(c=>c.id===e.category)?.type;return t==='variable'||t==='tax';}).reduce((s,e)=>s+(e.amount||0),0);
       const rev=finRevenue(from,to);
       const payroll=finPayrollCost(from,to);
       const totalVar=varExp+payroll;
@@ -7616,13 +7631,13 @@
       const expenses=state.expenses||[];
       const grouped={};
       expenses.forEach(e=>{
-        const cat=EXPENSE_CATS.find(c=>c.id===e.category)||{label:'Otros'};
-        if(!grouped[cat.label]) grouped[cat.label]=[];
-        grouped[cat.label].push(e);
+        const cat=expenseCats().find(c=>c.id===e.category)||{id:'other',label:'Otros',type:'other'};
+        if(!grouped[cat.id]) grouped[cat.id]={cat,items:[]};
+        grouped[cat.id].items.push(e);
       });
       const total=expenses.reduce((s,e)=>s+(e.amount||0),0);
       const byType={fixed:0,variable:0,tax:0,other:0};
-      expenses.forEach(e=>{const t=EXPENSE_CATS.find(c=>c.id===e.category)?.type||'other';byType[t]=(byType[t]||0)+(e.amount||0);});
+      expenses.forEach(e=>{const t=expenseCats().find(c=>c.id===e.category)?.type||'other';byType[t]=(byType[t]||0)+(e.amount||0);});
       panel.innerHTML=`
         <div class="fin-section">
           <div class="fin-section-title">Registrar gasto</div>
@@ -7630,7 +7645,7 @@
             <div class="fin-form-row">
               <div class="fin-form-field"><label>Fecha</label><input type="date" id="expDate" value="${dateKey(new Date())}" class="input-like"/></div>
               <div class="fin-form-field"><label>Categoría</label>
-                <select id="expCat" class="select-like">${EXPENSE_CATS.map(c=>`<option value="${c.id}">${c.label}</option>`).join('')}</select>
+                <select id="expCat" class="select-like">${expenseCats().map(c=>`<option value="${c.id}">${c.label} — ${TYPE_LABELS[c.type]||c.type}</option>`).join('')}</select>
               </div>
             </div>
             <div class="fin-form-row">
@@ -7656,9 +7671,12 @@
             ${byType.other>0?`<div class="fin-summary-row"><strong>Otros</strong><span>${money(byType.other)}</span></div>`:''}
           </div>`:''}
           ${Object.keys(grouped).length===0?`<p class="fin-empty">Sin gastos registrados aún.<br>Registrá tu primer gasto arriba.</p>`:''}
-          ${Object.entries(grouped).map(([cat,items])=>`
+          ${Object.values(grouped).map(({cat,items})=>`
             <div class="fin-expense-group">
-              <div class="fin-expense-group-header"><span>${cat}</span><span>${money(items.reduce((s,e)=>s+(e.amount||0),0))}</span></div>
+              <div class="fin-expense-group-header">
+                <span>${cat.label} <span class="fin-type-badge fin-type-${cat.type}">${TYPE_LABELS[cat.type]||cat.type}</span></span>
+                <span>${money(items.reduce((s,e)=>s+(e.amount||0),0))}</span>
+              </div>
               ${items.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>`
                 <div class="fin-expense-row">
                   <div>
@@ -7676,7 +7694,7 @@
         </div>
         <div class="fin-section">
           <div class="fin-section-title">Presupuesto mensual <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— hacé clic en el monto para editar</span></div>
-          ${EXPENSE_CATS.filter(c=>c.id!=='other').map(c=>{
+          ${expenseCats().filter(c=>c.id!=='other').map(c=>{
             const spent=expenses.filter(e=>e.category===c.id).reduce((s,e)=>s+(e.amount||0),0);
             const budget=Number((state.budgets||{})[c.id]||0);
             const pct=budget>0?Math.min(150,Math.round(spent/budget*100)):0;
@@ -7689,6 +7707,33 @@
               <span class="fin-budget-limit" title="Clic para editar presupuesto" style="cursor:pointer;text-decoration:underline dotted" data-action="editBudget" data-cat="${c.id}">${budget>0?money(budget):'—'}</span>
             </div>`;
           }).join('')}
+        </div>
+        <div class="fin-section">
+          <div class="fin-section-title">Categorías de gasto</div>
+          <div class="fin-type-help">
+            <strong>Fijo</strong> — igual todos los meses, sin importar cuánto vendas (alquiler, internet, sueldos)<br>
+            <strong>Variable</strong> — cambia con la actividad del salón (insumos, publicidad, envíos)<br>
+            <strong>Impuesto</strong> — monotributo, IIBB, percepciones fiscales
+          </div>
+          <div class="fin-cat-list">
+            ${expenseCats().map(c=>`
+              <div class="fin-cat-row">
+                <span class="fin-cat-name">${c.label}</span>
+                <span class="fin-type-badge fin-type-${c.type}">${TYPE_LABELS[c.type]||c.type}</span>
+                ${c.system!==false?`<span class="fin-cat-system">sistema</span>`:`<button class="small-btn danger" data-action="deleteExpenseCategory" data-id="${c.id}">✕</button>`}
+              </div>
+            `).join('')}
+          </div>
+          <div class="fin-cat-add">
+            <input type="text" id="newCatName" class="input-like" placeholder="Nombre de nueva categoría...">
+            <select id="newCatType" class="select-like">
+              <option value="fixed">Fijo</option>
+              <option value="variable" selected>Variable</option>
+              <option value="tax">Impuesto</option>
+              <option value="other">Otro</option>
+            </select>
+            <button class="btn" data-action="addExpenseCategory">+ Agregar</button>
+          </div>
         </div>
       `;
     }
@@ -7756,7 +7801,7 @@
       `;
     }
     function editBudget(catId){
-      const cat=EXPENSE_CATS.find(c=>c.id===catId);
+      const cat=expenseCats().find(c=>c.id===catId);
       if(!cat) return;
       showPrompt(`Presupuesto mensual para "${cat.label}"`,current=>{
         const v=parseFloat(current);
@@ -7788,6 +7833,30 @@
         saveState();
         renderFinanzasContador();
         showToast('Gasto eliminado');
+      });
+    }
+    function addExpenseCategory(){
+      const name=($('newCatName')?.value||'').trim();
+      const type=$('newCatType')?.value||'variable';
+      if(!name) return showToast('Ingresá un nombre de categoría.');
+      if(!state.expenseCategories||!state.expenseCategories.length){
+        state.expenseCategories=DEFAULT_EXPENSE_CATS.map(c=>({...c}));
+      }
+      if(state.expenseCategories.find(c=>c.label.toLowerCase()===name.toLowerCase())){
+        return showToast('Ya existe una categoría con ese nombre.');
+      }
+      const id='cat_'+Date.now().toString(36);
+      state.expenseCategories.push({id,label:name,type,system:false});
+      saveState(); renderFinanzasContador();
+      showToast(`Categoría "${name}" agregada.`);
+    }
+    function deleteExpenseCategory(id){
+      const cat=expenseCats().find(c=>c.id===id);
+      if(!cat||cat.system!==false) return showToast('Las categorías del sistema no se pueden eliminar.');
+      showConfirm(`¿Eliminar la categoría "${cat.label}"? Los gastos registrados no se borran.`,()=>{
+        state.expenseCategories=(state.expenseCategories||[]).filter(c=>c.id!==id);
+        saveState(); renderFinanzasContador();
+        showToast('Categoría eliminada.');
       });
     }
     function setFinanzasPeriod(p){
@@ -8243,6 +8312,8 @@
       dpNavYears:              el => dpNavYears(el),
       closePopover:            () => closePopover(),
       registerExpense:         () => registerExpense(),
+      addExpenseCategory:      () => addExpenseCategory(),
+      deleteExpenseCategory:   el => deleteExpenseCategory(el.dataset.id),
       // Con data-page
       showPage:                el => showPage(el.dataset.page),
       // Con data-tab
