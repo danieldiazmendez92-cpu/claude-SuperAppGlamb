@@ -4309,7 +4309,7 @@
     }
     function reservationDeposit(appts){
       if(!appts.length) return 0;
-      return Math.max(...appts.map(a=>Number(a.bookingDepositAmount||a.depositAmount||0)), 0);
+      return appts.reduce((sum,a)=>sum+Number(a.bookingDepositAmount||a.depositAmount||0),0);
     }
     function renderCommand(){
       const appts = activeAppointments();
@@ -4338,7 +4338,7 @@
 
       // At-risk clients: last visit >= 30 days ago, not in today's agenda
       const activeClientIds = new Set(appts.map(a=>a.clientId));
-      const atRisk = state.clients
+      const atRisk = (state.clients||[])
         .map(c=>({c, ins: clientInsights(c.id)}))
         .filter(({c, ins})=>!activeClientIds.has(c.id) && ins.daysSinceLast!==null && ins.daysSinceLast>=28)
         .sort((a,b)=>b.ins.daysSinceLast-a.ins.daysSinceLast)
@@ -5096,7 +5096,7 @@
     function confirmCashOpen(){
       const amount = Number($('cashOpeningAmount')?.value || 0);
       if(!amount && amount !== 0) return showToast('Ingresá un monto válido.');
-      state.cashSession = {isOpen:true, openingAmount:amount, openedBy:$('cashOpeningUser')?.value || 'Admin caja', openedAt:new Date().toISOString(), closedAt:null, countedCash:null, withdrawals:[]};
+      state.cashSession = {isOpen:true, openingAmount:amount, openedBy:$('cashOpeningUser')?.value || 'Admin caja', openedAt:new Date().toISOString(), closedAt:null, countedCash:null, withdrawals:[], expenses:[]};
       closeDrawers();
       renderAll();
       showToast('Caja abierta');
