@@ -3632,12 +3632,21 @@
             <p class="subtitle">Colaboradoras, servicios agrupados, disponibilidad y accesos. Esto alimenta la agenda.</p>
           </div>
           <div class="top-actions">
-            <button class="btn">Invitar usuario</button>
-            <button class="btn primary" data-open-collaborator>Nueva colaboradora</button>
+            <button class="btn" id="teamBtnNew" data-action="openNewUser" style="display:none">Nuevo usuario</button>
+            <button class="btn primary" id="teamBtnCollaborator" data-open-collaborator>Nueva colaboradora</button>
           </div>
         </div>
         <div class="grid kpis" id="teamKpis"></div>
-        <div class="list" id="teamList"></div>
+        <div class="rrhh-tabs" id="teamTabsBar">
+          <button class="rrhh-tab-btn active" data-action="setTeamTab" data-tab="collaborators">Colaboradoras</button>
+          <button class="rrhh-tab-btn" id="teamTabUsersBtn" data-action="setTeamTab" data-tab="users" style="display:none">Usuarios del sistema</button>
+        </div>
+        <div class="rrhh-panel active" id="teamPanelCollaborators">
+          <div class="list" id="teamList"></div>
+        </div>
+        <div class="rrhh-panel" id="teamPanelUsers">
+          <div class="list" id="systemUsersList"></div>
+        </div>
       </section>
 
       <section class="page" id="page-rrhh">
@@ -3885,6 +3894,41 @@
       <div class="footer-actions">
         <button class="btn" data-close>Cancelar</button>
         <button class="btn primary" id="saveCollaborator">Guardar</button>
+      </div>
+    </footer>
+  </aside>
+
+  <aside class="drawer" id="userDrawer">
+    <header class="drawer-header">
+      <div>
+        <div class="eyebrow" id="userDrawerEyebrow">Nuevo usuario</div>
+        <h2 class="drawer-title" id="userDrawerTitle">Crear acceso</h2>
+        <p class="drawer-subtitle">El usuario recibirá acceso según el rol asignado.</p>
+      </div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <div class="form-grid">
+        <div class="field"><label>Nombre completo</label><input id="userDrawerName" placeholder="Ana García"></div>
+        <div class="field"><label>Correo electrónico</label><input id="userDrawerEmail" type="email" placeholder="ana@glamb.com" autocomplete="off"></div>
+        <div class="field" id="userDrawerPasswordField"><label>Contraseña temporal</label><input id="userDrawerPassword" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password"></div>
+        <div class="field"><label>Rol</label>
+          <select id="userDrawerRole">
+            <option value="admin">Administrador</option>
+            <option value="medio" selected>Recepción</option>
+            <option value="bajo">Colaboradora</option>
+          </select>
+        </div>
+        <div class="field"><label>Colaboradora vinculada <span style="color:var(--text-muted);font-size:11px;">(opcional, para rol Colaboradora)</span></label>
+          <select id="userDrawerCollaboratorId"><option value="">Sin vincular</option></select>
+        </div>
+      </div>
+      <div id="userDrawerError" style="color:#c0392b;font-size:12px;min-height:16px;margin-top:8px;"></div>
+    </div>
+    <footer class="drawer-footer">
+      <div class="footer-actions">
+        <button class="btn" data-close>Cancelar</button>
+        <button class="btn primary" data-action="saveUser" id="userDrawerSaveBtn">Crear usuario</button>
       </div>
     </footer>
   </aside>
@@ -4351,7 +4395,9 @@
       {id:'u3',name:'Recepción',role:'medio',pin:'3333'},
       {id:'u4',name:'Ana (colaboradora)',role:'bajo',pin:'4444',collaboratorId:'co1'}
     ],
-    currentUserId:null
+    currentUserId:null,
+    teamTab:'collaborators',
+    systemUsers:[]
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -4371,7 +4417,7 @@
       messagingSenderId: "733109093638",
       appId: "1:733109093638:web:720da3c212b9da24a9ca87"
     };
-    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null;
+    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _usersUnsub=null;
     state.authUser = null;
     try {
       firebase.initializeApp(firebaseConfig);
@@ -4414,6 +4460,13 @@
         _applyingRemote=false;
       }, e=>console.error('[GLAMB] sync en vivo falló:', e));
     }
+    function subscribeUsersSync(){
+      if(!fbReady || _usersUnsub) return;
+      _usersUnsub = db.collection('users').onSnapshot(snap=>{
+        state.systemUsers = snap.docs.map(d=>({uid:d.id,...d.data()}));
+        if(state.page==='team') renderTeam();
+      }, e=>console.error('[GLAMB] users sync falló:', e));
+    }
     async function ensureUserRole(user){
       const uref = db.collection('users').doc(user.uid);
       let snap = await uref.get();
@@ -4421,10 +4474,14 @@
         // Primer login: se crea sin acceso ('pending'). El dueño se eleva a 'admin'
         // una sola vez desde la consola de Firestore; luego gestiona roles desde la app.
         const name = user.email ? user.email.split('@')[0] : 'Usuario';
-        await uref.set({ name, role:'pending', email:user.email||'', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        await uref.set({ name, role:'pending', email:user.email||'', disabled:false, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
         snap = await uref.get();
       }
       const d = snap.data()||{};
+      if(d.disabled){
+        state.authUser = null;
+        throw Object.assign(new Error('Cuenta deshabilitada'), {code:'user-disabled'});
+      }
       state.authUser = { uid:user.uid, email:user.email||'', name:d.name||'Usuario', role:d.role||'pending', collaboratorId:d.collaboratorId||null };
       return state.authUser;
     }
@@ -4747,18 +4804,171 @@
     function renderTeam(){
       const pros=state.collaborators.filter(c=>c.can).length;
       const groupCount = state.catalog.groups.length;
+      const isAdmin = curRole()==='admin';
+      const userCount = isAdmin ? state.systemUsers.length : '—';
       const items=[
-        ['Colaboradoras',state.collaborators.length,'equipo'],
+        ['Colaboradoras',state.collaborators.length,'en el equipo'],
         ['Profesionales',pros,'reciben turnos'],
         ['Grupos',groupCount,'del catálogo'],
-        ['Usuarios','—','siguiente etapa'],
+        ['Usuarios del sistema',userCount,'con acceso'],
         ['Disponibilidad','activa','base']
       ];
       $('teamKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
       $('teamList').innerHTML=state.collaborators.map(c=>{
         const groupLabels = (c.groupIds||[]).map(id=>state.catalog.groups.find(g=>g.id===id)?.name||'').filter(Boolean);
         return `<article class="person-card"><div class="person-main"><div class="avatar">${esc(initials(c))}</div><div><h3>${esc(fullName(c))}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${esc(c.phone)}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${esc(g)}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${esc(c.days)} · ${esc(c.hours)}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="editCollaborator" data-id="${c.id}">Editar</button><button class="small-btn danger" data-action="deleteCollaborator" data-id="${c.id}">Eliminar</button></div></article>`
-      }).join('')
+      }).join('');
+      // Visibility of admin-only UI
+      const tabBtn = $('teamTabUsersBtn');
+      if(tabBtn) tabBtn.style.display = isAdmin ? '' : 'none';
+      if(!isAdmin && state.teamTab==='users') state.teamTab='collaborators';
+      setTeamTab(state.teamTab||'collaborators');
+      renderSystemUsers();
+    }
+
+    function setTeamTab(tab){
+      state.teamTab = tab;
+      document.querySelectorAll('#teamTabsBar .rrhh-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+      const isCollaborators = tab==='collaborators';
+      const panelC=$('teamPanelCollaborators'), panelU=$('teamPanelUsers');
+      if(panelC) panelC.classList.toggle('active',isCollaborators);
+      if(panelU) panelU.classList.toggle('active',!isCollaborators);
+      const btnNew=$('teamBtnNew'), btnCollab=$('teamBtnCollaborator');
+      const isAdmin = curRole()==='admin';
+      if(btnNew) btnNew.style.display = (!isCollaborators && isAdmin) ? '' : 'none';
+      if(btnCollab) btnCollab.style.display = isCollaborators ? '' : 'none';
+    }
+
+    function renderSystemUsers(){
+      const el=$('systemUsersList'); if(!el) return;
+      if(curRole()!=='admin'){ el.innerHTML=''; return; }
+      if(!state.systemUsers.length){
+        el.innerHTML='<div class="mini-row"><strong>Cargando usuarios…</strong><span>Conectando con Firestore.</span></div>';
+        return;
+      }
+      const currentUid = state.authUser?.uid;
+      el.innerHTML=state.systemUsers.map(u=>{
+        const rolLabel = ROLE_LABELS[u.role]||u.role||'—';
+        const disabled = u.disabled||false;
+        const isSelf = u.uid===currentUid;
+        const linkedCollab = u.collaboratorId ? state.collaborators.find(c=>c.id===u.collaboratorId) : null;
+        return `<article class="person-card">
+          <div class="person-main">
+            <div class="avatar" style="${disabled?'opacity:.4;filter:grayscale(1)':''}">${esc((u.name||'?')[0].toUpperCase())}</div>
+            <div>
+              <h3>${esc(u.name||'Sin nombre')}${isSelf?' <span class="tag" style="font-size:10px;vertical-align:middle">Tú</span>':''}</h3>
+              <div class="meta">${esc(u.email||'—')}</div>
+              <div class="tags">
+                <span class="tag ${disabled?'':'dark'}" style="${disabled?'color:#c0392b;border-color:#c0392b':''}">${disabled?'Deshabilitado':rolLabel}</span>
+                ${linkedCollab?`<span class="tag">⟷ ${esc(fullName(linkedCollab))}</span>`:''}
+              </div>
+            </div>
+          </div>
+          <div class="actions-col">
+            ${!isSelf?`<button class="small-btn primary" data-action="editUser" data-uid="${esc(u.uid)}">Editar</button>`:''}
+            ${!isSelf?`<button class="small-btn ${disabled?'':'danger'}" data-action="toggleUserDisabled" data-uid="${esc(u.uid)}">${disabled?'Habilitar':'Deshabilitar'}</button>`:''}
+          </div>
+        </article>`;
+      }).join('');
+    }
+
+    function openNewUserDrawer(){
+      if(curRole()!=='admin') return showToast('Solo los administradores pueden crear usuarios.');
+      state._editingUserUid = null;
+      const eyebrow=$('userDrawerEyebrow'), title=$('userDrawerTitle'), saveBtn=$('userDrawerSaveBtn');
+      if(eyebrow) eyebrow.textContent='Nuevo usuario';
+      if(title) title.textContent='Crear acceso';
+      if(saveBtn) saveBtn.textContent='Crear usuario';
+      if($('userDrawerName')) $('userDrawerName').value='';
+      if($('userDrawerEmail')){ $('userDrawerEmail').value=''; $('userDrawerEmail').readOnly=false; }
+      if($('userDrawerPassword')) $('userDrawerPassword').value='';
+      if($('userDrawerPasswordField')) $('userDrawerPasswordField').style.display='';
+      if($('userDrawerRole')) $('userDrawerRole').value='medio';
+      if($('userDrawerError')) $('userDrawerError').textContent='';
+      const sel=$('userDrawerCollaboratorId');
+      if(sel) sel.innerHTML='<option value="">Sin vincular</option>'+state.collaborators.map(c=>`<option value="${c.id}">${esc(fullName(c))}</option>`).join('');
+      openDrawer('userDrawer');
+    }
+
+    function openEditUserDrawer(uid){
+      if(curRole()!=='admin') return;
+      const u=state.systemUsers.find(x=>x.uid===uid); if(!u) return;
+      state._editingUserUid = uid;
+      const eyebrow=$('userDrawerEyebrow'), title=$('userDrawerTitle'), saveBtn=$('userDrawerSaveBtn');
+      if(eyebrow) eyebrow.textContent='Editar usuario';
+      if(title) title.textContent=esc(u.name||'Usuario');
+      if(saveBtn) saveBtn.textContent='Guardar cambios';
+      if($('userDrawerName')) $('userDrawerName').value=u.name||'';
+      if($('userDrawerEmail')){ $('userDrawerEmail').value=u.email||''; $('userDrawerEmail').readOnly=true; }
+      if($('userDrawerPasswordField')) $('userDrawerPasswordField').style.display='none';
+      if($('userDrawerRole')) $('userDrawerRole').value=u.role||'medio';
+      if($('userDrawerError')) $('userDrawerError').textContent='';
+      const sel=$('userDrawerCollaboratorId');
+      if(sel){ sel.innerHTML='<option value="">Sin vincular</option>'+state.collaborators.map(c=>`<option value="${c.id}">${esc(fullName(c))}</option>`).join(''); sel.value=u.collaboratorId||''; }
+      openDrawer('userDrawer');
+    }
+
+    async function saveUserDrawer(){
+      if(curRole()!=='admin') return;
+      const name=($('userDrawerName')?.value||'').trim();
+      const email=($('userDrawerEmail')?.value||'').trim();
+      const password=$('userDrawerPassword')?.value||'';
+      const role=$('userDrawerRole')?.value||'medio';
+      const collaboratorId=$('userDrawerCollaboratorId')?.value||'';
+      const errEl=$('userDrawerError');
+      if(!name){ if(errEl) errEl.textContent='Ingresá un nombre.'; return; }
+      const editingUid=state._editingUserUid;
+      if(!editingUid){
+        // CREAR
+        if(!email){ if(errEl) errEl.textContent='Ingresá un correo electrónico.'; return; }
+        if(password.length<6){ if(errEl) errEl.textContent='La contraseña debe tener al menos 6 caracteres.'; return; }
+        if(errEl) errEl.textContent='Creando usuario…';
+        const saveBtn=$('userDrawerSaveBtn'); if(saveBtn) saveBtn.disabled=true;
+        try{
+          let secondaryAuth;
+          try{ secondaryAuth=firebase.app('glamb-secondary').auth(); }
+          catch(e){ secondaryAuth=firebase.initializeApp(firebaseConfig,'glamb-secondary').auth(); }
+          let newUid=null;
+          try{
+            const cred=await secondaryAuth.createUserWithEmailAndPassword(email,password);
+            newUid=cred.user.uid;
+            await cred.user.updateProfile({displayName:name}).catch(()=>{});
+          }finally{
+            await secondaryAuth.signOut().catch(()=>{});
+          }
+          await db.collection('users').doc(newUid).set({name,email,role,collaboratorId:collaboratorId||null,disabled:false,createdAt:firebase.firestore.FieldValue.serverTimestamp(),createdBy:state.authUser.uid});
+          closeDrawers();
+          showToast(`Usuario "${esc(name)}" creado. Ya puede iniciar sesión.`);
+        }catch(e){
+          console.error('[GLAMB] createUser falló:',e);
+          const msg=e.code==='auth/email-already-in-use'?'Ya existe una cuenta con ese correo.':e.code==='auth/invalid-email'?'Correo inválido.':'No se pudo crear el usuario. Reintentá.';
+          if(errEl) errEl.textContent=msg;
+        }finally{ if(saveBtn) saveBtn.disabled=false; }
+      } else {
+        // EDITAR
+        const saveBtn=$('userDrawerSaveBtn'); if(saveBtn) saveBtn.disabled=true;
+        try{
+          await db.collection('users').doc(editingUid).update({name,role,collaboratorId:collaboratorId||null});
+          closeDrawers();
+          showToast(`Usuario "${esc(name)}" actualizado.`);
+        }catch(e){
+          console.error('[GLAMB] updateUser falló:',e);
+          if(errEl) errEl.textContent='No se pudo guardar. Reintentá.';
+        }finally{ if(saveBtn) saveBtn.disabled=false; }
+      }
+    }
+
+    async function toggleUserDisabled(uid){
+      if(curRole()!=='admin') return;
+      const u=state.systemUsers.find(x=>x.uid===uid); if(!u) return;
+      const newDisabled=!u.disabled;
+      const actionLabel=newDisabled?'deshabilitar':'habilitar';
+      showConfirm(`¿${actionLabel.charAt(0).toUpperCase()+actionLabel.slice(1)} a ${esc(u.name||u.email)}? ${newDisabled?'No podrá iniciar sesión hasta ser habilitado nuevamente.':'Podrá iniciar sesión nuevamente.'}`, async()=>{
+        try{
+          await db.collection('users').doc(uid).update({disabled:newDisabled});
+          showToast(`Usuario ${newDisabled?'deshabilitado':'habilitado'} correctamente.`);
+        }catch(e){ console.error('[GLAMB] toggleUserDisabled falló:',e); showToast('Error al cambiar estado del usuario.'); }
+      });
     }
 
     function deleteCollaborator(id){
@@ -8516,14 +8726,24 @@
             }
             await loadStateFromCloud();
             subscribeStateSync();
+            if(curRole()==='admin') subscribeUsersSync();
             bootAppData();
             if($('loginOverlay')) $('loginOverlay').style.display='none';
             showPage(permCfg().pages[0]||'command');
             showToast(`Sesión iniciada: ${state.authUser.name} · ${ROLE_LABELS[state.authUser.role]||state.authUser.role}`);
-          }catch(e){ console.error('[GLAMB] bootstrap falló:', e); if($('loginError')) $('loginError').textContent='Error al cargar los datos. Reintentá.'; }
+          }catch(e){
+            if(e && e.code==='user-disabled'){
+              if($('loginError')) $('loginError').textContent='Tu cuenta está deshabilitada. Contactá al administrador.';
+              await auth.signOut(); return;
+            }
+            console.error('[GLAMB] bootstrap falló:', e);
+            if($('loginError')) $('loginError').textContent='Error al cargar los datos. Reintentá.';
+          }
         } else {
           if(_cloudUnsub){ _cloudUnsub(); _cloudUnsub=null; }
+          if(_usersUnsub){ _usersUnsub(); _usersUnsub=null; }
           state.authUser=null;
+          state.systemUsers=[];
           if($('loginOverlay')) $('loginOverlay').style.display='flex';
         }
       });
@@ -8649,6 +8869,12 @@
       openApptForClient:       el => { fillAppointmentOptions(el.dataset.client); openDrawer('appointmentDrawer'); },
       editApptAndClose:        el => { editAppointment(el.dataset.id); closePopover(); },
       openPopoverForRow:       (el,e) => openPopover({currentTarget:document.getElementById(el.dataset.rowid)||el}, el.dataset.id),
+      // Gestión de usuarios del sistema (Fase A.2)
+      openNewUser:             () => openNewUserDrawer(),
+      editUser:                el => openEditUserDrawer(el.dataset.uid),
+      toggleUserDisabled:      el => toggleUserDisabled(el.dataset.uid),
+      saveUser:                () => saveUserDrawer(),
+      setTeamTab:              el => setTeamTab(el.dataset.tab),
     };
     document.addEventListener('click', e => {
       const el = e.target.closest('[data-action]');
