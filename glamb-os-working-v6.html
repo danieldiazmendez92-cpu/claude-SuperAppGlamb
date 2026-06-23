@@ -6159,8 +6159,11 @@
       state.appointmentClient = {clientId:a.clientId, clientName:fullName(client(a.clientId))};
       showApClientChip(client(a.clientId));
       if($('apClientSuggestions')) $('apClientSuggestions').classList.remove('open');
-      if($('apDepositAmount')) $('apDepositAmount').value = appointmentDepositAmount(a) || 0;
-      if($('apDepositMethod')) $('apDepositMethod').value = a.depositMethod || 'Transferencia';
+      const _depAmt = appointmentDepositAmount(a) || 0;
+      const _bookingHasDeposit = a.bookingId && state.payments.some(p=>p.bookingId===a.bookingId&&p.type==='deposit_received'&&!p.voided);
+      state.apDepositIsPreExisting = !_bookingHasDeposit && _depAmt > 0;
+      if($('apDepositAmount')) $('apDepositAmount').value = _depAmt;
+      if($('apDepositMethod')){ $('apDepositMethod').value = a.depositMethod || 'Transferencia'; $('apDepositMethod').disabled = state.apDepositIsPreExisting; }
       if($('apNote')) $('apNote').value = a.note || '';
       if($('apDate')) $('apDate').value = a.date || dateKey(new Date());
       const related = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId).sort((x,y)=>x.start.localeCompare(y.start)) : [a];
@@ -6446,15 +6449,18 @@
           box.classList.remove('open');
           showApClientChip(c);
           const avail = clientAvailableDeposit(c.id);
+          state.apDepositIsPreExisting = avail > 0;
           const banner = $('apDepositAvailableBanner');
           const bannerText = $('apDepositAvailableText');
           if(avail > 0){
             if(banner){ banner.style.display='flex'; }
-            if(bannerText) bannerText.textContent = `${fullName(c)} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
+            if(bannerText) bannerText.textContent = `${esc(fullName(c))} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
             if($('apDepositAmount')) $('apDepositAmount').value = avail;
+            if($('apDepositMethod')) $('apDepositMethod').disabled = true;
           } else {
             if(banner) banner.style.display='none';
             if($('apDepositAmount')) $('apDepositAmount').value = 0;
+            if($('apDepositMethod')) $('apDepositMethod').disabled = false;
           }
           updateApPreview();
         });
@@ -6687,24 +6693,28 @@
     function fillAppointmentOptions(prefClient){
       state.editingAppointmentId = null;
       state.appointmentClient = {clientId:null, clientName:''};
+      state.apDepositIsPreExisting = false;
       if(prefClient){
         const c = client(prefClient);
         state.appointmentClient = {clientId:c.id, clientName:fullName(c)};
         showApClientChip(c);
         const avail = clientAvailableDeposit(c.id);
+        state.apDepositIsPreExisting = avail > 0;
         if(avail > 0){
           if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='flex';
-          if($('apDepositAvailableText')) $('apDepositAvailableText').textContent = `${fullName(c)} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
+          if($('apDepositAvailableText')) $('apDepositAvailableText').textContent = `${esc(fullName(c))} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
           if($('apDepositAmount')) $('apDepositAmount').value = avail;
+          if($('apDepositMethod')) $('apDepositMethod').disabled = true;
         } else {
           if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='none';
           if($('apDepositAmount')) $('apDepositAmount').value=0;
+          if($('apDepositMethod')) $('apDepositMethod').disabled = false;
         }
       } else { hideApClientChip(); }
       if($('apClientSuggestions')) $('apClientSuggestions').classList.remove('open');
       if($('apDepositAvailableBanner') && !prefClient) $('apDepositAvailableBanner').style.display='none';
       if(!prefClient && $('apDepositAmount')) $('apDepositAmount').value=0;
-      if($('apDepositMethod')) $('apDepositMethod').value='Transferencia';
+      if($('apDepositMethod')){ $('apDepositMethod').value='Transferencia'; if(!prefClient) $('apDepositMethod').disabled=false; }
       if($('apNote')) $('apNote').value='';
       if($('apDate')) $('apDate').value = dateKey(state.agenda.currentDate);
       if($('appointmentServiceLines')) { $('appointmentServiceLines').innerHTML=''; addAppointmentServiceLine(); }
@@ -6819,7 +6829,7 @@
 
         if(!reservationCharged(oldBookingId)){
           state.payments=state.payments.filter(p=>!(p.bookingId===oldBookingId&&p.type==='deposit_received'&&!p.voided));
-          if(depositAmount>0&&state.appointmentClient.clientId){
+          if(depositAmount>0&&state.appointmentClient.clientId&&!state.apDepositIsPreExisting){
             addPayment({id:uid('dep'),bookingId:oldBookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',reference:'Seña de reserva',note:'Seña recibida al agendar'});
           }else{saveState();}
         }
@@ -6887,7 +6897,7 @@
             }
           });
         });
-        if(depositAmount>0&&state.appointmentClient.clientId){
+        if(depositAmount>0&&state.appointmentClient.clientId&&!state.apDepositIsPreExisting){
           addPayment({id:uid('dep'),bookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',reference:'Seña de reserva',note:'Seña recibida al agendar'});
         }
         closeDrawers();showPage('agenda');showToast('Turno agregado a la agenda');
