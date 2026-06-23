@@ -1747,6 +1747,7 @@
     /* ── Premium input hover ── */
     input, select, textarea { transition: border-color 0.15s ease; }
     input:hover:not(:focus), select:hover:not(:focus) { border-color: var(--line-strong); }
+    input:read-only, input:disabled, select:disabled { background: var(--surface-2); color: var(--text-muted); cursor: not-allowed; }
 
     /* ── Popover premium ── */
     .detail-popover { border-radius: 20px; padding: 18px 20px; }
@@ -6194,7 +6195,7 @@
       const _depAmt = appointmentDepositAmount(a) || 0;
       const _bookingHasDeposit = a.bookingId && state.payments.some(p=>p.bookingId===a.bookingId&&p.type==='deposit_received'&&!p.voided);
       state.apDepositIsPreExisting = !_bookingHasDeposit && _depAmt > 0;
-      if($('apDepositAmount')) $('apDepositAmount').value = _depAmt;
+      if($('apDepositAmount')){ $('apDepositAmount').value = _depAmt; $('apDepositAmount').readOnly = state.apDepositIsPreExisting; }
       if($('apDepositMethod')){ $('apDepositMethod').value = a.depositMethod || 'Transferencia'; $('apDepositMethod').disabled = state.apDepositIsPreExisting; }
       if($('apNote')) $('apNote').value = a.note || '';
       if($('apDate')) $('apDate').value = a.date || dateKey(new Date());
@@ -6487,11 +6488,11 @@
           if(avail > 0){
             if(banner){ banner.style.display='flex'; }
             if(bannerText) bannerText.textContent = `${esc(fullName(c))} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
-            if($('apDepositAmount')) $('apDepositAmount').value = avail;
+            if($('apDepositAmount')){ $('apDepositAmount').value = avail; $('apDepositAmount').readOnly = true; }
             if($('apDepositMethod')) $('apDepositMethod').disabled = true;
           } else {
             if(banner) banner.style.display='none';
-            if($('apDepositAmount')) $('apDepositAmount').value = 0;
+            if($('apDepositAmount')){ $('apDepositAmount').value = 0; $('apDepositAmount').readOnly = false; }
             if($('apDepositMethod')) $('apDepositMethod').disabled = false;
           }
           updateApPreview();
@@ -6735,17 +6736,17 @@
         if(avail > 0){
           if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='flex';
           if($('apDepositAvailableText')) $('apDepositAvailableText').textContent = `${esc(fullName(c))} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
-          if($('apDepositAmount')) $('apDepositAmount').value = avail;
+          if($('apDepositAmount')){ $('apDepositAmount').value = avail; $('apDepositAmount').readOnly = true; }
           if($('apDepositMethod')) $('apDepositMethod').disabled = true;
         } else {
           if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='none';
-          if($('apDepositAmount')) $('apDepositAmount').value=0;
+          if($('apDepositAmount')){ $('apDepositAmount').value=0; $('apDepositAmount').readOnly = false; }
           if($('apDepositMethod')) $('apDepositMethod').disabled = false;
         }
       } else { hideApClientChip(); }
       if($('apClientSuggestions')) $('apClientSuggestions').classList.remove('open');
       if($('apDepositAvailableBanner') && !prefClient) $('apDepositAvailableBanner').style.display='none';
-      if(!prefClient && $('apDepositAmount')) $('apDepositAmount').value=0;
+      if(!prefClient && $('apDepositAmount')){ $('apDepositAmount').value=0; $('apDepositAmount').readOnly = false; }
       if($('apDepositMethod')){ $('apDepositMethod').value='Transferencia'; if(!prefClient) $('apDepositMethod').disabled=false; }
       if($('apNote')) $('apNote').value='';
       if($('apDate')) $('apDate').value = dateKey(state.agenda.currentDate);
@@ -8132,7 +8133,6 @@
     if($('confirmCashCloseBtn')) $('confirmCashCloseBtn').onclick=confirmCashClose;
     if($('cashUserMode')) $('cashUserMode').onchange=()=>{state.cashMode=$('cashUserMode').value; renderAll(); showToast(state.cashMode==='admin'?'Modo Admin caja':'Modo Colaboradora');};
     if($('cashCurrentCollaborator')) $('cashCurrentCollaborator').onchange=()=>{state.cashCurrentCollaboratorId=$('cashCurrentCollaborator').value; renderAll();};
-    if($('newSaleBtn')) $('newSaleBtn').onclick=()=>{setCashTab('register'); resetSaleForm();};
     if($('addSaleLineBtn')) $('addSaleLineBtn').onclick=()=>addSaleLine();
     if($('addAppointmentServiceBtn')) $('addAppointmentServiceBtn').onclick=()=>addAppointmentServiceLine();
     if($('registerSaleBtn')) $('registerSaleBtn').onclick=registerSale;
