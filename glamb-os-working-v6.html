@@ -4289,11 +4289,12 @@
     expenseCategories:null
   };
     const $=id=>document.getElementById(id),toast=$('toast');
+    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     const fullName=x=>`${x.first||''} ${x.last||''}`.trim();
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','ownerName'];
     function saveState(){
       try{
         const out={};
@@ -4417,7 +4418,8 @@
       const dayNames = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
       const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
       const now = new Date();
-      const greeting = `Buen${now.getHours()<13?'os días':'as tardes'}, Daniel. Hoy es ${dayNames[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]}.`;
+      const ownerName = state.ownerName || 'Daniel';
+      const greeting = `Buen${now.getHours()<13?'os días':'as tardes'}, ${esc(ownerName)}. Hoy es ${dayNames[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]}.`;
 
       // At-risk clients: last visit >= 30 days ago, not in today's agenda
       const activeClientIds = new Set(appts.map(a=>a.clientId));
@@ -4535,7 +4537,7 @@
       $('clientsList').innerHTML=list.map(c=>{
         const ins = clientInsights(c.id);
         const lastTxt = ins.daysSinceLast!==null ? ` · última hace ${ins.daysSinceLast} día(s)` : '';
-        return `<article class="client-card"><div class="client-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${clientCode(c)} · ${c.phone} · ${c.email||'Sin email'} · ${frequencyLabel(ins)}${lastTxt}</div><div class="tags">${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}${insightTagsHtml(ins)}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="openClientProfile" data-id="${c.id}">Ver perfil</button><button class="small-btn" data-action="openApptForClient" data-client="${c.id}">Crear turno</button></div></article>`;
+        return `<article class="client-card"><div class="client-main"><div class="avatar">${esc(initials(c))}</div><div><h3>${esc(fullName(c))}</h3><div class="meta">${esc(clientCode(c))} · ${esc(c.phone)} · ${esc(c.email||'Sin email')} · ${frequencyLabel(ins)}${lastTxt}</div><div class="tags">${c.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${insightTagsHtml(ins)}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="openClientProfile" data-id="${c.id}">Ver perfil</button><button class="small-btn" data-action="openApptForClient" data-client="${c.id}">Crear turno</button></div></article>`;
       }).join('')
     }
     $('clientSearch').oninput=e=>{state.clientSearch=e.target.value;renderClients()};
@@ -4552,7 +4554,7 @@
       $('teamKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
       $('teamList').innerHTML=state.collaborators.map(c=>{
         const groupLabels = (c.groupIds||[]).map(id=>state.catalog.groups.find(g=>g.id===id)?.name||'').filter(Boolean);
-        return `<article class="person-card"><div class="person-main"><div class="avatar">${initials(c)}</div><div><h3>${fullName(c)}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${c.phone}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${g}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${c.days} · ${c.hours}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="editCollaborator" data-id="${c.id}">Editar</button><button class="small-btn danger" data-action="deleteCollaborator" data-id="${c.id}">Eliminar</button></div></article>`
+        return `<article class="person-card"><div class="person-main"><div class="avatar">${esc(initials(c))}</div><div><h3>${esc(fullName(c))}</h3><div class="meta">${c.type==='professional'?'Profesional':'Equipo'} · ${esc(c.phone)}</div><div class="tags"><span class="tag ${c.can?'dark':''}">${c.can?'Recibe turnos':'No asignable'}</span>${groupLabels.map(g=>`<span class="tag">${esc(g)}</span>`).join('')}</div><div class="meta" style="margin-top:8px">${esc(c.days)} · ${esc(c.hours)}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="editCollaborator" data-id="${c.id}">Editar</button><button class="small-btn danger" data-action="deleteCollaborator" data-id="${c.id}">Eliminar</button></div></article>`
       }).join('')
     }
 
@@ -5237,7 +5239,7 @@
         if($('depositAvailableBalance')) $('depositAvailableBalance').textContent = '$0';
         if(!q){box.classList.remove('open'); return;}
         const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||''].join(' ').toLowerCase().includes(q)).slice(0,4);
-        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-dep-client="${c.id}">${fullName(c)}<span>${c.phone}</span></div>`).join('');
+        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-dep-client="${c.id}">${esc(fullName(c))}<span>${esc(c.phone)}</span></div>`).join('');
         box.classList.toggle('open', matches.length>0);
       };
     }
@@ -5310,7 +5312,7 @@
         state.saleClient = {clientId:null, clientName:input.value.trim()};
         if(!q){box.classList.remove('open'); return;}
         const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c)].join(' ').toLowerCase().includes(q)).slice(0,4);
-        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-client-suggestion="${c.id}">${fullName(c)}<span>${c.phone} · ${c.email||'sin email'}</span></div>`).join('');
+        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-client-suggestion="${c.id}">${esc(fullName(c))}<span>${esc(c.phone)} · ${esc(c.email||'sin email')}</span></div>`).join('');
         box.classList.toggle('open', matches.length>0);
         document.querySelectorAll('[data-client-suggestion]').forEach(item=>item.onclick=()=>{
           const c = client(item.dataset.clientSuggestion);
@@ -5736,7 +5738,7 @@
         expectedCash,
         countedCash: counted,
         difference: counted - expectedCash,
-        paymentsTotal: state.payments.reduce((sum,p)=>sum+Number(p.amount||0),0),
+        paymentsTotal: state.payments.filter(p=>!p.voided&&(p.createdAt||'')>=(state.cashSession.openedAt||'')).reduce((sum,p)=>sum+Number(p.amount||0),0),
         withdrawalsTotal: state.cashSession.withdrawals.reduce((sum,w)=>sum+Number(w.amount||0),0),
         pendingCount: state.pendingCharges.filter(p=>p.status==='pending').length,
         closedBy: 'Admin caja',
@@ -5849,12 +5851,12 @@
           const availDep=clientAvailableDeposit(c.id);
           const statusLabels={confirmed:'Confirmado',in_progress:'En curso',completed:'Finalizado',cancelled:'Cancelado',no_show:'No asistió'};
           const tier=c.tags.includes('VIP')?'Diamond':c.tags.includes('Acepta upgrades')?'Black':'Muse';
-          const servicesHtml=related.map(r=>`${r.service}`).join('<br>');
-          const proHtml=related.map(r=>fullName(member(r.memberId))).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
+          const servicesHtml=related.map(r=>esc(r.service)).join('<br>');
+          const proHtml=related.map(r=>esc(fullName(member(r.memberId)))).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
           const depositLine=availDep>0?`<div class="tt-deposit">💰 Seña disponible: ${money(availDep)}</div>`:depAmt>0?`<div class="tt-deposit">Seña en turno: ${money(depAmt)}</div>`:'';
           const tip=$('apptTooltip');
           if(!tip) return;
-          tip.innerHTML=`<div class="tt-tier">${tier}</div><div class="tt-name">${fullName(c)}</div><div class="tt-phone">${c.phone}</div><hr class="tt-divider"><div class="tt-service">${servicesHtml}</div><div class="tt-pro">con ${proHtml}</div><div class="tt-time">${a.start}–${a.end}</div>${depositLine}<hr class="tt-divider"><div class="tt-price">${money(totalPrice)}</div><div class="tt-status-chip">${statusLabels[a.status||'confirmed']||a.status||''}</div>`;
+          tip.innerHTML=`<div class="tt-tier">${esc(tier)}</div><div class="tt-name">${esc(fullName(c))}</div><div class="tt-phone">${esc(c.phone)}</div><hr class="tt-divider"><div class="tt-service">${servicesHtml}</div><div class="tt-pro">con ${proHtml}</div><div class="tt-time">${esc(a.start)}–${esc(a.end)}</div>${depositLine}<hr class="tt-divider"><div class="tt-price">${money(totalPrice)}</div><div class="tt-status-chip">${esc(statusLabels[a.status||'confirmed']||a.status||'')}</div>`;
           tip.style.display='block';
           const rect=el.getBoundingClientRect();
           const tipW=248, tipH=tip.offsetHeight;
@@ -6436,7 +6438,7 @@
         state.appointmentClient = {clientId:null, clientName:input.value.trim()};
         if(q.length < 3){ box.classList.remove('open'); box.innerHTML=''; updateApPreview(); return; }
         const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c)].join(' ').toLowerCase().includes(q)).slice(0,4);
-        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-ap-client="${c.id}">${fullName(c)}<span>${clientCode(c)} · ${c.phone} · ${c.email||'sin email'}</span></div>`).join('');
+        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-ap-client="${c.id}">${esc(fullName(c))}<span>${esc(clientCode(c))} · ${esc(c.phone)} · ${esc(c.email||'sin email')}</span></div>`).join('');
         box.classList.add('open');
         document.querySelectorAll('[data-ap-client]').forEach(item=>item.onclick=()=>{
           const c = client(item.dataset.apClient);
@@ -7305,7 +7307,7 @@
       if(!gc) return 0;
       if(variantId&&gc.serviceOverrides&&gc.serviceOverrides.length){
         const ov=gc.serviceOverrides.find(o=>o.serviceId===variantId);
-        if(ov!==undefined) return ov.pct;
+        if(ov!==undefined) return ov.pct || 0;
       }
       return gc.pct||0;
     }
