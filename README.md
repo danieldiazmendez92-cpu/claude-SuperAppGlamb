@@ -222,6 +222,10 @@ Al editar precio o nombre de un adicional, el sistema detecta los turnos afectad
 
 | Archivo | Descripción |
 |---------|-------------|
-| `glamb-os-working-v6.html` | **Archivo de trabajo activo** (~8100 líneas) |
+| `glamb-os-firebase.html` | **Versión en migración a Firebase** (Auth + Firestore). Ver `MIGRATION.md` |
+| `glamb-os-working-v6.html` | Prototipo localStorage (respaldo, abre como archivo) |
 | `glamb-os-stable.html` | Copia estable (sincronizar manualmente) |
 | `caja-mockups.html` | 4 mockups de diseño del módulo Caja (referencia) |
+| `MIGRATION.md` | Guía paso a paso de la migración a Firebase |
+| `firestore.rules` | Reglas de seguridad de Firestore (Fase A) |
+| `firebase.json` / `.firebaserc` | Config de deploy (Hosting + Firestore) |

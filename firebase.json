@@ -1,0 +1,22 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "**/.*",
+      "**/node_modules/**",
+      "*.md",
+      "firestore.rules",
+      "glamb-os-working-v6.html",
+      "glamb-os-stable.html",
+      "caja-mockups.html"
+    ],
+    "rewrites": [
+      { "source": "**", "destination": "/glamb-os-firebase.html" }
+    ]
+  }
+}
