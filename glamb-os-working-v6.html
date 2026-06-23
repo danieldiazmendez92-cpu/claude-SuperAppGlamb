@@ -3372,7 +3372,6 @@
             <button class="btn" id="cashWithdrawalBtn">Registrar retiro</button>
             <button class="btn" id="cashExpenseBtn">Registrar gasto</button>
             <button class="btn" id="cashCloseBtn">Cerrar caja</button>
-            <button class="btn primary" id="newSaleBtn">Nueva venta</button>
           </div>
         </div>
         <div class="grid kpis" id="cashKpis"></div>
@@ -3936,8 +3935,16 @@
         <h3>Datos del retiro</h3>
         <div class="form-grid">
           <div class="field"><label>Monto</label><input id="withdrawalAmount" type="number" value="0" min="0"></div>
-          <div class="field"><label>Motivo</label><select id="withdrawalReason"><option>Propina</option><option>Gasto</option><option>Compra varias</option><option>Retiro para depósito</option><option>Otro</option></select></div>
+          <div class="field"><label>Motivo</label><select id="withdrawalReason"></select></div>
           <div class="field full"><label>Nota</label><textarea id="withdrawalNote" placeholder="Detalle opcional"></textarea></div>
+        </div>
+      </section>
+      <section class="form-card" style="margin-top:12px">
+        <h3>Administrar conceptos de retiro</h3>
+        <div id="withdrawalReasonsConfig" style="margin-bottom:10px"></div>
+        <div class="form-grid">
+          <div class="field"><input id="newWithdrawalReason" type="text" placeholder="Nuevo concepto"></div>
+          <div class="field" style="display:flex;align-items:flex-end"><button class="btn" data-action="addWithdrawalReason">+ Agregar</button></div>
         </div>
       </section>
     </div>
@@ -4286,7 +4293,8 @@
     finanzasCustomFrom:'',
     finanzasCustomTo:'',
     budgets:{},
-    expenseCategories:null
+    expenseCategories:null,
+    withdrawalReasons:null
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -4294,7 +4302,7 @@
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','ownerName'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','withdrawalReasons','ownerName'];
     function saveState(){
       try{
         const out={};
@@ -5187,12 +5195,36 @@
       showToast('Caja abierta');
     }
 
+    function renderWithdrawalReasonsConfig(){
+      const el=$('withdrawalReasonsConfig'); if(!el) return;
+      const list=withdrawalReasonsList();
+      el.innerHTML=list.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:0.5px solid var(--line);font-size:13px"><span>${esc(r)}</span>${DEFAULT_WITHDRAWAL_REASONS.includes(r)?'<span class="fin-cat-system">sistema</span>':`<button class="small-btn danger" data-action="deleteWithdrawalReason" data-reason="${esc(r)}">✕</button>`}</div>`).join('');
+      const sel=$('withdrawalReason');
+      if(sel) sel.innerHTML=list.map(r=>`<option>${esc(r)}</option>`).join('');
+    }
+    function addWithdrawalReason(){
+      const input=$('newWithdrawalReason');
+      const name=(input?.value||'').trim();
+      if(!name) return showToast('Ingresá un nombre para el concepto.');
+      const list=withdrawalReasonsList();
+      if(list.map(r=>r.toLowerCase()).includes(name.toLowerCase())) return showToast('Ya existe ese concepto.');
+      if(!state.withdrawalReasons||!state.withdrawalReasons.length) state.withdrawalReasons=[...DEFAULT_WITHDRAWAL_REASONS];
+      state.withdrawalReasons.push(name);
+      if(input) input.value='';
+      saveState(); renderWithdrawalReasonsConfig(); showToast('Concepto agregado.');
+    }
+    function deleteWithdrawalReason(reason){
+      if(DEFAULT_WITHDRAWAL_REASONS.includes(reason)) return showToast('Los conceptos del sistema no se pueden eliminar.');
+      state.withdrawalReasons=(state.withdrawalReasons||[]).filter(r=>r!==reason);
+      saveState(); renderWithdrawalReasonsConfig(); showToast('Concepto eliminado.');
+    }
     function registerWithdrawal(){
       if(!isCashAdmin()) return showToast('Solo admin caja puede registrar retiros.');
       if(!state.cashSession.isOpen) return showToast('Primero abrí caja.');
       if($('withdrawalAmount')) $('withdrawalAmount').value = 0;
-      if($('withdrawalReason')) $('withdrawalReason').value = 'Retiro para depósito';
       if($('withdrawalNote')) $('withdrawalNote').value = '';
+      renderWithdrawalReasonsConfig();
+      const sel=$('withdrawalReason'); if(sel) sel.value='Retiro para depósito';
       openDrawer('cashWithdrawalDrawer');
     }
     function confirmWithdrawal(){
@@ -7483,6 +7515,8 @@
       {id:'other',label:'Otros',type:'other',system:true}
     ];
     const TYPE_LABELS={fixed:'Fijo',variable:'Variable',tax:'Impuesto',other:'Otro'};
+    const DEFAULT_WITHDRAWAL_REASONS=['Propina','Gasto','Compra varias','Retiro para depósito','Otro'];
+    const withdrawalReasonsList=()=>state.withdrawalReasons&&state.withdrawalReasons.length?state.withdrawalReasons:DEFAULT_WITHDRAWAL_REASONS;
     const expenseCats=()=>state.expenseCategories&&state.expenseCategories.length?state.expenseCategories:DEFAULT_EXPENSE_CATS;
     // Límites Monotributo 2025 prestadores de servicios (verificar en AFIP)
     const MONO_CATS_2025=[
@@ -8326,6 +8360,8 @@
       registerExpense:         () => registerExpense(),
       addExpenseCategory:      () => addExpenseCategory(),
       deleteExpenseCategory:   el => deleteExpenseCategory(el.dataset.id),
+      addWithdrawalReason:     () => addWithdrawalReason(),
+      deleteWithdrawalReason:  el => deleteWithdrawalReason(el.dataset.reason),
       // Con data-page
       showPage:                el => showPage(el.dataset.page),
       // Con data-tab
