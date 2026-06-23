@@ -4459,12 +4459,16 @@
       ['prevDay','nextDay','todayBtn'].forEach(id=>{ if($(id)) $(id).style.display = todayOnly?'none':''; });
       if($('dateTitle')) $('dateTitle').style.pointerEvents = todayOnly?'none':'';
       if(todayOnly && dateKey(state.agenda.currentDate)!==dateKey(new Date())) state.agenda.currentDate = new Date();
-      // Caja solo-ventas (rol bajo)
+      // Caja solo-ventas (rol bajo): registra y revisa SUS tickets, sin arqueo del salón
       const salesOnly = cfg.cash==='sales';
       ['cashOpenBtn','cashDepositBtn','cashWithdrawalBtn','cashExpenseBtn','cashCloseBtn'].forEach(id=>{ if($(id)) $(id).style.display = salesOnly?'none':''; });
+      const bajoTabs = ['register','tickets'];
       document.querySelectorAll('#cashTabs [data-cash-tab]').forEach(b=>{
-        b.style.display = (salesOnly && b.dataset.cashTab!=='register') ? 'none' : '';
+        b.style.display = (salesOnly && !bajoTabs.includes(b.dataset.cashTab)) ? 'none' : '';
       });
+      // KPIs y estado de caja = totales del salón → ocultos para rol bajo
+      if($('cashKpis')) $('cashKpis').style.display = salesOnly ? 'none' : '';
+      if($('cashStatus')) $('cashStatus').style.display = salesOnly ? 'none' : '';
       // Atajos que saltean módulos restringidos: crear colaboradora solo si tiene Equipo
       document.querySelectorAll('[data-open-collaborator]').forEach(b=>{ b.style.display = cfg.pages.includes('team') ? '' : 'none'; });
     }
@@ -5878,7 +5882,7 @@
         const statusLabel = t.status==='partial'?'Pago parcial':t.status==='confirmed'?'Confirmado':'Anulado';
         const statusColor = t.status==='partial'?'warn':t.status==='confirmed'?'ok':'';
         const breakdown = `Total: ${money(t.grossTotal)}${t.depositAppliedTotal>0?' · Seña: −'+money(t.depositAppliedTotal):''}${t.pendingBalance>0?' · <strong style="color:#8a5a14;">Saldo pendiente: '+money(t.pendingBalance)+'</strong>':''}`;
-        return `<div class="mini-row"><strong>${t.clientNameSnapshot} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${t.createdBy||'—'} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button></div></div>`;
+        return `<div class="mini-row"><strong>${esc(t.clientNameSnapshot)} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${esc(t.createdBy||'—')} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button></div></div>`;
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
     function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{ if(!reason)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); renderAll(); showToast('Ticket anulado'); }); }
@@ -6275,14 +6279,14 @@
             <div class="eyebrow" style="margin:0;">${isCombined?'Turno combinado':'Turno'}</div>
             <button data-action="closePopover" style="background:var(--surface-2);border:0;border-radius:8px;width:28px;height:28px;font-size:16px;color:var(--text-muted);cursor:pointer;flex-shrink:0;">×</button>
           </div>
-          <h3 style="margin:2px 0 1px;">${fullName(c)}</h3>
-          <div class="meta" style="margin-bottom:10px;">${c.phone}</div>
+          <h3 style="margin:2px 0 1px;">${esc(fullName(c))}</h3>
+          <div class="meta" style="margin-bottom:10px;">${maskedPhone(c)}</div>
           ${isCombined
             ? `<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service}<br><span style="color:var(--text-muted);font-size:11px;">${fullName(member(r.memberId))} · ${r.start}–${r.end}</span></span><strong style="color:var(--text);font-size:13px;margin-left:8px;flex-shrink:0;">${money(currentApptPrice(r)||0)}</strong></div>`).join('')}<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 0;font-size:12px;"><span style="color:var(--text-muted);">Total</span><strong>${money(totalCombined)}</strong></div></div>`
             : `<div class="popover-service" style="margin-bottom:4px;">${a.service} · ${fullName(m)} · ${a.start}–${a.end}</div><div style="font-family:'Cormorant',serif;font-size:22px;font-weight:300;margin-bottom:8px;">${money(currentApptPrice(a)||0)}</div>`}
           ${depositAmt>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:0.5px solid var(--line);font-size:12px;"><span style="color:var(--accent-dark);">− Seña abonada</span><strong style="color:var(--accent-dark);">${money(depositAmt)} · ${a.depositMethod||'Transf'}</strong></div><div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0 8px;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="font-weight:500;">Saldo</span><strong style="font-size:15px;">${money(Math.max(0,totalCombined-depositAmt))}</strong></div>`:''}
           ${statusHtml}
-          ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${a.note||c.note}</span></div>`:''}
+          ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${esc(a.note||c.note)}</span></div>`:''}
         </div>
         <div class="popover-footer">
           ${reservationCharged(reservationKey(a))
@@ -7130,6 +7134,9 @@
       $('profileMessage').onclick = ()=>showToast('Abriendo WhatsApp...');
       $('profileVip').onclick = ()=>{ if(!c.tags.includes('VIP')) c.tags.push('VIP'); renderClients(); openClientProfile(c.id); showToast('Cliente marcado como VIP.'); };
       $('profileEditClient').onclick = ()=>{ closeDrawers(); editClient(c.id); };
+      // Editar/eliminar datos del cliente (incluye teléfono/email) → solo admin
+      if($('profileEditClient')) $('profileEditClient').style.display = canSeeClientData() ? '' : 'none';
+      if($('profileDeleteClient')) $('profileDeleteClient').style.display = canSeeClientData() ? '' : 'none';
       $('profileDeleteClient').onclick = ()=>deleteClient(c.id);
       openDrawer('clientProfileDrawer');
     }
