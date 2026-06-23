@@ -12,10 +12,16 @@ No debe sentirse como un sistema administrativo genérico. Debe sentirse como un
 |------|-------|
 | Etapa | Prototipo HTML funcional |
 | Archivo de trabajo | `glamb-os-working-v6.html` |
-| Branch | `claude/glamb-os-beauty-salon-9rpkep` |
-| Último commit | `ac3e759` |
-| Líneas aprox. | ~8100 |
-| Publicación futura | Firebase Studio (después de estabilizar flujos) |
+| Branch | `claude/beautiful-fermat-l5mac7` |
+| Líneas aprox. | ~8600 |
+| Publicación futura | Backend Firebase (Firestore + Auth + Hosting) |
+
+> ⚠️ **El prototipo NO está listo para producción ni para datos reales sensibles.**
+> El login y el enmascarado de datos (teléfono/email por rol) son de **presentación**:
+> todo el estado vive en el `localStorage` del navegador, así que un usuario técnico
+> puede leerlo desde la consola. La protección **real** —filtrado server-side por rol,
+> autenticación y datos cifrados— llega con la migración a **Firebase Auth + security
+> rules**. Hasta completar esa etapa, el sistema es solo una demostración funcional.
 
 ---
 
@@ -31,7 +37,7 @@ Todo el JS vive dentro de un único IIFE. Los handlers usan `data-action` + `ACT
 
 | Módulo | Estado |
 |--------|--------|
-| Centro de Mando | ✅ KPIs + alertas automáticas + Katy (asistente IA) |
+| Centro de Mando | ✅ KPIs + alertas automáticas + Athenas (asistente IA) |
 | Clientes / CRM | ✅ Perfil, historial con filtros, insights automáticos, tags predictivos, eliminar cliente |
 | Equipo & Accesos | ✅ Colaboradoras + disponibilidad + edición + eliminar colaborador |
 | Catálogo | ✅ Grupos → Servicios → Variantes + Adicionales + propagación de cambios |
@@ -39,6 +45,25 @@ Todo el JS vive dentro de un único IIFE. Los handlers usan `data-action` + `ACT
 | Ventas & Caja | ✅ Wizard 3 pasos + apertura/cierre/arqueo + registro de gastos + retiros |
 | RRHH | ✅ Liquidaciones + comisiones + deducibles + presentismo/viático editables |
 | Finanzas | ✅ Libro contable, presupuesto mensual por categoría con alertas visuales |
+
+---
+
+## Usuarios y permisos (prototipo)
+
+Tres roles. El acceso se deriva del rol del usuario logueado — reemplaza al viejo toggle manual "modo de caja".
+
+| Módulo | 🟢 Admin (Daniel, Eze) | 🟡 Medio (Recepción) | 🔴 Bajo (Colaboradora) |
+|--------|------------------------|----------------------|------------------------|
+| Centro de Mando | Completo (con $) | Simplificado, sin montos | Mínimo |
+| Agenda | Todos los días | Solo día actual | Solo día actual |
+| Clientes / CRM | Completo (ve datos) | Agendar/consultar, **sin email/tel** | Sin módulo |
+| Caja / Ventas | Completo | Todos los registros | Solo registrar venta |
+| Catálogo / Equipo / RRHH / Finanzas | Completo | — | — |
+
+- Login por PIN (demo): Daniel `1111`, Eze `2222`, Recepción `3333`, Ana `4444`.
+- `PERMISSIONS[rol]` define páginas, vista de agenda, visibilidad de datos, alcance de caja y nivel de Centro.
+- `applyPermissions()` aplica los gates en cada `renderAll()`; `showPage()` bloquea módulos no permitidos.
+- **Recordatorio de seguridad:** el enmascarado es cosmético hasta Firebase (ver advertencia arriba).
 
 ---
 
@@ -81,7 +106,7 @@ RRHH → seleccionar colaboradora → período → revisar comisiones → editar
 
 ## Funcionalidades destacadas
 
-### Katy — Asistente inteligente
+### Athenas — Asistente inteligente
 Panel en Centro de Mando. Calcula en tiempo real:
 - Saludo contextual según la hora del día
 - Clientes en riesgo de abandono (≥28 días sin visita, no en agenda hoy)
@@ -186,7 +211,7 @@ Al editar precio o nombre de un adicional, el sistema detecta los turnos afectad
 1. **Todo cambio va a `glamb-os-working-v6.html`**
 2. `glamb-os-stable.html` no se modifica sin aprobación explícita
 3. Los commits deben tener autor `Claude <noreply@anthropic.com>` — el stop-hook lo verifica
-4. Push siempre a `claude/glamb-os-beauty-salon-9rpkep` vía PAT
+4. **Una sola rama de trabajo activa**: `claude/beautiful-fermat-l5mac7`. Si una sesión nueva asigna otra rama, avisar y mergear antes de trabajar — no dispersar commits
 5. Antes de cada commit: `git config user.email noreply@anthropic.com && git config user.name Claude`
 6. Todo handler nuevo usa `data-action` + `ACTION_MAP` — nunca `onclick=` inline
 7. Todo JS dentro del IIFE existente — sin funciones globales sueltas

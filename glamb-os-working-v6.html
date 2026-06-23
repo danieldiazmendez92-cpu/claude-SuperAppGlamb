@@ -3192,9 +3192,54 @@
     .fin-cat-system{font-size:10px;color:var(--text-soft);flex-shrink:0;padding:1px 6px;border-radius:8px;background:var(--surface-2)}
     .fin-cat-add{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--line)}
     .fin-cat-add input{flex:1;min-width:140px}
+    /* Login overlay */
+    .login-overlay{position:fixed;inset:0;z-index:10000;background:#1a1714;display:flex;align-items:center;justify-content:center;padding:20px}
+    .login-card{background:var(--surface,#fffdf9);border-radius:20px;padding:30px 28px;width:100%;max-width:380px;box-shadow:0 30px 80px rgba(0,0,0,.4);text-align:center}
+    .login-brand{font-size:26px;font-weight:700;letter-spacing:.04em;margin-bottom:4px}
+    .login-brand span{color:#b08d57}
+    .login-sub{font-size:13px;color:var(--text-muted);margin-bottom:18px}
+    .login-users{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+    .login-user{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2,#f6f2ec);cursor:pointer;text-align:left}
+    .login-user:hover{border-color:var(--line-strong,#cbb8a6)}
+    .login-user.sel{border-color:#b08d57;background:#fff;box-shadow:0 0 0 2px rgba(176,141,87,.25)}
+    .login-user-name{font-weight:600;font-size:13px}
+    .login-user-role{font-size:11px;color:var(--text-muted)}
+    .login-pin{width:100%;padding:12px;border:1px solid var(--line);border-radius:12px;font-size:18px;text-align:center;letter-spacing:.3em;margin-bottom:10px}
+    .login-error{color:#c0392b;font-size:12px;min-height:16px;margin-bottom:8px}
+    .login-go{width:100%;margin-bottom:14px}
+    .login-demo{font-size:11px;color:var(--text-muted);margin-bottom:10px}
+    .login-warn{font-size:11px;color:#8a6d3b;background:#fcf3e3;border:1px solid #f0d9a8;border-radius:10px;padding:8px 10px;line-height:1.4}
+    /* User chip */
+    .user-chip{position:fixed;top:12px;right:14px;z-index:9000;display:flex;align-items:center;gap:10px;background:var(--surface,#fffdf9);border:1px solid var(--line);border-radius:999px;padding:5px 8px 5px 12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+    .user-chip-badge{font-size:9px;font-weight:700;letter-spacing:.08em;color:#8a6d3b;background:#fcf3e3;border:1px solid #f0d9a8;border-radius:6px;padding:2px 6px}
+    .user-chip-info{display:flex;flex-direction:column;line-height:1.15}
+    .user-chip-info #userChipName{font-size:12px;font-weight:600}
+    .user-chip-info #userChipRole{font-size:10px;color:var(--text-muted)}
+    .user-chip-logout{border:0;background:var(--surface-2,#f6f2ec);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;color:var(--text)}
+    .user-chip-logout:hover{background:#e8ddcf}
+    @media(max-width:640px){ .user-chip{top:8px;right:8px;padding:4px 6px 4px 10px} .login-users{grid-template-columns:1fr} }
   </style>
 </head>
 <body>
+  <!-- Login (prototipo: autenticación de presentación, no segura aún) -->
+  <div id="loginOverlay" class="login-overlay">
+    <div class="login-card">
+      <div class="login-brand">GLAMB <span>OS</span></div>
+      <p class="login-sub">Elegí tu usuario e ingresá tu PIN</p>
+      <div id="loginUsers" class="login-users"></div>
+      <input id="loginPin" class="login-pin" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off">
+      <div id="loginError" class="login-error"></div>
+      <button class="btn primary login-go" data-action="loginSubmit">Ingresar</button>
+      <div class="login-demo">Demo · PINs: Daniel 1111 · Eze 2222 · Recepción 3333 · Ana 4444</div>
+      <div class="login-warn">⚠️ Prototipo: los datos viven en este navegador y no están protegidos. No usar con información real sensible hasta la migración a Firebase.</div>
+    </div>
+  </div>
+  <!-- Chip de usuario / cierre de sesión -->
+  <div id="userChip" class="user-chip">
+    <span class="user-chip-badge" title="Entorno de prototipo">PROTOTIPO</span>
+    <div class="user-chip-info"><span id="userChipName"></span><span id="userChipRole"></span></div>
+    <button class="user-chip-logout" data-action="logout" title="Cerrar sesión">⏻</button>
+  </div>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
@@ -3377,7 +3422,7 @@
         </div>
         <div class="grid kpis" id="cashKpis"></div>
         <section class="card" id="cashStatus" style="margin-bottom:16px;"></section>
-        <section class="card" style="margin-bottom:16px;">
+        <section class="card" id="cashModeCard" style="margin-bottom:16px;">
           <div class="form-grid">
             <div class="field"><label>Modo de caja</label><select id="cashUserMode"><option value="admin">Admin caja</option><option value="collaborator">Colaboradora</option></select></div>
             <div class="field"><label>Colaboradora activa</label><select id="cashCurrentCollaborator"></select></div>
@@ -4295,7 +4340,14 @@
     finanzasCustomTo:'',
     budgets:{},
     expenseCategories:null,
-    withdrawalReasons:null
+    withdrawalReasons:null,
+    users:[
+      {id:'u1',name:'Daniel',role:'admin',pin:'1111'},
+      {id:'u2',name:'Eze',role:'admin',pin:'2222'},
+      {id:'u3',name:'Recepción',role:'medio',pin:'3333'},
+      {id:'u4',name:'Ana (colaboradora)',role:'bajo',pin:'4444',collaboratorId:'co1'}
+    ],
+    currentUserId:null
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -4303,7 +4355,7 @@
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','withdrawalReasons','ownerName'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','withdrawalReasons','ownerName','users','currentUserId'];
     function saveState(){
       try{
         const out={};
@@ -4369,7 +4421,91 @@
         el.textContent = `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
       }
     }
-    function showPage(page){state.page=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('page-'+page).classList.add('active');document.querySelectorAll('.nav button,.mobile-module-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
+    // ── Usuarios y permisos ───────────────────────────────────────────
+    // ⚠️ PROTOTIPO: el enmascarado de datos y el login son de PRESENTACIÓN.
+    // Todo el state vive en localStorage del navegador, así que un usuario
+    // técnico puede leer los datos "ocultos" desde la consola. La protección
+    // REAL (filtrado server-side por rol) llega con Firebase Auth + security
+    // rules. NO usar con datos reales sensibles hasta completar esa etapa.
+    const PERMISSIONS = {
+      admin: { pages:['command','clients','agenda','cash','catalog','team','rrhh','finanzas'], agenda:'all',   clientData:'full',   cash:'full',  command:'full'   },
+      medio: { pages:['command','clients','agenda','cash'],                                    agenda:'today', clientData:'masked', cash:'full',  command:'simple' },
+      bajo:  { pages:['command','agenda','cash'],                                              agenda:'today', clientData:'masked', cash:'sales', command:'min'    }
+    };
+    const ROLE_LABELS={admin:'Administrador',medio:'Recepción',bajo:'Colaboradora'};
+    function curUser(){ return (state.users||[]).find(u=>u.id===state.currentUserId)||null; }
+    function curRole(){ const u=curUser(); return u?u.role:null; }
+    function permCfg(){ return PERMISSIONS[curRole()] || PERMISSIONS.admin; }
+    function canPage(p){ return permCfg().pages.includes(p); }
+    function canSeeClientData(){ return permCfg().clientData==='full'; }
+    function maskedPhone(c){ return canSeeClientData() ? esc(c.phone||'') : '•••• ••••'; }
+    function maskedEmail(c){ return canSeeClientData() ? esc(c.email||'Sin email') : '•••@•••'; }
+
+    function applyPermissions(){
+      const cfg = permCfg(), u = curUser();
+      // Navegación: ocultar módulos no permitidos
+      document.querySelectorAll('.nav button[data-page],.mobile-module-nav button[data-page]').forEach(b=>{
+        b.style.display = cfg.pages.includes(b.dataset.page) ? '' : 'none';
+      });
+      // Chip de usuario
+      if($('userChipName')) $('userChipName').textContent = u ? u.name : '';
+      if($('userChipRole')) $('userChipRole').textContent = u ? (ROLE_LABELS[u.role]||u.role) : '';
+      // Modo de caja derivado del rol (reemplaza el toggle manual)
+      state.cashMode = cfg.cash==='full' ? 'admin' : 'collaborator';
+      if(curRole()==='bajo' && u && u.collaboratorId) state.cashCurrentCollaboratorId = u.collaboratorId;
+      const modeCard = $('cashModeCard'); if(modeCard) modeCard.style.display='none';
+      // Agenda solo-hoy
+      const todayOnly = cfg.agenda==='today';
+      ['prevDay','nextDay','todayBtn'].forEach(id=>{ if($(id)) $(id).style.display = todayOnly?'none':''; });
+      if($('dateTitle')) $('dateTitle').style.pointerEvents = todayOnly?'none':'';
+      if(todayOnly && dateKey(state.agenda.currentDate)!==dateKey(new Date())) state.agenda.currentDate = new Date();
+      // Caja solo-ventas (rol bajo)
+      const salesOnly = cfg.cash==='sales';
+      ['cashOpenBtn','cashDepositBtn','cashWithdrawalBtn','cashExpenseBtn','cashCloseBtn'].forEach(id=>{ if($(id)) $(id).style.display = salesOnly?'none':''; });
+      document.querySelectorAll('#cashTabs [data-cash-tab]').forEach(b=>{
+        b.style.display = (salesOnly && b.dataset.cashTab!=='register') ? 'none' : '';
+      });
+      // Atajos que saltean módulos restringidos: crear colaboradora solo si tiene Equipo
+      document.querySelectorAll('[data-open-collaborator]').forEach(b=>{ b.style.display = cfg.pages.includes('team') ? '' : 'none'; });
+    }
+
+    function renderLogin(){
+      const box=$('loginUsers'); if(!box) return;
+      box.innerHTML=(state.users||[]).map(u=>`<button class="login-user" data-action="loginPick" data-id="${u.id}"><span class="login-user-name">${esc(u.name)}</span><span class="login-user-role">${ROLE_LABELS[u.role]||u.role}</span></button>`).join('');
+      state._loginPick=null;
+      if($('loginPin')) $('loginPin').value='';
+      if($('loginError')) $('loginError').textContent='';
+    }
+    function loginPick(id){
+      state._loginPick=id;
+      document.querySelectorAll('#loginUsers .login-user').forEach(b=>b.classList.toggle('sel',b.dataset.id===id));
+      if($('loginPin')){ $('loginPin').value=''; $('loginPin').focus(); }
+      if($('loginError')) $('loginError').textContent='';
+    }
+    function loginSubmit(){
+      const id=state._loginPick;
+      if(!id) return ($('loginError').textContent='Elegí un usuario.');
+      const u=(state.users||[]).find(x=>x.id===id);
+      const pin=($('loginPin')?.value||'').trim();
+      if(!u || pin!==u.pin) return ($('loginError').textContent='PIN incorrecto.');
+      state.currentUserId=u.id;
+      saveState();
+      if($('loginOverlay')) $('loginOverlay').style.display='none';
+      const first=permCfg().pages[0]||'command';
+      showPage(first);
+      showToast(`Sesión iniciada: ${u.name} · ${ROLE_LABELS[u.role]}`);
+    }
+    function logout(){
+      state.currentUserId=null;
+      saveState();
+      renderLogin();
+      if($('loginOverlay')) $('loginOverlay').style.display='flex';
+    }
+
+    function showPage(page){
+      if(!canPage(page)) page = permCfg().pages[0]||'command';
+      state.page=page;document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('page-'+page).classList.add('active');document.querySelectorAll('.nav button,.mobile-module-nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()
+    }
     document.querySelectorAll('.nav button,.mobile-module-nav button,[data-go]').forEach(b=>b.onclick=()=>showPage(b.dataset.page||b.dataset.go));
     function openDrawer(id){$(id).classList.add('open');$('overlay').classList.add('open')} function closeDrawers(){document.querySelectorAll('.drawer').forEach(d=>d.classList.remove('open'));$('overlay').classList.remove('open')}
     document.querySelectorAll('[data-open-client]').forEach(b=>b.onclick=()=>openClientDrawerNew());
@@ -4414,21 +4550,27 @@
       const clientsAtRisk = state.clients.filter(c=>!appts.some(a=>a.clientId===c.id)).length;
       const collaboratorRevenue = id => confirmed.reduce((sum,t)=>sum+t.lines.filter(l=>l.collaboratorId===id).reduce((lineSum,l)=>lineSum+Number(l.finalPrice||0),0),0);
       const lowCollaborators = state.collaborators.filter(c=>c.can && collaboratorRevenue(c.id)<20000).length;
-      const items=[['Venta servicios',money(serviceRevenue),'tickets confirmados'],['Pendiente cobro',money(pendingAmount),'a recuperar'],['Turnos hoy',appts.length,'en agenda'],['Huecos',openSlots,'vendibles'],['Clientes riesgo',clientsAtRisk,'sin turno activo']];
+      const cmd = permCfg().command; // 'full' | 'simple' | 'min'
+      const moneyItems=[['Venta servicios',money(serviceRevenue),'tickets confirmados'],['Pendiente cobro',money(pendingAmount),'a recuperar']];
+      const opItems=[['Turnos hoy',appts.length,'en agenda'],['Huecos',openSlots,'vendibles'],['Clientes riesgo',clientsAtRisk,'sin turno activo']];
+      const items = cmd==='full' ? [...moneyItems,...opItems] : cmd==='simple' ? opItems : [['Turnos hoy',appts.length,'en agenda'],['Huecos',openSlots,'vendibles']];
       $('commandKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
-      $('commandAlerts').innerHTML=`<div class="mini-row"><strong>${clientsAtRisk} clientas en riesgo</strong><span>Sin turno activo cargado para hoy. Priorizar contacto por WhatsApp.</span></div><div class="mini-row"><strong>${openSlots} huecos vendibles</strong><span>Revisar lista de espera y servicios de mayor margen.</span></div><div class="mini-row"><strong>${lowCollaborators} colaboradora(s) bajo objetivo</strong><span>Controlar ocupación y facturación por profesional.</span></div><div class="mini-row"><strong>${money(pendingAmount)} pendientes de cobro</strong><span>Caja necesita seguimiento antes del cierre.</span></div>`;
-      $('commandAppointments').innerHTML=appts.slice(0,4).map(a=>`<div class="mini-row"><strong>${a.start} · ${client(a.clientId).first} ${client(a.clientId).last}</strong><span>${a.service} con ${member(a.memberId).first}</span></div>`).join('') || '<div class="mini-row"><strong>Sin turnos activos</strong><span>La agenda está libre para vender huecos.</span></div>';
-      renderAthenas({appts, pendingAmount, openSlots, lowCollaborators});
+      const moneyAlert = cmd==='full' ? `<div class="mini-row"><strong>${money(pendingAmount)} pendientes de cobro</strong><span>Caja necesita seguimiento antes del cierre.</span></div>` : '';
+      const lowAlert = cmd==='min' ? '' : `<div class="mini-row"><strong>${lowCollaborators} colaboradora(s) bajo objetivo</strong><span>Controlar ocupación y facturación por profesional.</span></div>`;
+      $('commandAlerts').innerHTML=`<div class="mini-row"><strong>${clientsAtRisk} clientas en riesgo</strong><span>Sin turno activo cargado para hoy. Priorizar contacto por WhatsApp.</span></div><div class="mini-row"><strong>${openSlots} huecos vendibles</strong><span>Revisar lista de espera y servicios de mayor margen.</span></div>${lowAlert}${moneyAlert}`;
+      $('commandAppointments').innerHTML=appts.slice(0,4).map(a=>`<div class="mini-row"><strong>${esc(a.start)} · ${esc(client(a.clientId).first)} ${esc(client(a.clientId).last)}</strong><span>${esc(a.service)} con ${esc(member(a.memberId).first)}</span></div>`).join('') || '<div class="mini-row"><strong>Sin turnos activos</strong><span>La agenda está libre para vender huecos.</span></div>';
+      renderAthenas({appts, pendingAmount, openSlots, lowCollaborators, cmd});
     }
 
-    function renderAthenas({appts, pendingAmount, openSlots, lowCollaborators}){
+    function renderAthenas({appts, pendingAmount, openSlots, lowCollaborators, cmd}){
       const el = $('athenasSummary'); if(!el) return;
+      cmd = cmd || permCfg().command;
       const today = dateKey(new Date());
       const dayNames = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
       const months = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
       const now = new Date();
-      const ownerName = state.ownerName || 'Daniel';
-      const greeting = `Buen${now.getHours()<13?'os días':'as tardes'}, ${esc(ownerName)}. Hoy es ${dayNames[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]}.`;
+      const greetName = (curUser() && curUser().name) || state.ownerName || 'Daniel';
+      const greeting = `Buen${now.getHours()<13?'os días':'as tardes'}, ${esc(greetName)}. Hoy es ${dayNames[now.getDay()]} ${now.getDate()} ${months[now.getMonth()]}.`;
 
       // At-risk clients: last visit >= 30 days ago, not in today's agenda
       const activeClientIds = new Set(appts.map(a=>a.clientId));
@@ -4445,9 +4587,9 @@
             const msg = encodeURIComponent(`Hola ${c.first} 🌸 Te extrañamos en GLAMB. ¿Agendamos para ${service}? Tenemos turnos disponibles esta semana.`);
             const rawMsg = `Hola ${c.first} 🌸 Te extrañamos en GLAMB. ¿Agendamos para ${service}? Tenemos turnos disponibles esta semana.`;
             return `<div class="athenas-card">
-              <div class="athenas-card-title">${c.first} ${c.last}</div>
-              <div class="athenas-card-body">Sin visita hace ${ins.daysSinceLast} días · ${service}</div>
-              <button class="athenas-copy-btn" data-action="athenasCopy" data-msg="${rawMsg.replace(/"/g,'&quot;')}">📋 Copiar mensaje WhatsApp</button>
+              <div class="athenas-card-title">${esc(c.first)} ${esc(c.last)}</div>
+              <div class="athenas-card-body">Sin visita hace ${ins.daysSinceLast} días · ${esc(service)}</div>
+              <button class="athenas-copy-btn" data-action="athenasCopy" data-msg="${esc(rawMsg)}">📋 Copiar mensaje WhatsApp</button>
             </div>`;
           }).join('')
         : `<div class="athenas-empty">Sin clientas en riesgo hoy.</div>`;
@@ -4464,20 +4606,19 @@
         const parts = (m.hours||'09:00 - 19:00').split(' - ');
         const workMins = parts.length===2 ? mins(parts[1].trim())-mins(parts[0].trim()) : 480;
         const freeMins = Math.max(0, workMins - busyMins);
-        return freeMins>=30 ? `<div class="athenas-slot"><strong>${m.first}</strong><span>${Math.floor(freeMins/60)}h ${freeMins%60>0?freeMins%60+'min':''} libre</span></div>` : '';
+        return freeMins>=30 ? `<div class="athenas-slot"><strong>${esc(m.first)}</strong><span>${Math.floor(freeMins/60)}h ${freeMins%60>0?freeMins%60+'min':''} libre</span></div>` : '';
       }).filter(Boolean).join('');
 
-      // Cobros pendientes alert
-      const pendingHtml = pendingAmount>0
-        ? `<div class="athenas-section"><div class="athenas-section-label">💸 Cobros pendientes</div><div class="athenas-card"><div class="athenas-card-title">${money(pendingAmount)} sin cobrar</div><div class="athenas-card-body">Verificar antes del cierre de caja.</div><button class="athenas-copy-btn" data-action="showPage" data-page="caja">Ir a Caja</button></div></div>`
+      // Cobros pendientes: solo rol con visión de dinero (admin)
+      const pendingHtml = (cmd==='full' && pendingAmount>0)
+        ? `<div class="athenas-section"><div class="athenas-section-label">💸 Cobros pendientes</div><div class="athenas-card"><div class="athenas-card-title">${money(pendingAmount)} sin cobrar</div><div class="athenas-card-body">Verificar antes del cierre de caja.</div><button class="athenas-copy-btn" data-action="showPage" data-page="cash">Ir a Caja</button></div></div>`
         : '';
+      // Reactivación: tarea de recepción/admin, no para rol bajo
+      const reactivationSection = cmd==='min' ? '' : `<div class="athenas-section"><div class="athenas-section-label">🔁 Reactivación</div>${reactivationHtml}</div>`;
 
       el.innerHTML = `
         <div class="athenas-greeting">${greeting}</div>
-        <div class="athenas-section">
-          <div class="athenas-section-label">🔁 Reactivación</div>
-          ${reactivationHtml}
-        </div>
+        ${reactivationSection}
         ${slotsHtml ? `<div class="athenas-section"><div class="athenas-section-label">📅 Huecos del día</div>${slotsHtml}</div>` : ''}
         ${pendingHtml}
       `;
@@ -4546,7 +4687,7 @@
       $('clientsList').innerHTML=list.map(c=>{
         const ins = clientInsights(c.id);
         const lastTxt = ins.daysSinceLast!==null ? ` · última hace ${ins.daysSinceLast} día(s)` : '';
-        return `<article class="client-card"><div class="client-main"><div class="avatar">${esc(initials(c))}</div><div><h3>${esc(fullName(c))}</h3><div class="meta">${esc(clientCode(c))} · ${esc(c.phone)} · ${esc(c.email||'Sin email')} · ${frequencyLabel(ins)}${lastTxt}</div><div class="tags">${c.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${insightTagsHtml(ins)}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="openClientProfile" data-id="${c.id}">Ver perfil</button><button class="small-btn" data-action="openApptForClient" data-client="${c.id}">Crear turno</button></div></article>`;
+        return `<article class="client-card"><div class="client-main"><div class="avatar">${esc(initials(c))}</div><div><h3>${esc(fullName(c))}</h3><div class="meta">${esc(clientCode(c))} · ${maskedPhone(c)} · ${maskedEmail(c)} · ${frequencyLabel(ins)}${lastTxt}</div><div class="tags">${c.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${insightTagsHtml(ins)}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="openClientProfile" data-id="${c.id}">Ver perfil</button><button class="small-btn" data-action="openApptForClient" data-client="${c.id}">Crear turno</button></div></article>`;
       }).join('')
     }
     $('clientSearch').oninput=e=>{state.clientSearch=e.target.value;renderClients()};
@@ -5272,7 +5413,7 @@
         if($('depositAvailableBalance')) $('depositAvailableBalance').textContent = '$0';
         if(!q){box.classList.remove('open'); return;}
         const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||''].join(' ').toLowerCase().includes(q)).slice(0,4);
-        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-dep-client="${c.id}">${esc(fullName(c))}<span>${esc(c.phone)}</span></div>`).join('');
+        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-dep-client="${c.id}">${esc(fullName(c))}<span>${maskedPhone(c)}</span></div>`).join('');
         box.classList.toggle('open', matches.length>0);
       };
     }
@@ -5345,7 +5486,7 @@
         state.saleClient = {clientId:null, clientName:input.value.trim()};
         if(!q){box.classList.remove('open'); return;}
         const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c)].join(' ').toLowerCase().includes(q)).slice(0,4);
-        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-client-suggestion="${c.id}">${esc(fullName(c))}<span>${esc(c.phone)} · ${esc(c.email||'sin email')}</span></div>`).join('');
+        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-client-suggestion="${c.id}">${esc(fullName(c))}<span>${maskedPhone(c)} · ${maskedEmail(c)}</span></div>`).join('');
         box.classList.toggle('open', matches.length>0);
         document.querySelectorAll('[data-client-suggestion]').forEach(item=>item.onclick=()=>{
           const c = client(item.dataset.clientSuggestion);
@@ -5889,7 +6030,7 @@
           const depositLine=availDep>0?`<div class="tt-deposit">💰 Seña disponible: ${money(availDep)}</div>`:depAmt>0?`<div class="tt-deposit">Seña en turno: ${money(depAmt)}</div>`:'';
           const tip=$('apptTooltip');
           if(!tip) return;
-          tip.innerHTML=`<div class="tt-tier">${esc(tier)}</div><div class="tt-name">${esc(fullName(c))}</div><div class="tt-phone">${esc(c.phone)}</div><hr class="tt-divider"><div class="tt-service">${servicesHtml}</div><div class="tt-pro">con ${proHtml}</div><div class="tt-time">${esc(a.start)}–${esc(a.end)}</div>${depositLine}<hr class="tt-divider"><div class="tt-price">${money(totalPrice)}</div><div class="tt-status-chip">${esc(statusLabels[a.status||'confirmed']||a.status||'')}</div>`;
+          tip.innerHTML=`<div class="tt-tier">${esc(tier)}</div><div class="tt-name">${esc(fullName(c))}</div><div class="tt-phone">${maskedPhone(c)}</div><hr class="tt-divider"><div class="tt-service">${servicesHtml}</div><div class="tt-pro">con ${proHtml}</div><div class="tt-time">${esc(a.start)}–${esc(a.end)}</div>${depositLine}<hr class="tt-divider"><div class="tt-price">${money(totalPrice)}</div><div class="tt-status-chip">${esc(statusLabels[a.status||'confirmed']||a.status||'')}</div>`;
           tip.style.display='block';
           const rect=el.getBoundingClientRect();
           const tipW=248, tipH=tip.offsetHeight;
@@ -6474,7 +6615,7 @@
         state.appointmentClient = {clientId:null, clientName:input.value.trim()};
         if(q.length < 3){ box.classList.remove('open'); box.innerHTML=''; updateApPreview(); return; }
         const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c)].join(' ').toLowerCase().includes(q)).slice(0,4);
-        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-ap-client="${c.id}">${esc(fullName(c))}<span>${esc(clientCode(c))} · ${esc(c.phone)} · ${esc(c.email||'sin email')}</span></div>`).join('');
+        box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-ap-client="${c.id}">${esc(fullName(c))}<span>${esc(clientCode(c))} · ${maskedPhone(c)} · ${maskedEmail(c)}</span></div>`).join('');
         box.classList.add('open');
         document.querySelectorAll('[data-ap-client]').forEach(item=>item.onclick=()=>{
           const c = client(item.dataset.apClient);
@@ -6952,9 +7093,9 @@
       $('profileAvatar').textContent = initials(c);
       $('profileName').textContent = fullName(c);
       $('profileTier').textContent = c.tags.includes('VIP') ? 'Diamond' : c.tags.includes('Acepta upgrades') ? 'Black' : 'Muse';
-      $('profileWhatsapp').textContent = c.phone;
-      $('profileEmail').textContent = c.email || 'Sin email';
-      $('profilePreferences').innerHTML = c.tags.map(t=>`<span class="tag">${t}</span>`).join('') || '<span class="tag neutral">Sin preferencias</span>';
+      $('profileWhatsapp').textContent = canSeeClientData() ? (c.phone||'—') : '•••• ••••';
+      $('profileEmail').textContent = canSeeClientData() ? (c.email || 'Sin email') : '•••@•••';
+      $('profilePreferences').innerHTML = c.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('') || '<span class="tag neutral">Sin preferencias</span>';
       $('profileNote').textContent = c.note || 'Sin nota clave.';
       const ins = clientInsights(c.id);
       $('profileMetricTicket').textContent = ins.avgTicket ? money(ins.avgTicket) : '—';
@@ -8026,7 +8167,7 @@
     }
     // === FIN STATE MUTATION FUNCTIONS ===
 
-    function renderAll(){renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
+    function renderAll(){applyPermissions();renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
@@ -8165,6 +8306,7 @@
     document.querySelectorAll('[data-sale-source]').forEach(b=>b.onclick=()=>{setSaleSource(b.dataset.saleSource); document.querySelectorAll('.wiz-source-card').forEach(c=>c.classList.toggle('active',c.dataset.saleSource===b.dataset.saleSource));});
     initSaleClientAutocomplete();
     if($('saleAppointmentSelect')) $('saleAppointmentSelect').onchange=()=>selectSaleAppointment($('saleAppointmentSelect').value);
+    if($('loginPin')) $('loginPin').addEventListener('keydown', e=>{ if(e.key==='Enter') loginSubmit(); });
     if($('prevDay')) $('prevDay').onclick = () => { const d=state.agenda.view==='week'?-7:-1; state.agenda.currentDate.setDate(state.agenda.currentDate.getDate()+d); updateDateTitle(); renderAgenda(); };
     if($('nextDay')) $('nextDay').onclick = () => { const d=state.agenda.view==='week'?7:1; state.agenda.currentDate.setDate(state.agenda.currentDate.getDate()+d); updateDateTitle(); renderAgenda(); };
     if($('todayBtn')) $('todayBtn').onclick = () => { state.agenda.currentDate = new Date(); updateDateTitle(); renderAgenda(); };
@@ -8299,6 +8441,14 @@
       if(changed) saveState();
     })();
     buildCollaboratorForm();fillAppointmentOptions();renderAll();
+    // Bootstrap de sesión: si no hay usuario logueado, mostrar login
+    renderLogin();
+    if(curUser()){
+      if($('loginOverlay')) $('loginOverlay').style.display='none';
+      showPage(permCfg().pages.includes(state.page)?state.page:permCfg().pages[0]||'command');
+    } else {
+      if($('loginOverlay')) $('loginOverlay').style.display='flex';
+    }
     setInterval(saveState, 5000);
     window.addEventListener('beforeunload', saveState);
 
@@ -8362,6 +8512,9 @@
       deleteExpenseCategory:   el => deleteExpenseCategory(el.dataset.id),
       addWithdrawalReason:     () => addWithdrawalReason(),
       deleteWithdrawalReason:  el => deleteWithdrawalReason(el.dataset.reason),
+      loginPick:               el => loginPick(el.dataset.id),
+      loginSubmit:             () => loginSubmit(),
+      logout:                  () => logout(),
       // Con data-page
       showPage:                el => showPage(el.dataset.page),
       // Con data-tab
