@@ -19,13 +19,42 @@ jobs:
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Deploy Hosting + Firestore Rules
+      - name: Deploy Hosting
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLAMB_OS }}
         run: |
           echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/firebase-sa.json
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json firebase deploy \
-            --only hosting,firestore:rules \
+            --only hosting \
             --project glamb-os \
             --non-interactive
           rm -f /tmp/firebase-sa.json
+
+      - name: Deploy Firestore Rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLAMB_OS }}
+        # Requiere que la cuenta de servicio tenga el rol "Firebase Admin"
+        # (o al menos serviceusage.serviceUsageConsumer + Firebase Hosting Admin + Cloud Datastore Owner).
+        # Si falla con 403, ve a Google Cloud Console > IAM y agrega el rol "Firebase Admin"
+        # a la cuenta de servicio cuyo email aparece en el campo "client_email" del secret.
+        continue-on-error: true
+        run: |
+          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/firebase-sa.json
+          SA_EMAIL=$(python3 -c "import json,sys; d=json.load(open('/tmp/firebase-sa.json')); print(d['client_email'])" 2>/dev/null || echo "desconocido")
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json firebase deploy \
+            --only firestore:rules \
+            --project glamb-os \
+            --non-interactive
+          STATUS=$?
+          rm -f /tmp/firebase-sa.json
+          if [ $STATUS -ne 0 ]; then
+            echo ""
+            echo "ACCION REQUERIDA:"
+            echo "La cuenta de servicio '${SA_EMAIL}' no tiene permiso para desplegar"
+            echo "reglas de Firestore. Para solucionarlo:"
+            echo "  1. Ve a https://console.cloud.google.com/iam-admin/iam?project=glamb-os"
+            echo "  2. Encuentra la cuenta: ${SA_EMAIL}"
+            echo "  3. Agrega el rol: Firebase Admin"
+            echo "Hosting fue desplegado exitosamente. Las reglas de Firestore NO se actualizaron."
+            exit 1
+          fi
