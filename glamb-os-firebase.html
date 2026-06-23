@@ -4397,7 +4397,8 @@
     ],
     currentUserId:null,
     teamTab:'collaborators',
-    systemUsers:[]
+    systemUsers:[],
+    clientsPrivate:{}
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -4417,7 +4418,7 @@
       messagingSenderId: "733109093638",
       appId: "1:733109093638:web:720da3c212b9da24a9ca87"
     };
-    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _usersUnsub=null;
+    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _usersUnsub=null, _cpUnsub=null;
     state.authUser = null;
     try {
       firebase.initializeApp(firebaseConfig);
@@ -4428,14 +4429,18 @@
     } catch(e){ console.error('[GLAMB] Firebase init falló:', e); }
 
     function serializeState(){ const out={}; PERSIST_KEYS.forEach(k=>{ if(state[k]!==undefined) out[k]=state[k]; }); return out; }
-    function applyPersisted(data){ if(!data) return; PERSIST_KEYS.forEach(k=>{ if(data[k]!==undefined) state[k]=data[k]; }); }
+    // Versión sin datos sensibles para el blob compartido en Firestore.
+    // phone/email van a la colección clientsPrivate (solo lectura para admin).
+    function serializeForCloud(){ const out=serializeState(); if(out.clients) out.clients=out.clients.map(({phone:_p,email:_e,...rest})=>rest); return out; }
+    function applyPersisted(data){ if(!data) return; PERSIST_KEYS.forEach(k=>{ if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
 
     function saveState(){
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); }catch(e){}
       if(fbReady && auth && auth.currentUser && !_applyingRemote){
         clearTimeout(_cloudTimer);
         _cloudTimer = setTimeout(()=>{
-          stateDoc.set(serializeState(),{merge:false}).catch(e=>console.error('[GLAMB] guardado en nube falló:', e));
+          // Fase B: el blob compartido NO lleva phone/email de clientes
+          stateDoc.set(serializeForCloud(),{merge:false}).catch(e=>console.error('[GLAMB] guardado en nube falló:', e));
         }, 800);
       }
     }
@@ -4447,7 +4452,7 @@
       try{
         const snap=await stateDoc.get();
         if(snap.exists){ applyPersisted(snap.data()); }
-        else { await stateDoc.set(serializeState(),{merge:false}); } // primer arranque: sembrar demo
+        else { await stateDoc.set(serializeForCloud(),{merge:false}); } // primer arranque: sembrar demo
       }catch(e){ console.error('[GLAMB] carga desde nube falló:', e); }
     }
     function subscribeStateSync(){
@@ -4466,6 +4471,59 @@
         state.systemUsers = snap.docs.map(d=>({uid:d.id,...d.data()}));
         if(state.page==='team') renderTeam();
       }, e=>console.error('[GLAMB] users sync falló:', e));
+    }
+
+    // ── Fase B: protección server-side datos de contacto ─────────────
+    // phone/email viven en clientsPrivate/{id} (solo admin puede leer).
+    // El blob compartido appState/main nunca lleva estos campos.
+
+    function mergeClientsPrivate(){
+      if(!state.clients || !state.clientsPrivate) return;
+      const priv = state.clientsPrivate;
+      state.clients = state.clients.map(c=>{
+        const p = priv[c.id];
+        if(!p) return c;
+        return {...c, phone:p.phone||c.phone||'', email:p.email||c.email||''};
+      });
+    }
+
+    function saveClientPrivate(id, phone, email){
+      if(!fbReady || !db) return;
+      db.collection('clientsPrivate').doc(id)
+        .set({phone:phone||'',email:email||''},{merge:true})
+        .catch(e=>console.error('[GLAMB] saveClientPrivate falló:',e));
+    }
+
+    function deleteClientPrivate(id){
+      if(!fbReady || !db) return;
+      db.collection('clientsPrivate').doc(id).delete().catch(()=>{});
+    }
+
+    function subscribeClientsPrivateSync(){
+      if(!fbReady || _cpUnsub) return;
+      _cpUnsub = db.collection('clientsPrivate').onSnapshot(snap=>{
+        state.clientsPrivate = {};
+        snap.docs.forEach(d=>{ state.clientsPrivate[d.id]=d.data(); });
+        mergeClientsPrivate();
+        if(state.page==='clients') renderClients();
+      }, e=>console.error('[GLAMB] clientsPrivate sync falló:', e));
+    }
+
+    async function migrateClientsPrivateIfNeeded(){
+      if(!fbReady || curRole()!=='admin') return;
+      if(localStorage.getItem('glamb-cp-migrated-v1')) return;
+      const toMigrate=(state.clients||[]).filter(c=>c.phone||c.email);
+      if(!toMigrate.length){ localStorage.setItem('glamb-cp-migrated-v1','1'); return; }
+      try{
+        const batch=db.batch();
+        toMigrate.forEach(c=>{
+          batch.set(db.collection('clientsPrivate').doc(c.id),
+            {phone:c.phone||'',email:c.email||''},{merge:true});
+        });
+        await batch.commit();
+        localStorage.setItem('glamb-cp-migrated-v1','1');
+        console.log('[GLAMB] migración clientsPrivate completada:',toMigrate.length,'clientes');
+      }catch(e){ console.error('[GLAMB] migración clientsPrivate falló:',e); }
     }
     async function ensureUserRole(user){
       const uref = db.collection('users').doc(user.uid);
@@ -6696,15 +6754,19 @@
     $('saveClient').onclick=()=>{
       const first=$('clFirst').value.trim(),last=$('clLast').value.trim();
       if(!first||!last)return showToast('Completá nombre y apellido');
-      const data={first,last,phone:$('clPhone').value.trim(),email:$('clEmail').value.trim(),tags:selectedTexts('#clientPrefChips .select-chip'),note:$('clNote').value.trim()||'Sin nota clave.'};
+      const phone=$('clPhone').value.trim(), email=$('clEmail').value.trim();
+      const data={first,last,phone,email,tags:selectedTexts('#clientPrefChips .select-chip'),note:$('clNote').value.trim()||'Sin nota clave.'};
       if(state.editingClientId){
-        const idx=state.clients.findIndex(c=>c.id===state.editingClientId);
+        const editId=state.editingClientId;
+        const idx=state.clients.findIndex(c=>c.id===editId);
         if(idx>=0) Object.assign(state.clients[idx], data);
+        saveClientPrivate(editId, phone, email); // Fase B: persistir contacto en colección privada
         state.editingClientId=null;
         closeDrawers();renderAll();showToast('Cliente actualizado');
       } else {
         const newClient={id:'cl'+Date.now(),code:nextClientCode(),...data};
         state.clients.unshift(newClient);
+        saveClientPrivate(newClient.id, phone, email); // Fase B: persistir contacto en colección privada
         if(state.afterClientCreate==='sale'){state.afterClientCreate=null;state.saleSource='existing';state.saleClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();showPage('cash');setCashTab('register');setTimeout(()=>{if($('saleClientInput')) $('saleClientInput').value=fullName(newClient);updateSaleSummary();},0);showToast('Cliente creado y seleccionado para la venta');}
         else if(state.afterClientCreate==='appointment'){state.afterClientCreate=null;state.appointmentClient={clientId:newClient.id,clientName:fullName(newClient)};closeDrawers();openDrawer('appointmentDrawer');setTimeout(()=>{showApClientChip(newClient);updateApPreview();},0);showToast('Cliente creado y seleccionado para el turno');}
         else{closeDrawers();showPage('clients');showToast('Cliente creado')}
@@ -7407,6 +7469,7 @@
         ? `¿Eliminar a ${fullName(c)}? Tiene ${apptCount} turno(s) en agenda que quedarán sin cliente asignado.`
         : `¿Eliminar a ${fullName(c)}? Esta acción no se puede deshacer.`;
       showConfirm(msg, ()=>{
+        deleteClientPrivate(id);
         state.clients = state.clients.filter(x=>x.id!==id);
         saveState();
         closeDrawers();
@@ -8356,6 +8419,7 @@
       if(!state.clients) state.clients=[];
       state.clients.push(client);
       saveState();
+      saveClientPrivate(client.id, client.phone, client.email);
       return client;
     }
     function updateClient(id, props){
@@ -8363,6 +8427,9 @@
       if(idx>-1){
         state.clients[idx]={...state.clients[idx], ...props};
         saveState();
+        if(props.phone!==undefined || props.email!==undefined){
+          saveClientPrivate(id, state.clients[idx].phone, state.clients[idx].email);
+        }
       }
       return state.clients[idx];
     }
@@ -8726,7 +8793,11 @@
             }
             await loadStateFromCloud();
             subscribeStateSync();
-            if(curRole()==='admin') subscribeUsersSync();
+            if(curRole()==='admin'){
+              subscribeUsersSync();
+              subscribeClientsPrivateSync();
+              await migrateClientsPrivateIfNeeded();
+            }
             bootAppData();
             if($('loginOverlay')) $('loginOverlay').style.display='none';
             showPage(permCfg().pages[0]||'command');
@@ -8742,8 +8813,10 @@
         } else {
           if(_cloudUnsub){ _cloudUnsub(); _cloudUnsub=null; }
           if(_usersUnsub){ _usersUnsub(); _usersUnsub=null; }
+          if(_cpUnsub){ _cpUnsub(); _cpUnsub=null; }
           state.authUser=null;
           state.systemUsers=[];
+          state.clientsPrivate={};
           if($('loginOverlay')) $('loginOverlay').style.display='flex';
         }
       });

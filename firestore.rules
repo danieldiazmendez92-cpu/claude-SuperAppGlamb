@@ -29,6 +29,14 @@ service cloud.firestore {
       allow read, write: if hasAccess();
     }
 
+    // Datos privados de contacto de clientes (Fase B)
+    // Solo admin puede LEER. Cualquier usuario con acceso puede ESCRIBIR
+    // (la recepcionista carga el teléfono del cliente pero no puede consultarlo después).
+    match /clientsPrivate/{clientId} {
+      allow read: if isAdmin();
+      allow write: if hasAccess();
+    }
+
     // Todo lo demás: denegado
     match /{document=**} {
       allow read, write: if false;
