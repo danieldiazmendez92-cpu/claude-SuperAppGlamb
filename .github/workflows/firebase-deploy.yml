@@ -1,0 +1,19 @@
+name: Deploy GLAMB OS to Firebase Hosting
+
+on:
+  push:
+    branches:
+      - claude/beautiful-fermat-l5mac7
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLAMB_OS }}'
+          channelId: live
+          projectId: glamb-os
