@@ -9518,6 +9518,8 @@
     function buildAthenaContext(){
       const now=new Date(), today=dateKey(now);
       const dow=now.getDay(), weekStart=dateKey(new Date(now.getTime()-(dow===0?6:dow-1)*86400000));
+      const d90=dateKey(new Date(now.getTime()-90*86400000));
+      const d30=dateKey(new Date(now.getTime()-30*86400000));
       // Catalog price lookup
       const catalogPrices={};
       (state.catalog?.groups||[]).forEach(g=>g.services.forEach(s=>{
@@ -9525,14 +9527,20 @@
         catalogPrices[s.name]=prices.length?prices[0]:null;
       }));
       const apptLine=a=>`  ${a.date} ${a.start} · ${fullName(client(a.clientId))||'(sin cliente)'} · ${a.service}${catalogPrices[a.service]!=null?' ($'+catalogPrices[a.service].toLocaleString('es-AR')+')':''} · ${fullName(member(a.memberId))||'(sin prof.)'} [${a.status||'confirmado'}]`;
-      // All active appointments split past/future
       const allAppts=state.appointments.filter(a=>!a.isAdditional).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
-      const pastAppts=allAppts.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)&&(a.date||'')<today);
-      const todayAppts=allAppts.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)&&a.date===today);
-      const futureAppts=allAppts.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)&&(a.date||'')>today);
-      const cancelledAppts=allAppts.filter(a=>['cancelled','cancelado','voided'].includes(a.status));
+      const isCancelled=a=>['cancelled','cancelado','voided'].includes(a.status);
+      const activeAppts=allAppts.filter(a=>!isCancelled(a));
+      const pastAppts=activeAppts.filter(a=>(a.date||'')<today);
+      const todayAppts=activeAppts.filter(a=>a.date===today);
+      const futureAppts=activeAppts.filter(a=>(a.date||'')>today);
+      // Past 90 days in detail; older data covered by monthly summary
+      const recentPast=pastAppts.filter(a=>(a.date||'')>=d90);
+      const olderPastCount=pastAppts.filter(a=>(a.date||'')<d90).length;
+      // Cancelled: last 30 days + total count
+      const cancelledAll=allAppts.filter(a=>isCancelled(a));
+      const cancelledRecent=cancelledAll.filter(a=>(a.date||'')>=d30);
       // Weekly stats
-      const weekAppts=allAppts.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)&&(a.date||'')>=weekStart&&(a.date||'')<=today);
+      const weekAppts=activeAppts.filter(a=>(a.date||'')>=weekStart&&(a.date||'')<=today);
       const svcCount={};weekAppts.forEach(a=>{svcCount[a.service]=(svcCount[a.service]||0)+1;});
       const topSvcs=Object.entries(svcCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
       const weekRev=state.payments.filter(p=>(p.date||p.createdAt||'').slice(0,10)>=weekStart&&!p.voided&&(p.type==='service'||p.type==='deposit_applied')).reduce((s,p)=>s+Number(p.amount||0),0);
@@ -9546,8 +9554,10 @@
       });
       const monthSummary=Object.entries(ticketsByMonth).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,24)
         .map(([ym,d])=>`  ${ym}: $${d.rev.toLocaleString('es-AR')} (${d.count} ticket${d.count!==1?'s':''})`).join('\n');
-      // Client list
-      const clientList=state.clients.map(c=>`${fullName(c)} (${clientCode(c)})`).join(', ');
+      // Clients with last-visit date for "quién no vino" queries
+      const lastVisit={};
+      pastAppts.forEach(a=>{if(a.clientId&&(!lastVisit[a.clientId]||a.date>lastVisit[a.clientId])) lastVisit[a.clientId]=a.date;});
+      const clientList=state.clients.map(c=>`${fullName(c)} (${clientCode(c)})${lastVisit[c.id]?' — últ.visita '+lastVisit[c.id]:' — sin turnos'}`).join('\n  ');
       const todayStr=`${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} (${['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][now.getDay()]})`;
       return `
 === DATOS EN TIEMPO REAL (${todayStr}) ===
@@ -9556,9 +9566,9 @@ RESUMEN GENERAL:
 - Clientes registrados: ${state.clients.length}
 - Profesionales activas: ${state.collaborators.filter(c=>c.can).length}
 - Turnos hoy: ${todayAppts.length} | Esta semana (activos): ${weekAppts.length}
-- Total turnos futuros agendados: ${futureAppts.length}
-- Total turnos pasados (histórico): ${pastAppts.length}
-- Cancelados/anulados históricos: ${cancelledAppts.length}
+- Turnos futuros agendados: ${futureAppts.length}
+- Turnos pasados (últ. 90 días): ${recentPast.length} | Más antiguos: ${olderPastCount} (ver resumen mensual)
+- Cancelados/anulados histórico total: ${cancelledAll.length}
 - Facturación semana: $${weekRev.toLocaleString('es-AR')}
 
 TURNOS DE HOY:
@@ -9567,11 +9577,12 @@ ${todayAppts.length?todayAppts.sort((a,b)=>a.start.localeCompare(b.start)).map(a
 TURNOS FUTUROS — TODOS (${futureAppts.length} agendados):
 ${futureAppts.length?futureAppts.map(apptLine).join('\n'):'  Sin turnos futuros'}
 
-HISTORIAL DE TURNOS PASADOS — TODOS (${pastAppts.length} total, más reciente primero):
-${pastAppts.length?[...pastAppts].reverse().map(apptLine).join('\n'):'  Sin historial'}
+HISTORIAL ÚLTIMOS 90 DÍAS (${recentPast.length} turnos, más reciente primero):
+${recentPast.length?[...recentPast].reverse().map(apptLine).join('\n'):'  Sin historial reciente'}
+${olderPastCount>0?`(Hay ${olderPastCount} turnos anteriores al ${d90} — consultar resumen mensual para datos históricos)`:''  }
 
-TURNOS CANCELADOS/ANULADOS (${cancelledAppts.length}):
-${cancelledAppts.length?[...cancelledAppts].reverse().map(a=>`  ${a.date} · ${fullName(client(a.clientId))||'(sin cliente)'} · ${a.service} · ${a.status}`).join('\n'):'  Ninguno'}
+CANCELADOS/ANULADOS ÚLTIMOS 30 DÍAS (${cancelledRecent.length} de ${cancelledAll.length} totales):
+${cancelledRecent.length?cancelledRecent.reverse().map(a=>`  ${a.date} · ${fullName(client(a.clientId))||'(sin cliente)'} · ${a.service} · ${a.status}`).join('\n'):'  Ninguno reciente'}
 
 RESUMEN FINANCIERO POR MES (últimos 24 meses, tickets cobrados):
 ${monthSummary||'  Sin datos de tickets'}
@@ -9588,8 +9599,8 @@ ${(state.catalog?.groups||[]).map(g=>`  ${g.name}:\n${(g.services||[]).map(s=>` 
 EQUIPO (colaboradoras):
 ${state.collaborators.map(c=>`  ${fullName(c)} — ${(c.groups||[]).join(', ')||c.type} — ${c.can?'Recibe turnos':'No asignable'} — Días: ${c.days||'?'}`).join('\n')}
 
-CLIENTES (${state.clients.length} total):
-${clientList}`;
+CLIENTES (${state.clients.length} total, con última visita):
+  ${clientList}`;
     }
 
     function renderMarkdown(text){
