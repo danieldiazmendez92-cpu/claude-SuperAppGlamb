@@ -3314,9 +3314,11 @@
             <p class="subtitle">La memoria viva de GLAMB. Creá clientes, guardá WhatsApp, preferencias y notas clave.</p>
           </div>
           <div class="top-actions">
+            <button class="btn" id="importClientsBtn">Importar CSV</button>
             <button class="btn primary" data-open-client>Nuevo cliente</button>
           </div>
         </div>
+        <input type="file" id="clientsImportFile" accept=".csv,.txt" style="display:none">
         <div class="searchbar">⌕ <input id="clientSearch" placeholder="Buscar por nombre, WhatsApp o email"></div>
         <div class="list" id="clientsList"></div>
       </section>
@@ -5027,6 +5029,55 @@
       }).join('')
     }
     $('clientSearch').oninput=e=>{state.clientSearch=e.target.value;renderClients()};
+
+    function parseCSVLine(line){
+      const fields=[];let cur='';let q=false;
+      for(let i=0;i<line.length;i++){
+        const ch=line[i];
+        if(ch==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}
+        else if(ch===','&&!q){fields.push(cur.trim());cur='';}
+        else cur+=ch;
+      }
+      fields.push(cur.trim());return fields;
+    }
+    function importClientsFromCSV(){
+      const fi=$('clientsImportFile');if(!fi)return;
+      fi.value='';
+      fi.onchange=async()=>{
+        const file=fi.files[0];if(!file)return;
+        const text=await file.text();
+        const lines=text.split(/\r?\n/).filter(l=>l.trim());
+        if(lines.length<2)return showToast('El archivo debe tener encabezado y al menos una fila.');
+        const norm=s=>s.toLowerCase().replace(/[áéíóúü]/g,c=>({á:'a',é:'e',í:'i',ó:'o',ú:'u',ü:'u'})[c]||c).trim();
+        const headers=parseCSVLine(lines[0]).map(norm);
+        const findCol=(...keys)=>keys.map(k=>headers.indexOf(k)).find(i=>i>=0)??-1;
+        const iFirst=findCol('nombre','name','first');
+        const iLast=findCol('apellido','last','surname');
+        const iPhone=findCol('whatsapp','telefono','phone','celular','movil','tel');
+        const iEmail=findCol('email','correo','mail');
+        const iNote=findCol('nota','note','notas','observacion','observaciones','obs');
+        if(iFirst<0||iLast<0)return showToast('El CSV debe tener columnas "Nombre" y "Apellido".');
+        let count=0,skipped=0;
+        for(const line of lines.slice(1)){
+          if(!line.trim()){skipped++;continue;}
+          const f=parseCSVLine(line);
+          const first=(f[iFirst]||'').trim();
+          const last=(f[iLast]||'').trim();
+          if(!first&&!last){skipped++;continue;}
+          const phone=iPhone>=0?(f[iPhone]||'').trim():'';
+          const email=iEmail>=0?(f[iEmail]||'').trim():'';
+          const note=iNote>=0&&(f[iNote]||'').trim()?f[iNote].trim():'Sin nota clave.';
+          const newClient={id:'cl'+Date.now()+Math.random().toString(36).slice(2,8),code:nextClientCode(),first,last,phone,email,tags:[],note};
+          state.clients.unshift(newClient);
+          if(phone||email)saveClientPrivate(newClient.id,phone,email);
+          count++;
+        }
+        if(count){saveState();renderClients();showToast(`${count} cliente(s) importado(s)${skipped?' · '+skipped+' omitido(s)':''}`);}
+        else showToast('Sin filas válidas. Verificá que el CSV tenga columnas "Nombre" y "Apellido".');
+      };
+      fi.click();
+    }
+    if($('importClientsBtn')) $('importClientsBtn').onclick=()=>importClientsFromCSV();
     function renderTeam(){
       const pros=state.collaborators.filter(c=>c.can).length;
       const groupCount = state.catalog.groups.length;
@@ -6041,8 +6092,7 @@
         $('saleLines').innerHTML='';
         const related = reservationAppointments(appt);
         const additionals = activeAppointments().filter(a=>reservationKey(a)===reservationKey(appt) && a.isAdditional);
-        const clientDeposit = clientAvailableDeposit(c.id);
-        const deposit = clientDeposit > 0 ? clientDeposit : reservationDeposit(related);
+        const deposit = clientAvailableDeposit(c.id);
         if($('reservationDeposit')) $('reservationDeposit').value = deposit;
         related.forEach(line=>{
           addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
@@ -6243,14 +6293,6 @@
       const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:isPartial?'partial':'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.payments,pendingBalance,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
       state.salesTickets.unshift(ticket);
       if(t.depositApplied>0){
-        // Si la seña que se está aplicando no tiene respaldo de dinero recibido
-        // (p.ej. se cargó en el turno y nunca se registró), registrar el ingreso ahora
-        // para que la seña sea dinero real y los totales cuadren.
-        const availableBefore = clientAvailableDeposit(clientIdForTicket);
-        const unbacked = Math.max(0, t.depositApplied - Math.max(0, availableBefore));
-        if(unbacked>0 && clientIdForTicket){
-          addPayment({id:uid('deprec'),ticketId:ticket.id,clientId:clientIdForTicket,amount:unbacked,method:(sourceAppointment&&sourceAppointment.depositMethod)||'Transferencia',type:'deposit_received',reference:'Seña de reserva',note:'Seña cargada en el turno (registrada al cobrar)'});
-        }
         addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
       }
       salePayments.forEach(p=>addPayment({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
@@ -6325,10 +6367,11 @@
       // Panel resumen financiero
       if($('cashDailySummary')){
         const session = state.cashSession;
-        const cashIn = state.payments.filter(p=>p.method==='Efectivo'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
-        const transferIn = state.payments.filter(p=>p.method==='Transf'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
-        const debitIn = state.payments.filter(p=>p.method==='Débito'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
-        const creditIn = state.payments.filter(p=>p.method==='Crédito'&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const cashInFilter = p=>(p.type==='service'||p.type==='deposit_received')&&!p.voided;
+        const cashIn = state.payments.filter(p=>p.method==='Efectivo'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
+        const transferIn = state.payments.filter(p=>p.method==='Transf'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
+        const debitIn = state.payments.filter(p=>p.method==='Débito'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
+        const creditIn = state.payments.filter(p=>p.method==='Crédito'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
         const totalIn = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
         const withdrawalsTotal = (session.withdrawals||[]).reduce((s,w)=>s+Number(w.amount||0),0);
         const expensesTotal = (session.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
@@ -6342,7 +6385,7 @@
           </div>
           <div style="border-top:0.5px solid rgba(245,237,228,0.14);padding-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">
             <div style="font-size:12px;"><span style="color:#cbb8a6;">Apertura</span><br><strong style="color:#f5ede4;">${money(session.openingAmount||0)}</strong></div>
-            <div style="font-size:12px;"><span style="color:#cbb8a6;">Efectivo cobrado</span><br><strong style="color:#f5ede4;">${money(cashIn)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Efectivo recibido</span><br><strong style="color:#f5ede4;">${money(cashIn)}</strong></div>
             <div style="font-size:12px;"><span style="color:#cbb8a6;">Transferencia</span><br><strong style="color:#f5ede4;">${money(transferIn)}</strong></div>
             <div style="font-size:12px;"><span style="color:#cbb8a6;">Débito</span><br><strong style="color:#f5ede4;">${money(debitIn)}</strong></div>
             <div style="font-size:12px;"><span style="color:#cbb8a6;">Crédito</span><br><strong style="color:#f5ede4;">${money(creditIn)}</strong></div>
@@ -6352,7 +6395,7 @@
       $('cashMovements').innerHTML = state.payments.filter(p=>!p.voided).length ? state.payments.filter(p=>!p.voided).map(p=>`<div class="mini-row"><strong>${money(p.amount)} · ${p.method}</strong><span>${p.ticketId||'Movimiento'} · ${p.type==='deposit_applied'?'anticipo aplicado':p.type==='service'?'cobro de servicio':p.type}</span></div>`).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Los cobros del día aparecerán acá.</span></div>';
       // Por medio
       $('cashByMethod').innerHTML = paymentMethods.map(m=>{
-        const total = state.payments.filter(p=>p.method===m&&p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const total = state.payments.filter(p=>p.method===m&&(p.type==='service'||p.type==='deposit_received')&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
         return total > 0 ? `<div class="mini-row"><strong>${m}</strong><span>${money(total)}</span></div>` : '';
       }).join('') || '<div class="mini-row"><strong>Sin cobros</strong><span>—</span></div>';
       // Retiros
@@ -7116,19 +7159,17 @@
           box.classList.remove('open');
           showApClientChip(c);
           const avail = clientAvailableDeposit(c.id);
-          state.apDepositIsPreExisting = avail > 0;
+          state.apDepositIsPreExisting = false;
           const banner = $('apDepositAvailableBanner');
           const bannerText = $('apDepositAvailableText');
           if(avail > 0){
             if(banner){ banner.style.display='flex'; }
-            if(bannerText) bannerText.textContent = `${esc(fullName(c))} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
-            if($('apDepositAmount')){ $('apDepositAmount').value = avail; $('apDepositAmount').readOnly = true; }
-            if($('apDepositMethod')) $('apDepositMethod').disabled = true;
+            if(bannerText) bannerText.textContent = `${esc(fullName(c))} tiene ${money(avail)} de seña disponible — se aplica al cobrar. Completá el campo solo si deja una seña adicional ahora.`;
           } else {
             if(banner) banner.style.display='none';
-            if($('apDepositAmount')){ $('apDepositAmount').value = 0; $('apDepositAmount').readOnly = false; }
-            if($('apDepositMethod')) $('apDepositMethod').disabled = false;
           }
+          if($('apDepositAmount')){ $('apDepositAmount').value = 0; $('apDepositAmount').readOnly = false; }
+          if($('apDepositMethod')) $('apDepositMethod').disabled = false;
           updateApPreview();
         });
       };
@@ -7366,17 +7407,15 @@
         state.appointmentClient = {clientId:c.id, clientName:fullName(c)};
         showApClientChip(c);
         const avail = clientAvailableDeposit(c.id);
-        state.apDepositIsPreExisting = avail > 0;
+        state.apDepositIsPreExisting = false;
         if(avail > 0){
           if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='flex';
-          if($('apDepositAvailableText')) $('apDepositAvailableText').textContent = `${esc(fullName(c))} tiene una seña disponible de ${money(avail)} — se aplicará al cobrar.`;
-          if($('apDepositAmount')){ $('apDepositAmount').value = avail; $('apDepositAmount').readOnly = true; }
-          if($('apDepositMethod')) $('apDepositMethod').disabled = true;
+          if($('apDepositAvailableText')) $('apDepositAvailableText').textContent = `${esc(fullName(c))} tiene ${money(avail)} de seña disponible — se aplica al cobrar. Completá el campo solo si deja una seña adicional ahora.`;
         } else {
           if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='none';
-          if($('apDepositAmount')){ $('apDepositAmount').value=0; $('apDepositAmount').readOnly = false; }
-          if($('apDepositMethod')) $('apDepositMethod').disabled = false;
         }
+        if($('apDepositAmount')){ $('apDepositAmount').value=0; $('apDepositAmount').readOnly = false; }
+        if($('apDepositMethod')) $('apDepositMethod').disabled = false;
       } else { hideApClientChip(); }
       if($('apClientSuggestions')) $('apClientSuggestions').classList.remove('open');
       if($('apDepositAvailableBanner') && !prefClient) $('apDepositAvailableBanner').style.display='none';
