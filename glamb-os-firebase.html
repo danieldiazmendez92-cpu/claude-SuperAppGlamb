@@ -181,24 +181,6 @@
 
     .side-note { display: none; }
 
-    .side-reset-btn {
-      margin-top: auto;
-      margin-bottom: 16px;
-      background: transparent;
-      border: 0.5px solid var(--line);
-      border-radius: 8px;
-      width: 36px;
-      height: 36px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--text-soft);
-      font-size: 16px;
-      cursor: pointer;
-      position: absolute;
-      bottom: 16px;
-    }
-    .side-reset-btn:hover { background: var(--surface-2); color: var(--text); }
 
     main {
       padding: 32px 36px;
@@ -3361,7 +3343,6 @@
         <button data-page="comms" title="Comunicaciones">✉</button>
         <button data-page="athenas" title="Athenas IA">✦</button>
       </nav>
-      <button class="side-reset-btn" data-action="resetDemo" title="Resetear demo">↺</button>
     </aside>
 
     <div id="apptTooltip"></div>
@@ -4488,22 +4469,9 @@
     let athenasHistory=[]; // historial de chat de la sesión (no persiste)
     const athenasCacheMap=new Map(); // caché en memoria: key → {reply, ts}
     const state={page:'command',clientSearch:'',clients:[
-      {id:'cl1',code:'GL-000001',first:'Martina',last:'López',phone:'+54 9 11 5555-1201',email:'martina@email.com',tags:['Prefiere silencio','Acepta upgrades'],note:'Cuidar tiempos de espera. Prefiere café sin azúcar.'},
-      {id:'cl2',code:'GL-000002',first:'Valentina',last:'Paz',phone:'+54 9 11 5555-8821',email:'valentina@email.com',tags:['VIP','Nail art minimalista'],note:'Ama nail art minimalista. Evitar diseños cargados.'},
-      {id:'cl3',code:'GL-000003',first:'Claudia',last:'Astigarraga',phone:'+54 9 11 5555-1001',email:'',tags:['Kapping'],note:'Confirmar próximo mantenimiento.'}
     ],collaborators:[
-      {id:'co1',first:'Ana',last:'García',phone:'+54 9 11 5555-3101',email:'ana@glamb.com',type:'professional',can:true,services:['Semipermanente','Kapping','Nail art'],groups:['Manicuria'],days:'Lunes, Martes, Miércoles, Jueves, Viernes',hours:'10:00 - 19:00',payroll:{period:'monthly',presentismo:0,viatico:0,presentismoHistory:[],viaticHistory:[],commissions:[]}},
-      {id:'co2',first:'Macarena',last:'Reyes',phone:'+54 9 11 5555-3102',email:'macarena@glamb.com',type:'professional',can:true,services:['Perfilado de cejas','Lifting de pestañas'],groups:['Eyebrow & Lash'],days:'Martes, Miércoles, Jueves, Viernes, Sábado',hours:'10:00 - 19:00',payroll:{period:'monthly',presentismo:0,viatico:0,presentismoHistory:[],viaticHistory:[],commissions:[]}},
-      {id:'co3',first:'Vero',last:'Fuentes',phone:'+54 9 11 5555-3103',email:'vero@glamb.com',type:'professional',can:true,services:['Kapping','Esculpidas'],groups:['Manicuria'],days:'Lunes, Martes, Miércoles, Jueves, Viernes',hours:'12:00 - 20:00',payroll:{period:'monthly',presentismo:0,viatico:0,presentismoHistory:[],viaticHistory:[],commissions:[]}},
-      {id:'co4',first:'Giuli',last:'Ortiz',phone:'+54 9 11 5555-3104',email:'giuli@glamb.com',type:'professional',can:true,services:['Depilación definitiva','Belleza de manos'],groups:['Depilación','Beauty Extras'],days:'Lunes, Miércoles, Viernes',hours:'10:00 - 18:00',payroll:{period:'monthly',presentismo:0,viatico:0,presentismoHistory:[],viaticHistory:[],commissions:[]}}
     ],appointments:[
-      {id:'a1',memberId:'co1',clientId:'cl3',group:'Manicuria',service:'Kapping Gel',variantId:'var1',serviceId:'svc1',start:'12:00',end:'14:00',status:'confirmed',deposit:'paid',depositAmount:5000,depositMethod:'Transferencia',note:'Tratamiento premium.'},
-      {id:'a2',memberId:'co3',clientId:'cl2',group:'Manicuria',service:'Esculpidasgel',variantId:'var7',serviceId:'svc3',start:'13:30',end:'15:00',status:'confirmed',deposit:'paid',depositAmount:8000,depositMethod:'Transferencia',note:'Cliente VIP.'},
-      {id:'a3',memberId:'co2',clientId:'cl1',group:'Eyebrow & Lash',service:'Lifting completo',variantId:'var13',serviceId:'svc6',start:'17:30',end:'18:30',status:'confirmed',deposit:'pending',depositAmount:0,depositMethod:'Transferencia',note:'Reactivar mantenimiento.'},
-      {id:'a4',memberId:'co4',clientId:'cl2',group:'Depilación',service:'Zona facial',variantId:'var16',serviceId:'svc8',start:'16:00',end:'18:00',status:'confirmed',deposit:'paid',depositAmount:10000,depositMethod:'Mercado Pago',note:'Cuidar experiencia.'}
     ],blockers:[
-      {id:'b1',memberId:'co1',start:'09:00',end:'11:00',label:'No disponible'},
-      {id:'b2',memberId:'co2',start:'13:00',end:'13:30',label:'Comida'}
     ],agenda:{group:'Todos',member:'Todos',role:'reception',view:'day',showBlockers:true,dragging:null,currentDate:new Date(),colWidth:140},
     payments:[],salesTickets:[],pendingCharges:[],
     cashTab:'register',saleLineSeq:0,paymentLineSeq:0,ledgerDate:'',ledgerSubTab:'efectivo',
@@ -4878,6 +4846,63 @@
       }
     }
 
+    // ── Limpieza única de datos demo ──────────────────────────────────
+    // Elimina los registros demo (cl1-cl3, co1-co4, a1-a4, b1-b2) de Firestore
+    // y del state, una sola vez, marcado con un flag en localStorage.
+    const DEMO_CLEAR_FLAG = 'glamb-demo-cleared-v1';
+    const DEMO_CLIENT_IDS = ['cl1','cl2','cl3'];
+    const DEMO_COLLAB_IDS = ['co1','co2','co3','co4'];
+    const DEMO_APPT_IDS   = ['a1','a2','a3','a4'];
+    const DEMO_BLOCKER_IDS= ['b1','b2'];
+
+    async function clearDemoDataIfNeeded(){
+      if(!fbReady || !db) return;
+      if(localStorage.getItem(DEMO_CLEAR_FLAG)) return;
+
+      const hasDemoData =
+        (state.clients||[]).some(c=>DEMO_CLIENT_IDS.includes(c.id)) ||
+        (state.collaborators||[]).some(c=>DEMO_COLLAB_IDS.includes(c.id)) ||
+        (state.appointments||[]).some(a=>DEMO_APPT_IDS.includes(a.id)) ||
+        (state.blockers||[]).some(b=>DEMO_BLOCKER_IDS.includes(b.id));
+
+      if(!hasDemoData){
+        localStorage.setItem(DEMO_CLEAR_FLAG,'1');
+        return;
+      }
+
+      console.log('[GLAMB] limpiando datos demo de Firestore...');
+      try{
+        // 1. Limpiar state en memoria
+        state.clients       = (state.clients||[]).filter(c=>!DEMO_CLIENT_IDS.includes(c.id));
+        state.collaborators = (state.collaborators||[]).filter(c=>!DEMO_COLLAB_IDS.includes(c.id));
+        state.appointments  = (state.appointments||[]).filter(a=>!DEMO_APPT_IDS.includes(a.id));
+        state.blockers      = (state.blockers||[]).filter(b=>!DEMO_BLOCKER_IDS.includes(b.id));
+
+        // 2. Guardar blob limpio en Firestore de inmediato (sin debounce)
+        await stateDoc.set(serializeForCloud(),{merge:false});
+
+        // 3. Borrar turnos y blockers demo de colección SYNCED
+        const batch1 = db.batch();
+        [...DEMO_APPT_IDS, ...DEMO_BLOCKER_IDS].forEach(id=>{
+          batch1.delete(db.collection('appointments').doc(id));
+        });
+        await batch1.commit();
+
+        // 4. Borrar contactos privados demo de clientsPrivate
+        const batch2 = db.batch();
+        DEMO_CLIENT_IDS.forEach(id=>{
+          batch2.delete(db.collection('clientsPrivate').doc(id));
+        });
+        await batch2.commit();
+
+        localStorage.setItem(DEMO_CLEAR_FLAG,'1');
+        console.log('[GLAMB] datos demo eliminados correctamente.');
+      }catch(e){
+        console.error('[GLAMB] error al limpiar datos demo:',e);
+        // No guardar el flag — reintentará en el próximo login
+      }
+    }
+
     // ── Fase B.2: datos financieros en área solo-admin ───────────────
     // Solo el admin escribe/lee financePrivate/main. Las reglas de Firestore
     // bloquean la lectura para todos los demás roles.
@@ -4940,12 +4965,7 @@
       if(c.includes('network')) return 'Sin conexión. Revisá tu internet.';
       return 'No se pudo ingresar.';
     }
-    function resetDemo(){
-      showConfirm('¿Borrar los datos guardados y volver a la demo inicial?', ()=>{
-        localStorage.removeItem(STORAGE_KEY);
-        location.reload();
-      });
-    } const initials=x=>`${(x.first||'N')[0]}${(x.last||'A')[0]}`.toUpperCase();
+    const initials=x=>`${(x.first||'N')[0]}${(x.last||'A')[0]}`.toUpperCase();
     const memberAvatarHtml=m=>m.photo?`<div class="member-avatar"><img src="${m.photo}" alt="${initials(m)}"></div>`:`<div class="member-avatar">${initials(m)}</div>`;
     const mins=t=>{const[h,m]=t.split(':').map(Number);return h*60+m}; const topFor=t=>(mins(t)-startHour*60)*pxPerMin; const heightFor=(s,e)=>Math.max(24,(mins(e)-mins(s))*pxPerMin-3);
     const client=id=>state.clients.find(c=>c.id===id)||{id:null,code:'—',first:'Cliente',last:'eliminado',phone:'—',email:'',tags:[],note:''}; const member=id=>state.collaborators.find(c=>c.id===id)||{id:null,first:'Sin',last:'profesional',phone:'—',email:'',services:[],groups:[],can:false};
@@ -10244,6 +10264,7 @@ ${context}`;
               await auth.signOut(); return;
             }
             await loadStateFromCloud();
+            await clearDemoDataIfNeeded();        // elimina registros demo de Firestore (una sola vez)
             await migrateCollectionsIfNeeded();   // siembra la colección antes de suscribir
             subscribeStateSync();
             subscribeCollectionsSync();           // turnos en vivo para todos los roles
@@ -10313,7 +10334,7 @@ ${context}`;
       openCashSession, openCatalogDrawer, openClientProfile,
       openDeductionDrawer, openLiquidationView, openNewLiquidation,
       openPayrollConfigDrawer, openPopover,
-      removePayrollOverride, resetDemo,
+      removePayrollOverride,
       setCatalogFilter, setCatalogView,
       showPage, showRrhhTab, showToast,
       toggleAgendaFilters, toggleApptAdditionals, togglePaid,
@@ -10327,7 +10348,6 @@ ${context}`;
     // Regla arquitectónica: todo handler nuevo usa data-action, no onclick=
     const ACTION_MAP = {
       // Sin argumentos
-      resetDemo:               () => resetDemo(),
       openDeductionDrawer:     () => openDeductionDrawer(),
       openNewLiquidation:      () => openNewLiquidation(),
       openCatalogDrawer:       () => openCatalogDrawer(),
