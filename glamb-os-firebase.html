@@ -1928,6 +1928,24 @@
     .cash-section.active {
       display: block;
     }
+    /* === LEDGER === */
+    .ledger-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:8px;border:0.5px solid var(--line)}
+    .ledger-tbl{width:100%;border-collapse:collapse;font-size:12px}
+    .ledger-tbl th{padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;border-bottom:0.5px solid var(--line);background:var(--surface-2);white-space:nowrap}
+    .ledger-tbl th.r,.ledger-tbl td.r{text-align:right}
+    .ledger-tbl td{padding:7px 10px;border-bottom:0.5px solid var(--line);vertical-align:top;font-size:12px}
+    .ledger-tbl td.nb{white-space:nowrap}
+    .ledger-tbl tr:last-child td{border-bottom:none}
+    .ledger-tbl tr.voided td{opacity:.4;text-decoration:line-through}
+    .ledger-tbl tr.retiro-row{background:rgba(192,57,43,.03)}
+    .l-in{color:#2d7a4a;font-weight:600}
+    .l-out{color:#c0392b;font-weight:600}
+    .l-dep{color:#b8760a;font-weight:600}
+    .l-saldo{font-weight:700;white-space:nowrap}
+    .ledger-tbl tfoot td{font-weight:700;border-top:1.5px solid var(--line);background:var(--surface-2);font-size:12px}
+    .ledger-date-row{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+    .ledger-subnav{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+    .ledger-info{font-size:11px;color:var(--text-muted);padding:8px 12px;background:var(--surface-2);border-radius:8px;margin-bottom:10px}
 
     #page-cash {
       --pos-ink: #0E0E0D;
@@ -3526,6 +3544,7 @@
           <button class="chip" data-cash-tab="pending">Pendientes</button>
           <button class="chip" data-cash-tab="daily">Caja del día</button>
           <button class="chip" data-cash-tab="tickets">Tickets del día</button>
+          <button class="chip" data-cash-tab="ledger">Ledger</button>
         </div>
         <section class="cash-section active" id="cash-register">
           <!-- Stepper -->
@@ -3709,6 +3728,9 @@
         </section>
         <section class="cash-section" id="cash-tickets">
           <section class="card"><h2 class="section-title">Tickets del día</h2><div id="ticketsList"></div></section>
+        </section>
+        <section class="cash-section" id="cash-ledger">
+          <div id="ledgerPanel"></div>
         </section>
       </section>
 
@@ -4474,7 +4496,7 @@
       {id:'b2',memberId:'co2',start:'13:00',end:'13:30',label:'Comida'}
     ],agenda:{group:'Todos',member:'Todos',role:'reception',view:'day',showBlockers:true,dragging:null,currentDate:new Date(),colWidth:140},
     payments:[],salesTickets:[],pendingCharges:[],
-    cashTab:'register',saleLineSeq:0,paymentLineSeq:0,
+    cashTab:'register',saleLineSeq:0,paymentLineSeq:0,ledgerDate:'',ledgerSubTab:'efectivo',
     catalog:{
       groups:[
         {id:'cat1',name:'Manicuria',type:'service',services:[
@@ -5990,6 +6012,7 @@
       renderPendingCharges();
       renderCashDaily();
       renderTickets();
+      renderLedger();
       updateSaleSummary();
     }
     function renderCashKpis(){
@@ -6666,6 +6689,200 @@
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
     function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{ if(!reason)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); renderAll(); showToast('Ticket anulado'); }); }
+
+    function setLedgerDate(v){state.ledgerDate=v;renderLedger();}
+    function setLedgerSubTab(v){state.ledgerSubTab=v;renderLedger();}
+
+    function renderLedger(){
+      const panel=$('ledgerPanel'); if(!panel) return;
+      const today=dateKey(new Date());
+      const selDate=state.ledgerDate||today;
+      const sub=state.ledgerSubTab||'efectivo';
+      const subLabels={efectivo:'Efectivo',tickets:'Tickets',metodos:'Por método'};
+      const sesDate=(state.cashSession.openedAt||'').slice(0,10);
+      const hasSes=sesDate===selDate;
+
+      const header=`
+        <div class="ledger-date-row">
+          <span style="font-weight:600;font-size:14px">Ledger</span>
+          <input type="date" value="${selDate}" max="${today}"
+            style="font-size:13px;padding:5px 9px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-family:inherit"
+            onchange="setLedgerDate(this.value)">
+          ${selDate===today?'<span style="font-size:11px;color:var(--text-muted)">Hoy</span>':''}
+        </div>
+        <div class="ledger-subnav">
+          ${Object.entries(subLabels).map(([k,v])=>`<button class="chip ${sub===k?'active':''}" onclick="setLedgerSubTab('${k}')">${v}</button>`).join('')}
+        </div>`;
+
+      let content='';
+      if(sub==='efectivo')   content=ledgerEfectivo(selDate,hasSes);
+      else if(sub==='tickets') content=ledgerTickets(selDate);
+      else                     content=ledgerMetodos(selDate);
+
+      panel.innerHTML=header+content;
+    }
+
+    function ledgerFmt(iso){
+      if(!iso) return '—';
+      const d=new Date(iso);
+      return d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    }
+
+    function ledgerEfectivo(selDate,hasSes){
+      // Build sorted event list
+      const events=[];
+      if(hasSes && state.cashSession.openingAmount){
+        events.push({ts:state.cashSession.openedAt,tipo:'apertura',label:'Apertura de caja',detalle:state.cashSession.openedBy||'Admin caja',entra:Number(state.cashSession.openingAmount),sale:0,cashIn:Number(state.cashSession.openingAmount),cashOut:0});
+      } else if(!hasSes){
+        // past date: check closings for opening amount
+      }
+      // Payments
+      state.payments.filter(p=>(p.createdAt||'').slice(0,10)===selDate).forEach(p=>{
+        const amt=Number(p.amount||0);
+        const isCash=/efectivo/i.test(p.method||'');
+        const isOut=p.type==='withdrawal';
+        const typeLabel=p.type==='deposit_received'?'Seña recibida':p.type==='deposit_applied'?'Anticipo aplicado':p.type==='service'?'Cobro de servicio':'Movimiento';
+        const clientObj=p.clientId?state.clients.find(c=>c.id===p.clientId):null;
+        const ticket=p.ticketId?state.salesTickets.find(t=>t.id===p.ticketId):null;
+        const detalleStr=ticket?`${esc(ticket.clientNameSnapshot||'')} — ${(ticket.lines||[]).map(l=>l.service||l.group).join(', ')}`:(clientObj?esc(fullName(clientObj)):p.reference||typeLabel);
+        events.push({ts:p.createdAt,tipo:p.type,label:typeLabel,detalle:detalleStr,method:p.method||'—',voided:p.voided,entra:!isOut?amt:0,sale:isOut?amt:0,cashIn:isCash&&!isOut&&!p.voided?amt:0,cashOut:isOut&&isCash&&!p.voided?amt:0,payId:p.id,isDeposit:p.type==='deposit_received'});
+      });
+      // Withdrawals (current session only if same date)
+      if(hasSes)(state.cashSession.withdrawals||[]).forEach(w=>{
+        events.push({ts:w.createdAt,tipo:'retiro',label:`Retiro: ${w.reason}`,detalle:w.note||w.createdBy||'',entra:0,sale:Number(w.amount||0),cashIn:0,cashOut:Number(w.amount||0)});
+      });
+      // Cash expenses (current session)
+      if(hasSes)(state.cashSession.expenses||[]).filter(e=>/efectivo/i.test(e.method||'')).forEach(e=>{
+        events.push({ts:e.createdAt,tipo:'gasto',label:`Gasto: ${e.category}`,detalle:e.note||'',entra:0,sale:Number(e.amount||0),cashIn:0,cashOut:Number(e.amount||0)});
+      });
+
+      events.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
+
+      // Running balance
+      let saldo=0;
+      const rows=events.map(ev=>{
+        saldo+=ev.cashIn-ev.cashOut;
+        const isRetiro=ev.tipo==='retiro'||ev.tipo==='gasto';
+        const voided=ev.voided;
+        return `<tr class="${isRetiro?'retiro-row':''}${voided?' voided':''}">
+          <td class="nb">${ledgerFmt(ev.ts)}</td>
+          <td>${esc(ev.label)}</td>
+          <td style="max-width:180px;font-size:11px;color:var(--text-muted)">${ev.detalle}${ev.method&&ev.method!=='—'?` · <em>${esc(ev.method)}</em>`:''}</td>
+          <td class="r nb">${ev.entra>0?money(ev.entra):'—'}</td>
+          <td class="r nb">${ev.sale>0?`<span class="l-out">${money(ev.sale)}</span>`:'—'}</td>
+          <td class="r nb">${ev.cashIn>0?`<span class="${ev.isDeposit?'l-dep':'l-in'}">${ev.isDeposit?'':'+'}${money(ev.cashIn)}</span>`:'—'}</td>
+          <td class="r nb">${ev.cashOut>0?`<span class="l-out">−${money(ev.cashOut)}</span>`:'—'}</td>
+          <td class="r nb l-saldo">${money(saldo)}</td>
+        </tr>`;
+      });
+
+      const totalCashIn=events.filter(e=>!e.voided).reduce((s,e)=>s+e.cashIn,0);
+      const totalCashOut=events.filter(e=>!e.voided).reduce((s,e)=>s+e.cashOut,0);
+
+      const noSesNote=!hasSes?`<div class="ledger-info">⚠ Sesión cerrada — retiros y apertura de caja de esta fecha no están disponibles. Solo se muestran los cobros registrados.</div>`:'';
+
+      return `${noSesNote}<div class="ledger-wrap"><table class="ledger-tbl">
+        <thead><tr>
+          <th>Hora</th><th>Movimiento</th><th>Detalle</th>
+          <th class="r">Entra</th><th class="r">Sale</th>
+          <th class="r">Efectivo +</th><th class="r">Efectivo −</th>
+          <th class="r">Saldo</th>
+        </tr></thead>
+        <tbody>${rows.join('')||'<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-muted)">Sin movimientos en esta fecha</td></tr>'}</tbody>
+        <tfoot><tr>
+          <td colspan="5">Efectivo final esperado</td>
+          <td class="r"><span class="l-in">+${money(totalCashIn)}</span></td>
+          <td class="r"><span class="l-out">−${money(totalCashOut)}</span></td>
+          <td class="r l-saldo">${money(saldo)}</td>
+        </tr></tfoot>
+      </table></div>`;
+    }
+
+    function ledgerTickets(selDate){
+      const dayTickets=state.salesTickets.filter(t=>(t.createdAt||'').slice(0,10)===selDate).sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
+      const standaloneDeps=state.payments.filter(p=>p.type==='deposit_received'&&!p.ticketId&&(p.createdAt||'').slice(0,10)===selDate);
+
+      let totSvc=0,totSeña=0,totCob=0,totTip=0;
+
+      const ticketRows=dayTickets.map(t=>{
+        const voided=t.status==='voided';
+        const tPays=state.payments.filter(p=>p.ticketId===t.id&&!p.voided);
+        const media=tPays.filter(p=>p.type==='service'||p.type==='deposit_applied').map(p=>`<div style="white-space:nowrap">${esc(p.method)} ${money(p.amount)}</div>`).join('');
+        const collabs=[...new Set((t.lines||[]).map(l=>member(l.collaboratorId)?.firstName||'').filter(Boolean))].join(', ');
+        const svcs=(t.lines||[]).map(l=>esc(l.service||l.group||'?')).join('<br>');
+        if(!voided){totSvc+=t.grossTotal||0;totSeña+=t.depositAppliedTotal||0;totCob+=t.amountToCollectToday||0;totTip+=t.tipsTotal||0;}
+        return `<tr class="${voided?'voided':''}">
+          <td class="nb">${ledgerFmt(t.createdAt)}</td>
+          <td class="nb" style="font-size:11px">${esc(collabs)||'—'}</td>
+          <td style="font-weight:600">${esc(t.clientNameSnapshot||'Sin cliente')}</td>
+          <td style="font-size:11px">${svcs}</td>
+          <td class="r nb">${money(t.grossTotal||0)}</td>
+          <td class="r nb">${t.depositAppliedTotal>0?`<span class="l-dep">${money(t.depositAppliedTotal)}</span>`:'—'}</td>
+          <td class="r nb">${money(t.amountToCollectToday||0)}</td>
+          <td class="r nb">${t.tipsTotal>0?money(t.tipsTotal):'—'}</td>
+          <td style="font-size:11px">${media||'—'}</td>
+          <td style="font-size:10px;color:var(--text-muted)">${esc(t.createdBy||'—')}</td>
+          <td>${!voided&&isCashAdmin()?`<button class="small-btn danger" data-action="voidTicket" data-id="${t.id}">Anular</button>`:voided?'<span style="font-size:10px;color:var(--text-muted)">Anulado</span>':''}</td>
+        </tr>`;
+      });
+
+      const depRows=standaloneDeps.map(p=>{
+        const cl=p.clientId?state.clients.find(c=>c.id===p.clientId):null;
+        const voided=p.voided;
+        if(!voided) totSeña+=Number(p.amount||0);
+        return `<tr class="${voided?'voided':''}">
+          <td class="nb">${ledgerFmt(p.createdAt)}</td>
+          <td>—</td>
+          <td style="font-weight:600">${cl?esc(fullName(cl)):'<span style="color:#e07b47">⚠ sin cliente</span>'}</td>
+          <td style="font-size:11px;color:var(--text-muted)">Seña suelta</td>
+          <td class="r">—</td>
+          <td class="r nb"><span class="l-dep">${money(p.amount||0)}</span></td>
+          <td class="r">—</td><td class="r">—</td>
+          <td style="font-size:11px">${esc(p.method||'—')}</td>
+          <td style="font-size:10px;color:var(--text-muted)">—</td>
+          <td>${!voided&&isCashAdmin()?`<button class="small-btn danger" data-action="voidDeposit" data-id="${p.id}">Anular</button>`:''}</td>
+        </tr>`;
+      });
+
+      const allRows=[...ticketRows,...depRows];
+      return `<div class="ledger-wrap"><table class="ledger-tbl">
+        <thead><tr>
+          <th>Hora</th><th>Colaboradora</th><th>Cliente</th><th>Servicio</th>
+          <th class="r">Precio SVC</th><th class="r">Seña</th>
+          <th class="r">Cobrado hoy</th><th class="r">Propina</th>
+          <th>Medios</th><th>Usuario</th><th>Acción</th>
+        </tr></thead>
+        <tbody>${allRows.join('')||'<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--text-muted)">Sin tickets en esta fecha</td></tr>'}</tbody>
+        <tfoot><tr>
+          <td colspan="4">Totales</td>
+          <td class="r">${money(totSvc)}</td>
+          <td class="r"><span class="l-dep">${money(totSeña)}</span></td>
+          <td class="r">${money(totCob)}</td>
+          <td class="r">${money(totTip)}</td>
+          <td colspan="3"></td>
+        </tr></tfoot>
+      </table></div>`;
+    }
+
+    function ledgerMetodos(selDate){
+      const pays=state.payments.filter(p=>!p.voided&&(p.createdAt||'').slice(0,10)===selDate&&(p.type==='service'||p.type==='deposit_received'));
+      const byM={};
+      pays.forEach(p=>{const m=p.method||'Sin método';if(!byM[m])byM[m]={total:0,count:0};byM[m].total+=Number(p.amount||0);byM[m].count++;});
+      const rows=Object.entries(byM).sort((a,b)=>b[1].total-a[1].total);
+      const grand=rows.reduce((s,[,v])=>s+v.total,0);
+      if(!rows.length) return '<div class="ledger-info">Sin cobros en esta fecha.</div>';
+      return `<div class="ledger-wrap"><table class="ledger-tbl">
+        <thead><tr><th>Medio de pago</th><th class="r">Operaciones</th><th class="r">Monto total</th><th class="r">%</th></tr></thead>
+        <tbody>${rows.map(([m,v])=>`<tr>
+          <td>${esc(m)}</td>
+          <td class="r">${v.count}</td>
+          <td class="r">${money(v.total)}</td>
+          <td class="r" style="color:var(--text-muted)">${grand>0?Math.round((v.total/grand)*100)+'%':'—'}</td>
+        </tr>`).join('')}</tbody>
+        <tfoot><tr><td>Total</td><td class="r">${rows.reduce((s,[,v])=>s+v.count,0)}</td><td class="r">${money(grand)}</td><td class="r">100%</td></tr></tfoot>
+      </table></div>`;
+    }
+
     function voidDeposit(id){
       if(!isCashAdmin()) return showToast('Solo admin puede anular señas.');
       const p=state.payments.find(x=>x.id===id);
@@ -9941,6 +10158,7 @@ ${context}`;
       showPage, showRrhhTab, showToast,
       toggleAgendaFilters, toggleApptAdditionals, togglePaid,
       setFinanzasCFOMonth,
+      setLedgerDate, setLedgerSubTab, renderLedger,
       updateApptStatus, voidDeposit, voidPending, voidTicket,
       wizGoTo, wizSetPayMode
     });
