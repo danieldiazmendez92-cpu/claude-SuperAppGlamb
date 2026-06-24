@@ -5639,7 +5639,7 @@
     }
 
     function addServiceToGroup(){
-      const list = $('catServiceList');
+      const list = $('catServiceList') || $('editSvcList');
       const id = 'svc'+Date.now()+Math.random().toString(36).substr(2,5);
       const html = `<div class="variant-editor-row" data-svc="${id}" style="margin-bottom:8px;background:var(--surface-2);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:6px">
         <input placeholder="Nombre del servicio (ej: Kapping)" style="width:100%;padding:6px 8px;border:0.5px solid var(--line);border-radius:6px;font-size:12px">
