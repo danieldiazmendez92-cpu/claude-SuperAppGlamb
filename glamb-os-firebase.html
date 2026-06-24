@@ -4474,7 +4474,6 @@
     commsTab:'templates',
     comms:{
       bizName:'GLAMB',
-      emailjs:{serviceId:'',templateId:'',publicKey:''},
       templates:{
         booking:{enabled:true,subject:'Tu turno en {{bizName}} está confirmado ✓',body:'Hola {{nombre}},\n\nTu turno en {{bizName}} está confirmado.\n\n📅 {{fecha}}\n🕐 {{hora}}\n💅 {{servicio}} con {{profesional}}\n\n¡Te esperamos!\n{{bizName}}'},
         preEmail:{enabled:true,hoursBeforeEmail:4,subject:'Recordatorio: tu turno hoy a las {{hora}} en {{bizName}}',body:'Hola {{nombre}},\n\nTe recordamos que hoy a las {{hora}} tenés tu turno:\n\n💅 {{servicio}} con {{profesional}}\n📍 {{bizName}}\n\n¡Hasta pronto!'},
@@ -4863,8 +4862,8 @@
     // rules. NO usar con datos reales sensibles hasta completar esa etapa.
     const PERMISSIONS = {
       admin: { pages:['command','clients','agenda','cash','catalog','team','rrhh','finanzas','comms'], agenda:'all',   clientData:'full',   cash:'full',  command:'full'   },
-      medio: { pages:['command','clients','agenda','cash','comms'],                                    agenda:'today', clientData:'masked', cash:'full',  command:'simple' },
-      bajo:  { pages:['command','agenda','cash'],                                                      agenda:'today', clientData:'masked', cash:'sales', command:'min'    }
+      medio: { pages:['command','clients','agenda','cash'],                                             agenda:'today', clientData:'masked', cash:'full',  command:'simple' },
+      bajo:  { pages:['command','agenda','cash'],                                                       agenda:'today', clientData:'masked', cash:'sales', command:'min'    }
     };
     const ROLE_LABELS={admin:'Administrador',medio:'Recepción',bajo:'Colaboradora'};
     function curUser(){ return state.authUser || null; }
@@ -8897,8 +8896,7 @@
       saveState();
     }
     async function sendReminderEmail(type,appt,c){
-      const cfg=state.comms?.emailjs;
-      if(!cfg?.serviceId||!cfg?.publicKey||!cfg?.templateId) return false;
+      if(!fbReady||!db) return false;
       const toEmail=c?.email||(c?.id&&state.clientsPrivate?.[c.id]?.email);
       if(!toEmail) return false;
       const tpl=state.comms?.templates?.[type];
@@ -8906,12 +8904,17 @@
       const vars=getTemplateVars(appt,c);
       const subject=fillTemplate(tpl.subject||'',vars);
       const body=fillTemplate(tpl.body||'',vars);
+      // Convierte saltos de línea a <br> para la versión HTML
+      const html=body.replace(/\n/g,'<br>');
       try{
-        const res=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:cfg.serviceId,template_id:cfg.templateId,user_id:cfg.publicKey,template_params:{to_email:toEmail,to_name:c.first||'',subject,body}})});
-        const ok=res.status===200||res.ok;
-        logReminder(type,appt?.id||'',type==='retention'?'email':'email',ok?'sent':'error');
-        return ok;
-      }catch(e){logReminder(type,appt?.id||'','email','error');return false;}
+        await db.collection('mail').add({to:[toEmail],message:{subject,html,text:body},createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+        logReminder(type,appt?.id||'','email','sent');
+        return true;
+      }catch(e){
+        console.error('mail write failed',e);
+        logReminder(type,appt?.id||'','email','error');
+        return false;
+      }
     }
     function getWALink(phone,message){
       const digits=(phone||'').replace(/\D/g,'');
@@ -9000,10 +9003,35 @@
       }).join('');
     }
     function renderCommsConfig(){
-      const cfg=state.comms?.emailjs||{};
-      return `<div class="form-card" style="margin-bottom:16px"><h3>Identidad del local</h3><div class="field" style="margin-top:10px"><label>Nombre del local ({{bizName}} en las plantillas)</label><input id="commsBizName" value="${esc(state.comms?.bizName||'GLAMB')}" style="width:100%"></div><button class="btn primary" id="saveCommsConfig" style="margin-top:12px">Guardar</button></div>
-      <div class="form-card" style="margin-bottom:16px"><h3>✉ Email — EmailJS</h3><div class="meta" style="margin-bottom:14px">EmailJS envía emails directo desde el navegador sin servidor.<br><a href="https://www.emailjs.com" target="_blank" style="color:#1a7a4a;text-decoration:none">emailjs.com</a> — plan gratuito: 200 emails/mes.<br><br><strong>Pasos rápidos:</strong><ol style="margin:8px 0 0 16px;padding:0;font-size:12px;line-height:1.8"><li>Creá cuenta en EmailJS</li><li>Conectá tu Gmail en <em>Email Services</em> → copiá el <strong>Service ID</strong></li><li>Creá un template con variables <code style="background:var(--surface-2);padding:1px 4px;border-radius:3px">{{to_email}}</code> <code style="background:var(--surface-2);padding:1px 4px;border-radius:3px">{{to_name}}</code> <code style="background:var(--surface-2);padding:1px 4px;border-radius:3px">{{subject}}</code> <code style="background:var(--surface-2);padding:1px 4px;border-radius:3px">{{body}}</code> → copiá el <strong>Template ID</strong></li><li>En Account → <strong>Public Key</strong> copialo acá</li></ol></div><div class="form-grid"><div class="field"><label>Service ID</label><input id="commsEjsService" value="${esc(cfg.serviceId||'')}" placeholder="service_xxxxxxx"></div><div class="field"><label>Template ID</label><input id="commsEjsTemplate" value="${esc(cfg.templateId||'')}" placeholder="template_xxxxxxx"></div><div class="field full"><label>Public Key</label><input id="commsEjsKey" value="${esc(cfg.publicKey||'')}" placeholder="xxxxxxxxxxxxxxx"></div></div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" id="saveCommsEmailCfg">Guardar credenciales</button><button class="btn" id="testCommsEmail">Enviar email de prueba</button></div></div>
-      <div class="form-card"><h3>💬 WhatsApp</h3><div class="meta">Los recordatorios de WhatsApp se generan como links <em>wa.me</em> con el mensaje ya escrito. Aparecen en la pestaña <strong>Pendientes</strong> para enviarlos con un toque desde el celular.<br><br>Para envíos 100% automáticos (sin click manual) se necesita integrar la API oficial de Meta WhatsApp Business o Twilio. Consultanos si lo necesitás.</div></div>`;
+      const bizConnected=fbReady&&db;
+      const statusBadge=bizConnected?'<span style="color:#1a7a4a;font-weight:600">✓ Conectado a Firebase</span>':'<span style="color:#c0392b">✗ Sin conexión a Firebase</span>';
+      return `<div class="form-card" style="margin-bottom:16px"><h3>Identidad del local</h3><div class="field" style="margin-top:10px"><label>Nombre del local (aparece como <code style="background:var(--surface-2);padding:1px 5px;border-radius:3px">{{bizName}}</code> en las plantillas)</label><input id="commsBizName" value="${esc(state.comms?.bizName||'GLAMB')}" style="width:100%"></div><button class="btn primary" id="saveCommsConfig" style="margin-top:12px">Guardar</button></div>
+      <div class="form-card" style="margin-bottom:16px">
+        <h3>✉ Email — Firebase Trigger Email</h3>
+        <div style="display:flex;align-items:center;gap:8px;margin:10px 0 14px">${statusBadge}</div>
+        <div class="meta" style="margin-bottom:14px">
+          Los emails se envían a través de la extensión oficial de Firebase <strong>Trigger Email from Firestore</strong>.<br>
+          La app escribe un documento en la colección <code style="background:var(--surface-2);padding:1px 5px;border-radius:3px">mail</code> y la extensión lo detecta y envía el email automáticamente usando tu cuenta de Gmail (hasta 500/día gratis).
+        </div>
+        <div style="background:var(--surface-2);border-radius:10px;padding:14px 16px;font-size:12px;line-height:1.9">
+          <strong>Instalación (una sola vez — se hace desde la consola de Firebase):</strong>
+          <ol style="margin:8px 0 0 16px;padding:0">
+            <li>Ir a <strong>Firebase Console → Extensions</strong></li>
+            <li>Buscar <strong>"Trigger Email from Firestore"</strong> e instalarla</li>
+            <li>En la configuración de la extensión:<br>
+              · <strong>Email documents collection:</strong> <code style="background:var(--surface);padding:1px 5px;border-radius:3px">mail</code><br>
+              · <strong>SMTP connection URI:</strong> <code style="background:var(--surface);padding:1px 5px;border-radius:3px">smtps://tu_email%40gmail.com:tu_contraseña_de_app@smtp.gmail.com:465</code><br>
+              &nbsp;&nbsp;(usá una <a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:#1a7a4a">contraseña de aplicación de Google</a>, no tu contraseña normal)
+            </li>
+            <li>Guardar. Desde ese momento los emails se envían solos.</li>
+          </ol>
+        </div>
+        <div style="margin-top:14px">
+          <button class="btn primary" id="testCommsEmail">Enviar email de prueba</button>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">Escribe un documento de prueba en la colección <code>mail</code>. Si la extensión está instalada, llegará a destino.</div>
+        </div>
+      </div>
+      <div class="form-card"><h3>💬 WhatsApp</h3><div class="meta">Los recordatorios de WhatsApp se generan como links <em>wa.me</em> con el mensaje ya escrito. Aparecen en la pestaña <strong>Pendientes</strong> para enviarlos con un toque desde el celular.<br><br>Para envíos 100% automáticos (sin click manual) se necesita integrar la API oficial de Meta WhatsApp Business. Consultanos si lo necesitás.</div></div>`;
     }
     function renderCommsPending(){
       const pwa=getPendingWA();const ret=getRetentionCandidates();
@@ -9094,26 +9122,17 @@
       // Config save (biz name)
       const saveCommsBtn=$('saveCommsConfig');
       if(saveCommsBtn) saveCommsBtn.onclick=()=>{if(!state.comms)state.comms={};state.comms.bizName=$('commsBizName')?.value.trim()||'GLAMB';saveState();showToast('Guardado');};
-      // Email credentials save
-      const saveEmailBtn=$('saveCommsEmailCfg');
-      if(saveEmailBtn) saveEmailBtn.onclick=()=>{
-        if(!state.comms)state.comms={};if(!state.comms.emailjs)state.comms.emailjs={};
-        state.comms.emailjs.serviceId=$('commsEjsService')?.value.trim()||'';
-        state.comms.emailjs.templateId=$('commsEjsTemplate')?.value.trim()||'';
-        state.comms.emailjs.publicKey=$('commsEjsKey')?.value.trim()||'';
-        saveState();showToast('Credenciales guardadas');
-      };
-      // Test email
+      // Test email via Firestore
       const testBtn=$('testCommsEmail');
       if(testBtn) testBtn.onclick=async()=>{
-        if(!state.comms?.emailjs?.serviceId||!state.comms?.emailjs?.publicKey||!state.comms?.emailjs?.templateId) return showToast('Guardá las credenciales primero');
+        if(!fbReady||!db) return showToast('Sin conexión a Firebase');
         const toEmail=prompt('¿A qué email enviamos el test?'); if(!toEmail) return;
         testBtn.textContent='Enviando…';testBtn.disabled=true;
-        const fakeAppt={id:'test',service:'Servicio de prueba',start:'10:00',date:dateKey(new Date()),memberId:(state.collaborators[0]||{}).id};
+        const fakeAppt={id:'test-'+Date.now(),service:'Servicio de prueba',start:'10:00',date:dateKey(new Date()),memberId:(state.collaborators[0]||{}).id};
         const fakeClient={id:'test',first:'Test',last:'GLAMB',email:toEmail};
         const ok=await sendReminderEmail('booking',fakeAppt,fakeClient);
         testBtn.textContent='Enviar email de prueba';testBtn.disabled=false;
-        showToast(ok?'✓ Email de prueba enviado':'✗ Error. Verificá las credenciales.');
+        showToast(ok?'✓ Documento creado en colección mail — llegará si la extensión está instalada':'✗ Error al escribir en Firestore. Verificá las reglas.');
       };
     }
     // Run reminder check on load and every 30 min
