@@ -9382,8 +9382,9 @@ ${context}`;
       }
       // Suggestions
       const sug=$('athenasSuggestions'); if(sug) sug.innerHTML=ATHENAS_SUGGESTIONS.slice(0,6).map(s=>`<button class="ath-suggestion" data-ath-q="${esc(s)}">${esc(s)}</button>`).join('');
-      // Config panel prefill
-      if($('athenasApiKey')) $('athenasApiKey').value=state.athenas?.apiKey||'';
+      // Config panel prefill — solo si el usuario no está escribiendo en el campo
+      const keyInp=$('athenasApiKey');
+      if(keyInp && document.activeElement!==keyInp) keyInp.value=state.athenas?.apiKey||'';
       if($('athenasModel')) $('athenasModel').value=state.athenas?.model||'gemini-2.0-flash';
       // Handlers
       const sendFn=async()=>{
@@ -9398,7 +9399,16 @@ ${context}`;
       if(inp){ inp.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendFn();}}; }
       document.querySelectorAll('[data-ath-q]').forEach(b=>b.onclick=()=>{if($('athenasInput'))$('athenasInput').value=b.dataset.athQ;sendFn();});
       const cfg=$('athenasConfigSave');
-      if(cfg) cfg.onclick=()=>{if(!state.athenas)state.athenas={};state.athenas.apiKey=$('athenasApiKey')?.value.trim()||'';state.athenas.model=$('athenasModel')?.value||'gemini-2.0-flash';saveState();showToast('Configuración guardada');renderAthenas();};
+      if(cfg) cfg.onclick=()=>{
+        if(!state.athenas)state.athenas={};
+        const k=($('athenasApiKey')?.value||'').trim();
+        if(!k){showToast('Ingresá una API key antes de guardar');return;}
+        state.athenas.apiKey=k;
+        state.athenas.model=$('athenasModel')?.value||'gemini-2.0-flash';
+        saveState();
+        showToast('API key guardada ✓');
+        renderAthenas();
+      };
       const toggle=$('athenasToggleConfig');
       if(toggle) toggle.onclick=()=>{const p=$('athenasConfigPanel');if(p)p.style.display=p.style.display==='block'?'none':'block';};
       const clear=$('athenaClear');
