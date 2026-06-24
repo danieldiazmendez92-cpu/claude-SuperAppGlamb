@@ -4779,6 +4779,11 @@
     function syncCollections(){
       if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
       SYNCED_COLLECTIONS.forEach(({key,coll})=>{
+        // No sincronizar hasta que el primer snapshot de Firestore haya establecido
+        // el shadow correcto. Sin este guard, el localStorage (potencialmente viejo)
+        // se empuja a Firestore antes de recibir la fuente de verdad, resucitando
+        // registros eliminados en otras sesiones.
+        if(!_syncInit[key]) return;
         const arr=Array.isArray(state[key])?state[key]:[];
         const prev=_syncShadow[key]||new Map();
         const next=new Map();
@@ -7276,9 +7281,9 @@
       });
     }
     function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+window.scrollY; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration),date:dateKey(state.agenda.currentDate)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); renderAgenda(); showToast('Turno movido.');}
-    function resizeAppointment(id,delta){const a=state.appointments.find(x=>x.id===id); if(!a)return; const old=a.end; a.end=toTime(mins(a.end)+delta); if(mins(a.end)<=mins(a.start)+15 || overlaps(a,a.id)){a.end=old; showToast('No se puede ajustar duración.'); return;} renderAgenda(); showToast('Duración actualizada.');}
-    function togglePaid(id){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.deposit = a.deposit==='paid'?'pending':'paid'; renderAgenda(); showToast(a.deposit==='paid'?'Pago/seña marcado OK.':'Pago/seña pendiente.');}
-    function cancelAppointment(id,status='cancelado'){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.status=status; showToast(`Turno marcado como ${status}.`); openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();}
+    function resizeAppointment(id,delta){const a=state.appointments.find(x=>x.id===id); if(!a)return; const old=a.end; a.end=toTime(mins(a.end)+delta); if(mins(a.end)<=mins(a.start)+15 || overlaps(a,a.id)){a.end=old; showToast('No se puede ajustar duración.'); return;} saveState(); renderAgenda(); showToast('Duración actualizada.');}
+    function togglePaid(id){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.deposit = a.deposit==='paid'?'pending':'paid'; saveState(); renderAgenda(); showToast(a.deposit==='paid'?'Pago/seña marcado OK.':'Pago/seña pendiente.');}
+    function cancelAppointment(id,status='cancelado'){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.status=status; saveState(); showToast(`Turno marcado como ${status}.`); openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();}
     function deleteAppointment(id){
       showConfirm('¿Eliminar este turno permanentemente? No se puede deshacer.', ()=>{
         state.appointments = state.appointments.filter(a=>a.id!==id);
@@ -7406,6 +7411,7 @@
       const appt = state.appointments.find(a => a.id === id);
       if (appt) {
         appt.status = status;
+        saveState();
         renderAgenda();
         showToast('Estado actualizado');
         document.getElementById('detailPopover').classList.remove('open');
