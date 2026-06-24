@@ -6631,7 +6631,19 @@
           </div>`;
       }
       // Movimientos
-      $('cashMovements').innerHTML = state.payments.filter(p=>!p.voided).length ? state.payments.filter(p=>!p.voided).map(p=>`<div class="mini-row"><strong>${money(p.amount)} · ${p.method}</strong><span>${p.ticketId||'Movimiento'} · ${p.type==='deposit_applied'?'anticipo aplicado':p.type==='service'?'cobro de servicio':p.type}</span></div>`).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Los cobros del día aparecerán acá.</span></div>';
+      {
+        const visible = state.payments.filter(p=>!p.voided);
+        $('cashMovements').innerHTML = visible.length ? visible.map(p=>{
+          const typeLabel = p.type==='deposit_applied'?'Anticipo aplicado':p.type==='service'?'Cobro de servicio':p.type==='deposit_received'?'Seña recibida':'Movimiento';
+          const clientObj = p.clientId ? state.clients.find(c=>c.id===p.clientId) : null;
+          const isOrphan = p.type==='deposit_received' && p.clientId && !clientObj;
+          const clientExtra = clientObj ? ` · ${esc(clientObj.firstName||'')} ${esc(clientObj.lastName||'')}`.trim()
+            : isOrphan ? ' · <span style="color:#e07b47;font-weight:600">⚠ cliente eliminado</span>' : '';
+          const ref = p.ticketId ? `Ticket #${p.ticketId.slice(-4)}` : (p.reference||typeLabel);
+          const canVoid = p.type==='deposit_received' && isCashAdmin();
+          return `<div class="mini-row"><strong>${money(p.amount)} · ${p.method}${clientExtra}</strong><span>${ref} · ${typeLabel}</span>${canVoid?`<div style="margin-top:6px"><button class="small-btn danger" data-action="voidDeposit" data-id="${p.id}">Anular seña</button></div>`:''}</div>`;
+        }).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Los cobros del día aparecerán acá.</span></div>';
+      }
       // Por medio
       $('cashByMethod').innerHTML = paymentMethods.map(m=>{
         const total = state.payments.filter(p=>p.method===m&&(p.type==='service'||p.type==='deposit_received')&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
@@ -6653,6 +6665,23 @@
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
     function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{ if(!reason)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); renderAll(); showToast('Ticket anulado'); }); }
+    function voidDeposit(id){
+      if(!isCashAdmin()) return showToast('Solo admin puede anular señas.');
+      const p=state.payments.find(x=>x.id===id);
+      if(!p||p.voided) return;
+      const clientObj=p.clientId?state.clients.find(c=>c.id===p.clientId):null;
+      const who=clientObj?`${clientObj.firstName||''} ${clientObj.lastName||''}`.trim():'cliente eliminado';
+      showPromptDialog(`Anular seña — ${money(p.amount)} · ${who}`,
+        'Ingresá el motivo (quedará registrado)…',
+        reason=>{
+          if(!reason) return;
+          p.voided=true; p.voidReason=reason;
+          p.voidedAt=new Date().toISOString(); p.voidedBy='Admin caja';
+          saveState(); renderCashKpis(); renderCashDaily();
+          showToast('Seña anulada ✓');
+        }
+      );
+    }
     function cashClose(){
       if(!isCashAdmin()) return showToast('Solo admin caja puede cerrar caja.');
       if(!state.cashSession.isOpen) return showToast('La caja no está abierta.');
@@ -9837,7 +9866,7 @@ ${context}`;
       setCatalogFilter, setCatalogView,
       showPage, showRrhhTab, showToast,
       toggleAgendaFilters, toggleApptAdditionals, togglePaid,
-      updateApptStatus, voidPending, voidTicket,
+      updateApptStatus, voidDeposit, voidPending, voidTicket,
       wizGoTo, wizSetPayMode
     });
 
@@ -9903,6 +9932,7 @@ ${context}`;
       openLiquidationView:     el => openLiquidationView(el.dataset.id),
       openPayrollConfigDrawer: el => openPayrollConfigDrawer(el.dataset.id),
       togglePaid:              el => togglePaid(el.dataset.id),
+      voidDeposit:             el => voidDeposit(el.dataset.id),
       voidPending:             el => voidPending(el.dataset.id),
       voidTicket:              el => voidTicket(el.dataset.id),
       addPayrollOverride:      el => addPayrollOverride(el.dataset.member, el.dataset.gid),
