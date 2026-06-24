@@ -3837,20 +3837,18 @@
           </div>
           <div class="ath-config-panel" id="athenasConfigPanel">
             <div class="form-grid">
-              <div class="field"><label>API Key (OpenRouter)</label><input id="athenasApiKey" type="password" placeholder="sk-or-v1-…" style="width:100%"></div>
+              <div class="field"><label>API Key (Google AI Studio)</label><input id="athenasApiKey" type="password" placeholder="AIza…" style="width:100%"></div>
               <div class="field"><label>Modelo</label>
                 <select id="athenasModel" style="width:100%">
-                  <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5 (recomendado)</option>
-                  <option value="anthropic/claude-3-haiku">Claude 3 Haiku</option>
-                  <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B</option>
-                  <option value="google/gemini-flash-1.5">Gemini Flash 1.5</option>
-                  <option value="openai/gpt-4o-mini">GPT-4o mini</option>
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash (recomendado)</option>
+                  <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                 </select>
               </div>
             </div>
             <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
               <button class="btn primary" id="athenasConfigSave">Guardar</button>
-              <span style="font-size:11px;color:var(--text-muted)">Clave guardada solo en este dispositivo. Obtené una gratis en <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:#1a7a4a">openrouter.ai</a></span>
+              <span style="font-size:11px;color:var(--text-muted)">Clave gratuita en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color:#1a7a4a">aistudio.google.com</a> · Guardada solo en este dispositivo.</span>
             </div>
           </div>
         </div>
@@ -4555,7 +4553,7 @@
     teamTab:'collaborators',
     systemUsers:[],
     clientsPrivate:{},
-    athenas:{apiKey:'',model:'anthropic/claude-haiku-4-5'},
+    athenas:{apiKey:'',model:'gemini-2.0-flash'},
     commsTab:'templates',
     comms:{
       bizName:'GLAMB',
@@ -9310,7 +9308,7 @@ ${clientList}`;
     async function sendToAthenas(userMessage){
       const apiKey=(state.athenas?.apiKey||'').trim();
       if(!apiKey){
-        appendAthenasMsg('ai','Para usar Athenas necesitás configurar una API key de OpenRouter. Hacé clic en **Configurar IA** arriba.');
+        appendAthenasMsg('ai','Para usar Athenas necesitás configurar una API key de Google AI Studio. Hacé clic en **Configurar IA** arriba — es gratis en aistudio.google.com.');
         return;
       }
       appendAthenasMsg('user',userMessage);
@@ -9342,13 +9340,24 @@ Profesional, cálida y directa. Respondés en español rioplatense (usás "vos")
 
 ${context}`;
       try{
-        const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+        const model=state.athenas?.model||'gemini-2.0-flash';
+        // Google Generative Language API format
+        const contents=athenasHistory.slice(-16).map(m=>({
+          role:m.role==='assistant'?'model':'user',
+          parts:[{text:m.content}]
+        }));
+        const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,{
           method:'POST',
-          headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`,'HTTP-Referer':window.location.origin,'X-Title':'GLAMB OS — Athenas'},
-          body:JSON.stringify({model:state.athenas?.model||'anthropic/claude-haiku-4-5',messages:[{role:'system',content:systemPrompt},...athenasHistory.slice(-16)],max_tokens:900})
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            system_instruction:{parts:[{text:systemPrompt}]},
+            contents,
+            generationConfig:{maxOutputTokens:900}
+          })
         });
         const data=await res.json();
-        const reply=data.choices?.[0]?.message?.content||(data.error?.message?`Error: ${data.error.message}`:'Sin respuesta de la IA.');
+        const reply=data.candidates?.[0]?.content?.parts?.[0]?.text
+          ||(data.error?.message?`Error de API: ${data.error.message}`:'Sin respuesta de la IA.');
         const thinkEl=$('ath-thinking-msg'); if(thinkEl) thinkEl.remove();
         athenasHistory.push({role:'assistant',content:reply});
         appendAthenasMsg('ai',reply);
@@ -9375,7 +9384,7 @@ ${context}`;
       const sug=$('athenasSuggestions'); if(sug) sug.innerHTML=ATHENAS_SUGGESTIONS.slice(0,6).map(s=>`<button class="ath-suggestion" data-ath-q="${esc(s)}">${esc(s)}</button>`).join('');
       // Config panel prefill
       if($('athenasApiKey')) $('athenasApiKey').value=state.athenas?.apiKey||'';
-      if($('athenasModel')) $('athenasModel').value=state.athenas?.model||'anthropic/claude-haiku-4-5';
+      if($('athenasModel')) $('athenasModel').value=state.athenas?.model||'gemini-2.0-flash';
       // Handlers
       const sendFn=async()=>{
         const inp=$('athenasInput'); if(!inp||!inp.value.trim()) return;
@@ -9389,7 +9398,7 @@ ${context}`;
       if(inp){ inp.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendFn();}}; }
       document.querySelectorAll('[data-ath-q]').forEach(b=>b.onclick=()=>{if($('athenasInput'))$('athenasInput').value=b.dataset.athQ;sendFn();});
       const cfg=$('athenasConfigSave');
-      if(cfg) cfg.onclick=()=>{if(!state.athenas)state.athenas={};state.athenas.apiKey=$('athenasApiKey')?.value.trim()||'';state.athenas.model=$('athenasModel')?.value||'anthropic/claude-haiku-4-5';saveState();showToast('Configuración guardada');renderAthenas();};
+      if(cfg) cfg.onclick=()=>{if(!state.athenas)state.athenas={};state.athenas.apiKey=$('athenasApiKey')?.value.trim()||'';state.athenas.model=$('athenasModel')?.value||'gemini-2.0-flash';saveState();showToast('Configuración guardada');renderAthenas();};
       const toggle=$('athenasToggleConfig');
       if(toggle) toggle.onclick=()=>{const p=$('athenasConfigPanel');if(p)p.style.display=p.style.display==='block'?'none':'block';};
       const clear=$('athenaClear');
