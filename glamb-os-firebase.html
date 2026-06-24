@@ -4015,7 +4015,8 @@
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <h3 style="margin:0">Historial</h3>
           <select id="profileHistoryFilter" class="select-like" style="font-size:12px;padding:3px 8px">
-            <option value="all">Todos</option>
+            <option value="active">Activos</option>
+            <option value="all">Todos (incl. cancelados)</option>
             <option value="confirmed">Confirmados</option>
             <option value="completed">Completados</option>
             <option value="in_progress">En curso</option>
@@ -8179,13 +8180,22 @@
       else insightText = `Ritmo de visita normal${ins.frequency?` (cada ${ins.frequency} días aprox.)`:''}. Mantener experiencia habitual.`;
       if(ins.tags.some(t=>t.label==='Alto valor')) insightText += ' Ticket promedio por encima de la media del salón: priorizar su experiencia.';
       $('profileInsightText').textContent = insightText;
+      const CANCELLED_STATUSES=['cancelled','cancelado','voided','no_show'];
+      const STATUS_LABEL={'confirmed':'Confirmado','completed':'Completado','in_progress':'En curso','cancelled':'Cancelado','cancelado':'Cancelado','voided':'Anulado','no_show':'No show'};
+      const STATUS_COLOR={'completed':'#2d7a4a','confirmed':'#1a5fa8','in_progress':'#b8760a','cancelled':'#c0392b','cancelado':'#c0392b','voided':'#c0392b','no_show':'#888'};
       const renderProfileHistory = () => {
-        const filt = $('profileHistoryFilter')?.value || 'all';
+        const filt = $('profileHistoryFilter')?.value || 'active';
         const history = state.appointments
-          .filter(a=>a.clientId===c.id && (filt==='all'||a.status===filt))
+          .filter(a=>{
+            if(a.clientId!==c.id) return false;
+            if(filt==='active') return !CANCELLED_STATUSES.includes(a.status);
+            if(filt==='all') return true;
+            return a.status===filt;
+          })
           .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.start||'').localeCompare(a.start||''));
+        const statusBadge=st=>{const label=STATUS_LABEL[st]||st||'Confirmado';const color=STATUS_COLOR[st]||'#1a5fa8';return `<span style="font-size:10px;font-weight:600;color:${color};background:${color}18;padding:1px 6px;border-radius:4px">${label}</span>`;};
         $('profileHistory').innerHTML = history.length
-          ? history.map(a=>`<div class="history-item"><strong>${a.service}</strong><span>${a.date||'—'} · ${a.start}–${a.end} · ${fullName(member(a.memberId))} · <em>${a.status||'confirmado'}</em></span></div>`).join('')
+          ? history.map(a=>`<div class="history-item"><strong>${esc(a.service)}</strong><span>${a.date||'—'} · ${a.start}–${a.end} · ${esc(fullName(member(a.memberId))||'Sin profesional')} ${statusBadge(a.status)}</span></div>`).join('')
           : '<div class="history-item"><strong>Sin turnos</strong><span>No hay turnos con este filtro.</span></div>';
       };
       renderProfileHistory();
