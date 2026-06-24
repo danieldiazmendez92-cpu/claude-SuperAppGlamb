@@ -3284,14 +3284,18 @@
     .login-demo{font-size:11px;color:var(--text-muted);margin-bottom:10px}
     .login-warn{font-size:11px;color:#8a6d3b;background:#fcf3e3;border:1px solid #f0d9a8;border-radius:10px;padding:8px 10px;line-height:1.4}
     /* User chip */
-    .user-chip{position:fixed;top:12px;right:14px;z-index:9000;display:flex;align-items:center;gap:10px;background:var(--surface,#fffdf9);border:1px solid var(--line);border-radius:999px;padding:5px 8px 5px 12px;box-shadow:0 6px 18px rgba(0,0,0,.08)}
-    .user-chip-badge{font-size:9px;font-weight:700;letter-spacing:.08em;color:#8a6d3b;background:#fcf3e3;border:1px solid #f0d9a8;border-radius:6px;padding:2px 6px}
-    .user-chip-info{display:flex;flex-direction:column;line-height:1.15}
-    .user-chip-info #userChipName{font-size:12px;font-weight:600}
-    .user-chip-info #userChipRole{font-size:10px;color:var(--text-muted)}
-    .user-chip-logout{border:0;background:var(--surface-2,#f6f2ec);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;color:var(--text)}
-    .user-chip-logout:hover{background:#e8ddcf}
-    @media(max-width:640px){ .user-chip{top:8px;right:8px;padding:4px 6px 4px 10px} .login-users{grid-template-columns:1fr} }
+    .user-chip{position:fixed;top:10px;right:12px;z-index:9000}
+    .user-chip-btn{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#3d2010,#7a4a2a);color:#f5e6d6;font-size:13px;font-weight:700;border:2px solid var(--line);cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.18);letter-spacing:.02em;transition:transform .15s}
+    .user-chip-btn:hover{transform:scale(1.08)}
+    .user-chip-dropdown{position:absolute;top:calc(100% + 8px);right:0;min-width:180px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.14);padding:6px;display:none;z-index:9100}
+    .user-chip-dropdown.open{display:block}
+    .ucd-header{padding:10px 12px 8px;border-bottom:1px solid var(--line)}
+    .ucd-name{font-size:13px;font-weight:700;color:var(--text)}
+    .ucd-role{font-size:10px;font-weight:600;letter-spacing:.07em;color:#8a6d3b;background:#fcf3e3;border:1px solid #f0d9a8;border-radius:6px;padding:2px 7px;display:inline-block;margin-top:4px}
+    .ucd-action{display:flex;align-items:center;gap:8px;width:100%;padding:8px 12px;border:0;background:none;border-radius:9px;cursor:pointer;font-size:12px;color:var(--text);text-align:left}
+    .ucd-action:hover{background:var(--surface-2)}
+    .ucd-action.danger{color:#c0392b}
+    @media(max-width:640px){ .user-chip{top:7px;right:8px} }
   </style>
   <!-- Firebase SDK (compat: expone el global `firebase`, sin build step) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
@@ -3313,8 +3317,14 @@
   </div>
   <!-- Chip de usuario / cierre de sesión -->
   <div id="userChip" class="user-chip">
-<div class="user-chip-info"><span id="userChipName"></span><span id="userChipRole"></span></div>
-    <button class="user-chip-logout" data-action="logout" title="Cerrar sesión">⏻</button>
+    <button class="user-chip-btn" id="userChipBtn" title="Perfil"></button>
+    <div class="user-chip-dropdown" id="userChipDropdown">
+      <div class="ucd-header">
+        <div class="ucd-name" id="userChipName"></div>
+        <div class="ucd-role" id="userChipRole"></div>
+      </div>
+      <button class="ucd-action danger" data-action="logout">⏻ Cerrar sesión</button>
+    </div>
   </div>
   <div class="app">
     <aside class="sidebar">
@@ -4966,9 +4976,20 @@
       document.querySelectorAll('.nav button[data-page],.mobile-module-nav button[data-page]').forEach(b=>{
         b.style.display = cfg.pages.includes(b.dataset.page) ? '' : 'none';
       });
-      // Chip de usuario
+      // Chip de usuario — avatar con iniciales + dropdown
       if($('userChipName')) $('userChipName').textContent = u ? u.name : '';
       if($('userChipRole')) $('userChipRole').textContent = u ? (ROLE_LABELS[u.role]||u.role) : '';
+      const chipBtn=$('userChipBtn');
+      if(chipBtn && u){
+        const parts=(u.name||'').trim().split(/\s+/);
+        chipBtn.textContent=(parts[0]?.[0]||'')+(parts[1]?.[0]||parts[0]?.[1]||'');
+        chipBtn.onclick=(e)=>{e.stopPropagation();const dd=$('userChipDropdown');if(dd)dd.classList.toggle('open');};
+      }
+      // Cerrar dropdown al clic fuera
+      if(!window._chipOutside){
+        window._chipOutside=true;
+        document.addEventListener('click',()=>{$('userChipDropdown')?.classList.remove('open');});
+      }
       // Modo de caja derivado del rol (reemplaza el toggle manual)
       state.cashMode = cfg.cash==='full' ? 'admin' : 'collaborator';
       if(curRole()==='bajo' && u && u.collaboratorId) state.cashCurrentCollaboratorId = u.collaboratorId;
