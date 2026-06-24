@@ -3869,7 +3869,7 @@
           </div>
           <div class="ath-config-panel" id="athenasConfigPanel">
             <div class="form-grid">
-              <div class="field"><label>API Key (Google AI Studio)</label><input id="athenasApiKey" type="password" placeholder="AIza…" style="width:100%"></div>
+              <div class="field"><label>API Key (Google AI Studio) — <span style="font-weight:400;color:var(--text-muted)">podés agregar varias separadas por coma para rotación automática</span></label><input id="athenasApiKey" type="password" placeholder="AIza… o AIza…, AIza…" style="width:100%"></div>
               <div class="field"><label>Modelo <button type="button" class="small-btn" id="athenasDetectModels" style="margin-left:6px;font-size:10px">Detectar disponibles</button></label>
                 <select id="athenasModel" style="width:100%">
                   <option value="gemini-2.0-flash">gemini-2.0-flash</option>
@@ -4477,6 +4477,7 @@
     };
     const startHour=9,endHour=22; let slotMinutes=30; let pxPerMin=1.05;
     let athenasHistory=[]; // historial de chat de la sesión (no persiste)
+    const athenasCacheMap=new Map(); // caché en memoria: key → {reply, ts}
     const state={page:'command',clientSearch:'',clients:[
       {id:'cl1',code:'GL-000001',first:'Martina',last:'López',phone:'+54 9 11 5555-1201',email:'martina@email.com',tags:['Prefiere silencio','Acepta upgrades'],note:'Cuidar tiempos de espera. Prefiere café sin azúcar.'},
       {id:'cl2',code:'GL-000002',first:'Valentina',last:'Paz',phone:'+54 9 11 5555-8821',email:'valentina@email.com',tags:['VIP','Nail art minimalista'],note:'Ama nail art minimalista. Evitar diseños cargados.'},
@@ -9623,13 +9624,24 @@ ${clientList}`;
     }
 
     async function sendToAthenas(userMessage){
-      const apiKey=(state.athenas?.apiKey||'').trim();
-      if(!apiKey){
+      const keys=(state.athenas?.apiKey||'').split(',').map(k=>k.trim()).filter(Boolean);
+      if(!keys.length){
         appendAthenasMsg('ai','Para usar Athenas necesitás configurar una API key de Google AI Studio. Hacé clic en **Configurar IA** arriba — es gratis en aistudio.google.com.');
         return;
       }
+      // Caché: misma pregunta dentro de 5 min → sin llamada a la API
+      const cacheKey=userMessage.trim().toLowerCase();
+      const cached=athenasCacheMap.get(cacheKey);
+      if(cached && Date.now()-cached.ts < 5*60*1000){
+        appendAthenasMsg('user',userMessage);
+        athenasHistory.push({role:'user',content:userMessage});
+        athenasHistory.push({role:'assistant',content:cached.reply});
+        const el=appendAthenasMsg('ai',cached.reply);
+        if(el) el.querySelector('.athenas-bubble')?.insertAdjacentHTML('beforeend','<div style="font-size:10px;color:var(--text-muted);margin-top:4px">↩ respuesta guardada (5 min)</div>');
+        return;
+      }
       appendAthenasMsg('user',userMessage);
-      appendAthenasMsg('ai','',true); // thinking indicator
+      appendAthenasMsg('ai','',true);
       athenasHistory.push({role:'user',content:userMessage});
       const context=buildAthenaContext();
       const systemPrompt=`Sos **Athenas**, la asistente inteligente de GLAMB OS — el sistema de gestión del salón de belleza GLAMB.
@@ -9669,22 +9681,39 @@ ${context}`;
         ];
         const RETRY_DELAYS=[3000,6000,12000];
         let data, lastErr;
-        for(let attempt=0;attempt<=RETRY_DELAYS.length;attempt++){
-          if(attempt>0){
+        let startKeyIdx=(state.athenas?.activeKeyIdx||0)%keys.length;
+        outerLoop: for(let ki=0;ki<keys.length;ki++){
+          const keyIdx=(startKeyIdx+ki)%keys.length;
+          const apiKey=keys[keyIdx];
+          if(ki>0){
             const thinkBubble=$('ath-thinking-msg')?.querySelector('.athenas-bubble');
-            if(thinkBubble) thinkBubble.innerHTML=`<span style="font-size:12px;color:var(--text-muted)">Mucha demanda, reintentando ${attempt}/${RETRY_DELAYS.length}…</span>`;
-            await new Promise(r=>setTimeout(r,RETRY_DELAYS[attempt-1]));
+            if(thinkBubble) thinkBubble.innerHTML=`<span style="font-size:12px;color:var(--text-muted)">Probando API key ${ki+1} de ${keys.length}…</span>`;
           }
-          try{
-            const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,{
-              method:'POST',headers:{'Content-Type':'application/json'},
-              body:JSON.stringify({contents,generationConfig:{maxOutputTokens:900}})
-            });
-            data=await res.json();
-          }catch(netErr){ lastErr='red'; break; }
-          const errMsg=(data.error?.message||'').toLowerCase();
-          const isRetryable=errMsg.includes('high demand')||errMsg.includes('overloaded')||errMsg.includes('unavailable')||(data.error?.code===503);
-          if(!isRetryable||attempt===RETRY_DELAYS.length) break;
+          for(let attempt=0;attempt<=RETRY_DELAYS.length;attempt++){
+            if(attempt>0){
+              const thinkBubble=$('ath-thinking-msg')?.querySelector('.athenas-bubble');
+              if(thinkBubble) thinkBubble.innerHTML=`<span style="font-size:12px;color:var(--text-muted)">Mucha demanda, reintentando ${attempt}/${RETRY_DELAYS.length}…</span>`;
+              await new Promise(r=>setTimeout(r,RETRY_DELAYS[attempt-1]));
+            }
+            try{
+              const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,{
+                method:'POST',headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({contents,generationConfig:{maxOutputTokens:900}})
+              });
+              data=await res.json();
+            }catch(netErr){ lastErr='red'; break outerLoop; }
+            const errMsg=(data.error?.message||'').toLowerCase();
+            const isQuota=errMsg.includes('quota')||errMsg.includes('rate limit')||data.error?.code===429;
+            const isRetryable=errMsg.includes('high demand')||errMsg.includes('overloaded')||errMsg.includes('unavailable')||data.error?.code===503;
+            if(isQuota){
+              // Rotar a la siguiente key
+              if(!state.athenas) state.athenas={};
+              state.athenas.activeKeyIdx=(keyIdx+1)%keys.length;
+              saveState();
+              break; // probar siguiente key
+            }
+            if(!isRetryable||attempt===RETRY_DELAYS.length) break outerLoop;
+          }
         }
         const thinkEl=$('ath-thinking-msg'); if(thinkEl) thinkEl.remove();
         let reply;
@@ -9692,12 +9721,15 @@ ${context}`;
           reply='No pude conectarme. Verificá tu conexión a internet.';
         } else if(data?.candidates?.[0]?.content?.parts?.[0]?.text){
           reply=data.candidates[0].content.parts[0].text;
+          athenasCacheMap.set(cacheKey,{reply,ts:Date.now()});
         } else if(data?.error?.message){
           const em=data.error.message;
           if(em.toLowerCase().includes('high demand')||em.toLowerCase().includes('overloaded'))
             reply='El servicio de IA está con mucha demanda ahora. Esperá un minuto y volvé a preguntar.';
-          else if(em.toLowerCase().includes('quota')||em.toLowerCase().includes('rate limit'))
-            reply='Se alcanzó el límite de consultas de la API key. Esperá un rato o revisá tu cuota en Google AI Studio.';
+          else if(em.toLowerCase().includes('quota')||em.toLowerCase().includes('rate limit')||data.error?.code===429)
+            reply=keys.length>1
+              ? 'Todas las API keys llegaron a su límite diario. Podés esperar a mañana o agregar más keys en **Configurar IA**.'
+              : 'Se alcanzó el límite diario de la API key. Podés agregar más keys separadas por coma en **Configurar IA** para rotación automática, o esperar a mañana.';
           else if(em.toLowerCase().includes('api key')||em.toLowerCase().includes('invalid'))
             reply='La API key no es válida. Revisala en Configurar IA.';
           else if(em.toLowerCase().includes('not found')||em.toLowerCase().includes('model'))
