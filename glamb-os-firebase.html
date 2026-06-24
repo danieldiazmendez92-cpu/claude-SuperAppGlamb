@@ -3120,6 +3120,23 @@
     .comms-log-table{width:100%;border-collapse:collapse;font-size:12px}
     .comms-log-table th{text-align:left;padding:6px 8px;color:var(--text-muted);font-size:11px;font-weight:500;border-bottom:1px solid var(--line)}
     .comms-log-table td{padding:8px;border-top:1px solid var(--line)}
+    /* Reseñas */
+    .star-btn{background:none;border:none;cursor:pointer;font-size:24px;color:#d1d5db;padding:2px 4px;transition:color .1s;line-height:1}
+    .star-btn.selected,.star-btn:hover~.star-btn,.star-btn:hover{color:#f59e0b}
+    .star-btn:hover~.star-btn{color:#d1d5db}
+    .rv-star-row{display:flex;direction:ltr}
+    .star.filled{color:#f59e0b}.star{color:#d1d5db}
+    .review-card{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--surface)}
+    .review-card-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+    .review-stars-line{font-size:15px;letter-spacing:1px;flex-shrink:0}
+    .review-info{font-size:13px;color:var(--text);flex:1;min-width:120px}
+    .review-date{font-size:11px;color:var(--text-muted);white-space:nowrap}
+    .review-comment{font-size:13px;color:var(--text-soft);font-style:italic;margin-top:4px}
+    .review-card-mini{padding:8px 0;border-bottom:0.5px solid var(--line)}
+    .review-card-mini:last-child{border-bottom:none}
+    .review-stars-mini,.review-stars-line{letter-spacing:2px}
+    .review-meta-mini{font-size:12px;color:var(--text-muted);margin-top:2px}
+    .review-comment-mini{font-size:12px;color:var(--text-soft);font-style:italic;margin-top:2px}
     /* === ATHENAS AI ASSISTANT === */
     #page-athenas{display:flex;flex-direction:column;height:100%}
     .athenas-header{padding:16px 24px 0;flex-shrink:0}
@@ -3828,11 +3845,13 @@
           <button class="comms-tab-btn" data-comms-tab="config">Configuración</button>
           <button class="comms-tab-btn" data-comms-tab="pending">Pendientes <span class="comms-badge" id="commsWABadge" style="display:none"></span></button>
           <button class="comms-tab-btn" data-comms-tab="log">Historial</button>
+          <button class="comms-tab-btn" data-comms-tab="reviews">Reseñas</button>
         </div>
         <div class="comms-panel active" id="comms-templates"></div>
         <div class="comms-panel" id="comms-config"></div>
         <div class="comms-panel" id="comms-pending"></div>
         <div class="comms-panel" id="comms-log"></div>
+        <div class="comms-panel" id="comms-reviews"></div>
       </section>
 
       <section class="page" id="page-athenas">
@@ -3992,6 +4011,10 @@
         <h3>Nota clave</h3>
         <div class="key-note" id="profileNote">—</div>
       </section>
+      <section class="profile-section" id="profileReviewsSection">
+        <h3>Reseñas</h3>
+        <div id="profileReviews"></div>
+      </section>
       <section class="profile-section">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <h3 style="margin:0">Historial</h3>
@@ -4011,9 +4034,42 @@
     <footer class="drawer-footer">
       <button class="btn primary" id="profileCreateAppointment">Crear turno</button>
       <button class="btn accent" id="profileMessage">Enviar mensaje</button>
+      <button class="btn" id="profileAddReview">Nueva reseña</button>
       <button class="btn" id="profileEditClient">Editar datos</button>
       <button class="btn" id="profileVip">Marcar VIP</button>
       <button class="btn danger" id="profileDeleteClient">Eliminar</button>
+    </footer>
+  </aside>
+
+  <aside class="drawer" id="reviewDrawer">
+    <header class="drawer-header">
+      <div>
+        <div class="eyebrow">Feedback de clienta</div>
+        <h2 class="drawer-title">Nueva reseña</h2>
+        <p class="drawer-subtitle">Registrá la valoración del servicio.</p>
+      </div>
+      <button class="close" data-close>×</button>
+    </header>
+    <div class="drawer-body">
+      <section class="form-card">
+        <div class="form-grid">
+          <div class="field full"><label>Clienta</label><select id="rvClient"></select></div>
+          <div class="field full"><label>Colaboradora</label><select id="rvCollaborator"></select></div>
+          <div class="field"><label>Servicio</label><input id="rvService" placeholder="Corte, tinte, uñas..."></div>
+          <div class="field"><label>Fecha</label><input id="rvDate" type="date"></div>
+          <div class="field full">
+            <label>Valoración</label>
+            <div id="rvStarPicker" class="rv-star-row" style="margin-top:6px"></div>
+          </div>
+          <div class="field full"><label>Comentario <span style="color:var(--text-muted);font-size:10px">opcional</span></label><textarea id="rvComment" rows="3" placeholder="'Le encantó el color', 'Muy conforme con el resultado'..."></textarea></div>
+        </div>
+      </section>
+    </div>
+    <footer class="drawer-footer">
+      <div class="footer-actions">
+        <button class="btn" data-close>Cancelar</button>
+        <button class="btn primary" data-action="saveReview">Guardar reseña</button>
+      </div>
     </footer>
   </aside>
 
@@ -4579,7 +4635,8 @@
         retention:{enabled:true,daysAfter:27,subject:'¿Cuándo nos volvemos a ver? — {{bizName}}',body:'Hola {{nombre}},\n\nTu último turno fue hace {{dias}} días y nos encantaría verte de nuevo 💅\n\nReservá tu próximo turno respondiendo este mail o escribiéndonos al {{bizPhone}}.\n\n¡El equipo de {{bizName}} te espera!'}
       },
       sentLog:[]
-    }
+    },
+    reviews:[]
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -4588,7 +4645,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -6637,6 +6694,7 @@
         state.pendingCharges.unshift({id:'pending'+Date.now(),clientId:clientIdForTicket,clientNameSnapshot:clientName,status:'pending',service:'Saldo de visita',group:'',finalPrice:pendingBalance,depositAmount:0,ticketId:ticket.id,reservationId:ticket.reservationId,createdBy:ticket.createdBy,serviceOf:'—',createdAt:new Date().toISOString()});
       }
       resetSaleForm(); renderAll(); showToast(isPartial?`Venta registrada. Saldo pendiente: ${money(pendingBalance)}`:'Venta registrada');
+      if(!isPartial && ticket.clientId) setTimeout(()=>showReviewAfterCheckout(ticket), 400);
     }
     function saveSinglePendingLine(){
       savePendingSale();
@@ -8280,7 +8338,9 @@
       };
       renderProfileHistory();
       if($('profileHistoryFilter')) $('profileHistoryFilter').onchange = renderProfileHistory;
+      renderProfileReviews(c.id);
       $('profileCreateAppointment').onclick = ()=>{ closeDrawers(); fillAppointmentOptions(c.id); openDrawer('appointmentDrawer'); };
+      if($('profileAddReview')) $('profileAddReview').onclick = ()=>{ closeDrawers(); openReviewDrawer({clientId:c.id}); };
       const openWA = ()=>{
         if(!c.phone) return showToast('Esta clienta no tiene WhatsApp cargado.');
         window.open(getWALink(c.phone, ''), '_blank');
@@ -8289,10 +8349,11 @@
       $('profileMessage').onclick = openWA;
       $('profileVip').onclick = ()=>{ if(!c.tags.includes('VIP')) c.tags.push('VIP'); renderClients(); openClientProfile(c.id); showToast('Cliente marcado como VIP.'); };
       $('profileEditClient').onclick = ()=>{ closeDrawers(); editClient(c.id); };
-      // Comunicación y edición/eliminación → solo admin (evita exponer teléfono/email)
+      // Comunicación, reseñas y edición/eliminación → solo admin (evita exponer teléfono/email)
       const _adminOnly = canSeeClientData() ? '' : 'none';
       if($('profileContactWA'))   $('profileContactWA').style.display   = _adminOnly;
       if($('profileMessage'))     $('profileMessage').style.display     = _adminOnly;
+      if($('profileAddReview'))   $('profileAddReview').style.display   = _adminOnly;
       if($('profileEditClient'))  $('profileEditClient').style.display  = _adminOnly;
       if($('profileDeleteClient')) $('profileDeleteClient').style.display = _adminOnly;
       $('profileDeleteClient').onclick = ()=>deleteClient(c.id);
@@ -9555,6 +9616,165 @@
       const typeLabel={booking:'Confirmación',preEmail:'Recordatorio email',preWA:'Recordatorio WA',retention:'Reactivación'};
       return `<table class="comms-log-table"><thead><tr><th>Tipo</th><th>Canal</th><th>Estado</th><th>Fecha</th></tr></thead><tbody>${log.slice(0,80).map(e=>`<tr><td>${typeLabel[e.type]||e.type}</td><td>${e.channel==='email'?'✉ Email':'💬 WhatsApp'}</td><td style="color:${e.status==='sent'?'#1a7a4a':'#c0392b'}">${e.status==='sent'?'✓ Enviado':'✗ Error'}</td><td style="color:var(--text-muted)">${e.sentAt?new Date(e.sentAt).toLocaleString('es-AR'):'—'}</td></tr>`).join('')}</tbody></table>`;
     }
+    // ── Módulo de Reseñas ─────────────────────────────────────────────
+    function starsHtml(n){
+      const full=Math.round(n||0);
+      return [1,2,3,4,5].map(i=>`<span class="${i<=full?'star filled':'star'}">★</span>`).join('');
+    }
+    function reviewAvg(revs){ return revs.length ? revs.reduce((s,r)=>s+(r.stars||0),0)/revs.length : 0; }
+
+    function addReview(rev){
+      if(!state.reviews) state.reviews=[];
+      rev.id = rev.id||('rev'+uid(''));
+      rev.createdAt = rev.createdAt||new Date().toISOString();
+      state.reviews.unshift(rev);
+      saveState();
+    }
+    function deleteReview(id){
+      if(curRole()!=='admin') return showToast('Solo admin puede eliminar reseñas.');
+      showConfirm('¿Eliminar esta reseña?', ()=>{
+        state.reviews=(state.reviews||[]).filter(r=>r.id!==id);
+        saveState(); renderComms(); showToast('Reseña eliminada.');
+      });
+    }
+
+    let _reviewDraft={};
+    function renderDrawerStars(sel){
+      const el=$('rvStarPicker'); if(!el) return;
+      el.innerHTML=[1,2,3,4,5].map(i=>
+        `<button class="star-btn${i<=sel?' selected':''}" data-action="pickReviewStar" data-stars="${i}" type="button">★</button>`
+      ).join('');
+      _reviewDraft.stars=sel;
+    }
+    function pickReviewStar(el){ renderDrawerStars(Number(el.dataset.stars||0)); }
+
+    function openReviewDrawer({clientId=null,collaboratorId=null,service='',date=null}={}){
+      _reviewDraft={clientId,collaboratorId,service,stars:0};
+      const sel=$('rvClient');
+      if(sel) sel.innerHTML=`<option value="">— Elegir clienta —</option>`+
+        state.clients.map(c=>`<option value="${c.id}"${c.id===clientId?' selected':''}>${esc(fullName(c))}</option>`).join('');
+      const cSel=$('rvCollaborator');
+      if(cSel) cSel.innerHTML=`<option value="">— Sin especificar —</option>`+
+        state.collaborators.filter(c=>c.can).map(c=>`<option value="${c.id}"${c.id===collaboratorId?' selected':''}>${esc(c.first)} ${esc(c.last)}</option>`).join('');
+      if($('rvService')) $('rvService').value=service;
+      if($('rvDate'))    $('rvDate').value=date||dateKey(new Date());
+      if($('rvComment')) $('rvComment').value='';
+      renderDrawerStars(0);
+      openDrawer('reviewDrawer');
+    }
+    function saveReview(){
+      if(!_reviewDraft.stars) return showToast('Seleccioná al menos 1 estrella.');
+      const clientId=$('rvClient')?.value||null;
+      if(!clientId) return showToast('Seleccioná una clienta.');
+      addReview({
+        clientId,
+        collaboratorId:$('rvCollaborator')?.value||null,
+        service:$('rvService')?.value?.trim()||'',
+        date:$('rvDate')?.value||dateKey(new Date()),
+        stars:_reviewDraft.stars,
+        comment:$('rvComment')?.value?.trim()||''
+      });
+      closeDrawers();
+      showToast('Reseña guardada. ¡Gracias por el feedback!');
+      renderComms();
+      if($('profileReviews')&&_reviewDraft.clientId) renderProfileReviews(_reviewDraft.clientId);
+    }
+
+    function renderProfileReviews(clientId){
+      const el=$('profileReviews'); if(!el) return;
+      const revs=(state.reviews||[]).filter(r=>r.clientId===clientId);
+      if(!revs.length){ el.innerHTML='<div class="muted" style="font-size:13px;margin-top:4px">Sin reseñas todavía.</div>'; return; }
+      el.innerHTML=revs.map(r=>{
+        const col=r.collaboratorId?member(r.collaboratorId):{first:''};
+        return `<div class="review-card-mini">
+          <div class="review-stars-mini">${starsHtml(r.stars)}</div>
+          <div class="review-meta-mini">${esc(r.service||'—')}${col.first?' · con '+esc(col.first):''} · ${esc(r.date||'')}</div>
+          ${r.comment?`<div class="review-comment-mini">${esc(r.comment)}</div>`:''}
+        </div>`;
+      }).join('');
+    }
+
+    function renderCommsReviews(){
+      const revs=state.reviews||[];
+      const total=revs.length;
+      const avg=reviewAvg(revs);
+      const thisMonth=dateKey(new Date()).slice(0,7);
+      const monthCount=revs.filter(r=>(r.date||r.createdAt||'').slice(0,7)===thisMonth).length;
+
+      const colMap={};
+      revs.forEach(r=>{
+        if(!r.collaboratorId) return;
+        if(!colMap[r.collaboratorId]) colMap[r.collaboratorId]={sum:0,cnt:0};
+        colMap[r.collaboratorId].sum+=r.stars; colMap[r.collaboratorId].cnt++;
+      });
+      const ranking=Object.entries(colMap)
+        .map(([id,{sum,cnt}])=>({id,avg:sum/cnt,cnt}))
+        .sort((a,b)=>b.avg-a.avg);
+      const rankHtml=ranking.length
+        ? ranking.map(r=>{ const m=member(r.id); return `<div class="mini-row"><strong>${esc(m.first)} ${esc(m.last)}</strong><span>${starsHtml(Math.round(r.avg))} ${r.avg.toFixed(1)} · ${r.cnt} reseña${r.cnt!==1?'s':''}</span></div>`; }).join('')
+        : '<div class="mini-row"><strong>Sin datos aún</strong><span>Las reseñas de colaboradoras van a aparecer acá.</span></div>';
+
+      const listHtml=total
+        ? revs.slice(0,60).map(r=>{
+            const c=client(r.clientId), m=r.collaboratorId?member(r.collaboratorId):null;
+            return `<div class="review-card">
+              <div class="review-card-top">
+                <span class="review-stars-line">${starsHtml(r.stars)}</span>
+                <span class="review-info">${esc(fullName(c))}${r.service?' · '+esc(r.service):''}${m?' · '+esc(m.first):''}</span>
+                <span class="review-date">${esc(r.date||'')}</span>
+                ${curRole()==='admin'?`<button class="small-btn danger" data-action="deleteReview" data-id="${r.id}" style="padding:2px 8px;font-size:11px">✕</button>`:''}
+              </div>
+              ${r.comment?`<div class="review-comment">"${esc(r.comment)}"</div>`:''}
+            </div>`;
+          }).join('')
+        : '<div class="mini-row"><strong>Sin reseñas todavía</strong><span>Se van acumulando a medida que registrás el feedback de las clientas.</span></div>';
+
+      return `
+        <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
+          <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${avg?avg.toFixed(1):'—'}</div><div class="kpi-label">Promedio</div><span class="kpi-mini">${starsHtml(Math.round(avg))}</span></article>
+          <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${total}</div><div class="kpi-label">Total reseñas</div><span class="kpi-mini">acumuladas</span></article>
+          <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${monthCount}</div><div class="kpi-label">Este mes</div><span class="kpi-mini">reseñas recibidas</span></article>
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+          <button class="btn primary" data-action="openReviewDrawer">+ Nueva reseña</button>
+        </div>
+        <div class="form-card" style="margin-bottom:16px"><h3 style="margin-bottom:12px">Ranking colaboradoras</h3>${rankHtml}</div>
+        <div class="form-card"><h3 style="margin-bottom:12px">Últimas reseñas</h3>${listHtml}</div>`;
+    }
+
+    function showReviewAfterCheckout(ticket){
+      if(!ticket.clientId) return;
+      const firstLine=(ticket.lines||[])[0];
+      const service=firstLine?.name||'';
+      const collaboratorId=firstLine?.collaboratorId||null;
+      const dlg=document.createElement('dialog');
+      dlg.className='glamb-dialog';
+      dlg.innerHTML=`<p class="glamb-dialog-msg"></p>
+        <div id="coStarPicker" style="display:flex;gap:8px;justify-content:center;margin:14px 0;font-size:30px"></div>
+        <div class="glamb-dialog-actions">
+          <button class="btn secondary" id="coSkip">Omitir</button>
+          <button class="btn primary" id="coSave">Guardar</button>
+        </div>`;
+      dlg.querySelector('.glamb-dialog-msg').textContent='¿La clienta deja una valoración?';
+      document.body.appendChild(dlg);
+      let sel=0;
+      const renderCoStars=n=>{
+        sel=n;
+        dlg.querySelector('#coStarPicker').innerHTML=[1,2,3,4,5].map(i=>
+          `<span style="cursor:pointer;color:${i<=n?'#f59e0b':'#d1d5db'}" data-s="${i}">★</span>`
+        ).join('');
+        dlg.querySelectorAll('#coStarPicker span').forEach(s=>s.onclick=()=>renderCoStars(Number(s.dataset.s)));
+      };
+      renderCoStars(0);
+      dlg.querySelector('#coSkip').onclick=()=>{ dlg.close(); dlg.remove(); };
+      dlg.querySelector('#coSave').onclick=()=>{
+        if(!sel){ showToast('Tocá una estrella para valorar.'); return; }
+        addReview({clientId:ticket.clientId,collaboratorId,service,date:dateKey(new Date()),stars:sel,comment:'',ticketId:ticket.id});
+        dlg.close(); dlg.remove(); showToast('Reseña guardada.');
+      };
+      dlg.showModal();
+    }
+
     function renderComms(){
       const tpl=$('comms-templates'),cfg=$('comms-config'),pnd=$('comms-pending'),log=$('comms-log');
       if(!tpl) return;
@@ -9563,6 +9783,8 @@
       cfg.innerHTML=renderCommsConfig();
       pnd.innerHTML=renderCommsPending();
       log.innerHTML=renderCommsLog();
+      const rvPanel=$('comms-reviews');
+      if(rvPanel) rvPanel.innerHTML=renderCommsReviews();
       // Badge
       const badge=$('commsWABadge'),pwaLen=getPendingWA().length;
       if(badge){badge.textContent=pwaLen;badge.style.display=pwaLen?'inline-flex':'none';}
@@ -10438,6 +10660,10 @@ ${context}`;
       showToast:               el => showToast(el.dataset.msg),
       // Con data-id (un argumento)
       athenasCopy:             el => athenasCopy(el.dataset.msg),
+      openReviewDrawer:        () => openReviewDrawer(),
+      saveReview:              () => saveReview(),
+      pickReviewStar:          el => pickReviewStar(el),
+      deleteReview:            el => deleteReview(el.dataset.id),
       cancelAppointment:       el => cancelAppointment(el.dataset.id),
       deleteAppointment:       el => deleteAppointment(el.dataset.id),
       chargeFromAppointment:   el => chargeFromAppointment(el.dataset.id),
