@@ -4658,7 +4658,7 @@
       messagingSenderId: "733109093638",
       appId: "1:733109093638:web:720da3c212b9da24a9ca87"
     };
-    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _usersUnsub=null, _cpUnsub=null, _fpUnsub=null;
+    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _blobReady=false, _usersUnsub=null, _cpUnsub=null, _fpUnsub=null;
     state.authUser = null;
     try {
       firebase.initializeApp(firebaseConfig);
@@ -4683,6 +4683,7 @@
       if(fbReady && auth && auth.currentUser && !_applyingRemote){
         clearTimeout(_cloudTimer);
         _cloudTimer = setTimeout(()=>{
+          if(!_blobReady) return; // no escribir hasta leer el estado real de Firestore
           // Fase B: el blob compartido NO lleva phone/email de clientes
           // Fase 3: tampoco lleva las entidades sincronizadas (van por colección)
           stateDoc.set(serializeForCloud(),{merge:false}).catch(e=>console.error('[GLAMB] guardado en nube falló:', e));
@@ -4701,6 +4702,7 @@
         if(snap.exists){ applyPersisted(snap.data(), true); }
         else { await stateDoc.set(serializeForCloud(),{merge:false}); } // primer arranque: sembrar demo
       }catch(e){ console.error('[GLAMB] carga desde nube falló:', e); }
+      finally{ _blobReady=true; } // liberar escrituras DESPUÉS de leer estado real
     }
     function subscribeStateSync(){
       if(!fbReady || _cloudUnsub) return;
@@ -4952,7 +4954,8 @@
     function showConfirm(msg, onOk, onCancel){
       const dlg = document.createElement('dialog');
       dlg.className = 'glamb-dialog';
-      dlg.innerHTML = `<p class="glamb-dialog-msg">${msg}</p><div class="glamb-dialog-actions"><button class="btn secondary glamb-dialog-cancel">Cancelar</button><button class="btn primary glamb-dialog-ok">Confirmar</button></div>`;
+      dlg.innerHTML = `<p class="glamb-dialog-msg"></p><div class="glamb-dialog-actions"><button class="btn secondary glamb-dialog-cancel">Cancelar</button><button class="btn primary glamb-dialog-ok">Confirmar</button></div>`;
+      dlg.querySelector('.glamb-dialog-msg').textContent = msg;
       document.body.appendChild(dlg);
       dlg.showModal();
       dlg.querySelector('.glamb-dialog-ok').onclick = () => { dlg.close(); dlg.remove(); onOk && onOk(); };
@@ -4962,7 +4965,9 @@
     function showPromptDialog(msg, placeholder, onOk){
       const dlg = document.createElement('dialog');
       dlg.className = 'glamb-dialog';
-      dlg.innerHTML = `<p class="glamb-dialog-msg">${msg}</p><input class="glamb-dialog-input" type="text" placeholder="${placeholder||''}" style="width:100%;margin-bottom:12px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);font-size:14px;"><div class="glamb-dialog-actions"><button class="btn secondary glamb-dialog-cancel">Cancelar</button><button class="btn primary glamb-dialog-ok">Confirmar</button></div>`;
+      dlg.innerHTML = `<p class="glamb-dialog-msg"></p><input class="glamb-dialog-input" type="text" style="width:100%;margin-bottom:12px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);font-size:14px;"><div class="glamb-dialog-actions"><button class="btn secondary glamb-dialog-cancel">Cancelar</button><button class="btn primary glamb-dialog-ok">Confirmar</button></div>`;
+      dlg.querySelector('.glamb-dialog-msg').textContent = msg;
+      dlg.querySelector('.glamb-dialog-input').placeholder = placeholder||'';
       document.body.appendChild(dlg);
       dlg.showModal();
       const inp = dlg.querySelector('.glamb-dialog-input');
@@ -5003,7 +5008,7 @@
     const ROLE_LABELS={admin:'Administrador',medio:'Recepción',bajo:'Colaboradora'};
     function curUser(){ return state.authUser || null; }
     function curRole(){ return state.authUser ? state.authUser.role : null; }
-    function permCfg(){ return PERMISSIONS[curRole()] || PERMISSIONS.admin; }
+    function permCfg(){ return PERMISSIONS[curRole()] || PERMISSIONS.bajo; }
     function canPage(p){ return permCfg().pages.includes(p); }
     function canSeeClientData(){ return permCfg().clientData==='full'; }
     function maskedPhone(c){ return canSeeClientData() ? esc(c.phone||'') : '•••• ••••'; }
@@ -5737,6 +5742,7 @@
         catalog.products.push({id:'prod'+Date.now(),name,price,stock});
         showToast('Producto creado.');
       }
+      saveState();
       closeDrawers();
       renderCatalog();
       updateServiceGroupFromCatalog();
@@ -5847,7 +5853,7 @@
       }
 
       info.variant.name=name; info.variant.price=price; info.variant.duration=duration;
-      closeDrawers();renderCatalog();updateServiceGroupFromCatalog();
+      saveState(); closeDrawers();renderCatalog();updateServiceGroupFromCatalog();
       renderAgenda();
       showToast('Variante actualizada.');
     }
@@ -5870,7 +5876,7 @@
           }
         }
       }
-      closeDrawers();renderCatalog();updateServiceGroupFromCatalog();showToast('Servicio actualizado.');
+      saveState(); closeDrawers();renderCatalog();updateServiceGroupFromCatalog();showToast('Servicio actualizado.');
     }
 
     function updateAdditional(id){
@@ -5911,7 +5917,7 @@
       if(!name||!price) return showToast('Completá nombre y precio.');
       const prod = state.catalog.products.find(p=>p.id===id);
       if(prod){ prod.name=name; prod.price=price; prod.stock=stock; }
-      closeDrawers();renderCatalog();showToast('Producto actualizado.');
+      saveState(); closeDrawers();renderCatalog();showToast('Producto actualizado.');
     }
 
     function updateServiceGroup(id){
@@ -5936,20 +5942,20 @@
           if(variants.length) group.services.push({id:'svc'+Date.now()+Math.random().toString(36).substr(2,4),name:svcName,variants});
         });
       }
-      closeDrawers();renderCatalog();updateServiceGroupFromCatalog();showToast('Grupo actualizado.');
+      saveState(); closeDrawers();renderCatalog();updateServiceGroupFromCatalog();showToast('Grupo actualizado.');
     }
 
     function deleteServiceGroup(groupId){
       showConfirm('¿Eliminar este grupo y todos sus servicios?', ()=>{
         state.catalog.groups = state.catalog.groups.filter(g=>g.id!==groupId);
-        closeDrawers(); renderCatalog(); updateServiceGroupFromCatalog(); showToast('Grupo eliminado.');
+        saveState(); closeDrawers(); renderCatalog(); updateServiceGroupFromCatalog(); showToast('Grupo eliminado.');
       });
     }
 
     function deleteService(svcId){
       for(const g of state.catalog.groups){
         const idx = g.services.findIndex(s=>s.id===svcId);
-        if(idx>-1){ g.services.splice(idx,1); renderCatalog(); return; }
+        if(idx>-1){ g.services.splice(idx,1); saveState(); renderCatalog(); return; }
       }
     }
 
@@ -5957,7 +5963,7 @@
       for(const g of state.catalog.groups){
         for(const s of g.services){
           const varIdx = s.variants.findIndex(v=>v.id===variantId);
-          if(varIdx>-1){ s.variants.splice(varIdx,1); renderCatalog(); return; }
+          if(varIdx>-1){ s.variants.splice(varIdx,1); saveState(); renderCatalog(); return; }
         }
       }
     }
@@ -5971,18 +5977,18 @@
           for(const g of catalog.groups){
             for(const s of g.services){
               const vi=s.variants.findIndex(v=>v.id===id);
-              if(vi>-1){s.variants.splice(vi,1);showToast('Variante eliminada.');renderCatalog();updateServiceGroupFromCatalog();return;}
+              if(vi>-1){s.variants.splice(vi,1);showToast('Variante eliminada.');saveState();renderCatalog();updateServiceGroupFromCatalog();return;}
             }
           }
         }
         else if(type==='service'){
           for(const g of catalog.groups){
             const si=g.services.findIndex(s=>s.id===id);
-            if(si>-1){g.services.splice(si,1);showToast('Servicio eliminado.');renderCatalog();updateServiceGroupFromCatalog();return;}
+            if(si>-1){g.services.splice(si,1);showToast('Servicio eliminado.');saveState();renderCatalog();updateServiceGroupFromCatalog();return;}
           }
         }
         else if(type==='service-group'){ catalog.groups=catalog.groups.filter(g=>g.id!==id); showToast('Grupo eliminado.'); updateServiceGroupFromCatalog(); }
-        renderCatalog(); updateServiceGroupFromCatalog();
+        saveState(); renderCatalog(); updateServiceGroupFromCatalog();
       });
     }
 
@@ -6632,7 +6638,7 @@
       addSaleLine(p);
       if($('reservationDeposit')) $('reservationDeposit').value = p.depositAmount||0;
       p.status='converted'; p.convertedBy = state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); p.convertedAt = new Date().toISOString();
-      renderPendingCharges(); updateSaleSummary(); showToast('Pendiente cargado en venta');
+      saveState(); renderPendingCharges(); updateSaleSummary(); showToast('Pendiente cargado en venta');
     }
     function renderPendingCharges(){
       if(!$('pendingChargesList')) return;
@@ -6676,7 +6682,7 @@
           const typeLabel = p.type==='deposit_applied'?'Anticipo aplicado':p.type==='service'?'Cobro de servicio':p.type==='deposit_received'?'Seña recibida':'Movimiento';
           const clientObj = p.clientId ? state.clients.find(c=>c.id===p.clientId) : null;
           const isOrphan = p.type==='deposit_received' && p.clientId && !clientObj;
-          const clientExtra = clientObj ? ` · ${esc(clientObj.firstName||'')} ${esc(clientObj.lastName||'')}`.trim()
+          const clientExtra = clientObj ? ` · ${esc(clientObj.first||'')} ${esc(clientObj.last||'')}`.trim()
             : isOrphan ? ' · <span style="color:#e07b47;font-weight:600">⚠ cliente eliminado</span>' : '';
           const ref = p.ticketId ? `Ticket #${p.ticketId.slice(-4)}` : (p.reference||typeLabel);
           const canVoid = p.type==='deposit_received' && isCashAdmin();
@@ -6703,7 +6709,7 @@
         return `<div class="mini-row"><strong>${esc(t.clientNameSnapshot)} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${esc(t.createdBy||'—')} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button></div></div>`;
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
-    function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{ if(!reason)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); renderAll(); showToast('Ticket anulado'); }); }
+    function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{ if(!reason)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); saveState(); renderAll(); showToast('Ticket anulado'); }); }
 
     function setLedgerDate(v){state.ledgerDate=v;renderLedger();}
     function setLedgerSubTab(v){state.ledgerSubTab=v;renderLedger();}
@@ -6823,7 +6829,7 @@
         const voided=t.status==='voided';
         const tPays=state.payments.filter(p=>p.ticketId===t.id&&!p.voided);
         const media=tPays.filter(p=>p.type==='service'||p.type==='deposit_applied').map(p=>`<div style="white-space:nowrap">${esc(p.method)} ${money(p.amount)}</div>`).join('');
-        const collabs=[...new Set((t.lines||[]).map(l=>member(l.collaboratorId)?.firstName||'').filter(Boolean))].join(', ');
+        const collabs=[...new Set((t.lines||[]).map(l=>member(l.collaboratorId)?.first||'').filter(Boolean))].join(', ');
         const svcs=(t.lines||[]).map(l=>esc(l.service||l.group||'?')).join('<br>');
         if(!voided){totSvc+=t.grossTotal||0;totSeña+=t.depositAppliedTotal||0;totCob+=t.amountToCollectToday||0;totTip+=t.tipsTotal||0;}
         return `<tr class="${voided?'voided':''}">
@@ -6903,7 +6909,7 @@
       const p=state.payments.find(x=>x.id===id);
       if(!p||p.voided) return;
       const clientObj=p.clientId?state.clients.find(c=>c.id===p.clientId):null;
-      const who=clientObj?`${clientObj.firstName||''} ${clientObj.lastName||''}`.trim():'cliente eliminado';
+      const who=clientObj?`${clientObj.first||''} ${clientObj.last||''}`.trim():'cliente eliminado';
       showPromptDialog(`Anular seña — ${money(p.amount)} · ${who}`,
         'Ingresá el motivo (quedará registrado)…',
         reason=>{
@@ -7280,7 +7286,7 @@
         return Math.max(mins(a.start),mins(appt.start)) < Math.min(mins(a.end),mins(appt.end));
       });
     }
-    function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+window.scrollY; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration),date:dateKey(state.agenda.currentDate)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); renderAgenda(); showToast('Turno movido.');}
+    function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+window.scrollY; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration),date:dateKey(state.agenda.currentDate)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); saveState(); renderAgenda(); showToast('Turno movido.');}
     function resizeAppointment(id,delta){const a=state.appointments.find(x=>x.id===id); if(!a)return; const old=a.end; a.end=toTime(mins(a.end)+delta); if(mins(a.end)<=mins(a.start)+15 || overlaps(a,a.id)){a.end=old; showToast('No se puede ajustar duración.'); return;} saveState(); renderAgenda(); showToast('Duración actualizada.');}
     function togglePaid(id){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.deposit = a.deposit==='paid'?'pending':'paid'; saveState(); renderAgenda(); showToast(a.deposit==='paid'?'Pago/seña marcado OK.':'Pago/seña pendiente.');}
     function cancelAppointment(id,status='cancelado'){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.status=status; saveState(); showToast(`Turno marcado como ${status}.`); openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();}
@@ -8771,7 +8777,7 @@
       return (state.expenses||[]).filter(e=>e.date>=from&&e.date<=to).reduce((s,e)=>s+(e.amount||0),0);
     }
     function finPayrollCost(from,to){
-      return (state.liquidations||[]).filter(l=>l.status==='paid'&&l.date&&l.date>=from&&l.date<=to).reduce((s,l)=>s+(l.totalPaid||0),0);
+      return (state.liquidations||[]).filter(l=>l.status==='paid'&&l.paidAt&&(l.paidAt||'').slice(0,10)>=from&&(l.paidAt||'').slice(0,10)<=to).reduce((s,l)=>s+(l.netPay||0),0);
     }
     function finTicketCount(from,to){
       return state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).length;
@@ -9093,13 +9099,13 @@
     function editBudget(catId){
       const cat=expenseCats().find(c=>c.id===catId);
       if(!cat) return;
-      showPrompt(`Presupuesto mensual para "${cat.label}"`,current=>{
+      showPromptDialog(`Presupuesto mensual para "${cat.label}"`,String((state.budgets||{})[catId]||''),current=>{
         const v=parseFloat(current);
         if(isNaN(v)||v<0) return showToast('Monto inválido.');
         if(!state.budgets) state.budgets={};
         state.budgets[catId]=v;
         saveState(); renderFinanzasContador(); showToast('Presupuesto actualizado.');
-      }, String((state.budgets||{})[catId]||''));
+      });
     }
     function registerExpense(){
       const date=$('expDate')?.value||dateKey(new Date());
