@@ -7200,11 +7200,19 @@
       const input = $('apClientSearch');
       const box = $('apClientSuggestions');
       if(!input || !box) return;
+      const normStr = s=>(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
       input.oninput = () => {
-        const q = input.value.trim().toLowerCase();
-        state.appointmentClient = {clientId:null, clientName:input.value.trim()};
-        if(q.length < 3){ box.classList.remove('open'); box.innerHTML=''; updateApPreview(); return; }
-        const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c)].join(' ').toLowerCase().includes(q)).slice(0,4);
+        const raw = input.value.trim();
+        state.appointmentClient = {clientId:null, clientName:raw};
+        if(raw.length < 2){ box.classList.remove('open'); box.innerHTML=''; updateApPreview(); return; }
+        const qNorm = normStr(raw);
+        const qDigits = raw.replace(/\D/g,'');
+        const isPhone = qDigits.length >= 3 && /^\+?\d/.test(raw.replace(/\s/g,''));
+        const matches = state.clients.filter(c=>{
+          if(isPhone && (c.phone||'').replace(/\D/g,'').includes(qDigits)) return true;
+          const hay = [normStr(c.first), normStr(c.last), normStr(c.email||''), normStr(clientCode(c))].join(' ');
+          return qNorm.split(/\s+/).filter(Boolean).every(w=>hay.includes(w));
+        }).slice(0,5);
         box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-ap-client="${c.id}">${esc(fullName(c))}<span>${esc(clientCode(c))} · ${maskedPhone(c)} · ${maskedEmail(c)}</span></div>`).join('');
         box.classList.add('open');
         document.querySelectorAll('[data-ap-client]').forEach(item=>item.onclick=()=>{
