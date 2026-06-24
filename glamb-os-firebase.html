@@ -3869,22 +3869,30 @@
           </div>
           <div class="ath-config-panel" id="athenasConfigPanel">
             <div class="form-grid">
-              <div class="field"><label>API Key (Google AI Studio) — <span style="font-weight:400;color:var(--text-muted)">podés agregar varias separadas por coma para rotación automática</span></label><input id="athenasApiKey" type="password" placeholder="AIza… o AIza…, AIza…" style="width:100%"></div>
-              <div class="field"><label>Modelo <button type="button" class="small-btn" id="athenasDetectModels" style="margin-left:6px;font-size:10px">Detectar disponibles</button></label>
+              <div class="field" style="grid-column:1/-1">
+                <label>Proveedor de IA</label>
+                <select id="athenasProvider" style="width:100%">
+                  <option value="google">Google Gemini — aistudio.google.com</option>
+                  <option value="groq">Groq (Llama 3.3 70B) — 14.400 req/día gratis — console.groq.com</option>
+                </select>
+              </div>
+              <div class="field"><label>API Key Google <span style="font-weight:400;color:var(--text-muted)">— varias por coma para rotación</span></label><input id="athenasApiKey" type="password" placeholder="AIza…" style="width:100%"></div>
+              <div class="field"><label>Modelo Gemini <button type="button" class="small-btn" id="athenasDetectModels" style="margin-left:6px;font-size:10px">Detectar disponibles</button></label>
                 <select id="athenasModel" style="width:100%">
-                  <option value="gemini-1.5-flash">gemini-1.5-flash (recomendado — 1.500 req/día gratis)</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash (1.500 req/día)</option>
                   <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-                  <option value="gemini-2.0-flash">gemini-2.0-flash (200 req/día gratis)</option>
+                  <option value="gemini-2.0-flash">gemini-2.0-flash (200 req/día)</option>
                   <option value="gemini-2.5-flash">gemini-2.5-flash</option>
                   <option value="gemini-2.5-pro">gemini-2.5-pro</option>
                   <option value="gemini-2.0-flash-001">gemini-2.0-flash-001</option>
                 </select>
                 <span id="athenasModelHint" style="font-size:10px;color:var(--text-muted);margin-top:3px;display:block"></span>
               </div>
+              <div class="field" style="grid-column:1/-1"><label>API Key Groq <span style="font-weight:400;color:var(--text-muted)">— gratis en console.groq.com → API Keys</span></label><input id="athenasGroqKey" type="password" placeholder="gsk_…" style="width:100%"></div>
             </div>
             <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
               <button class="btn primary" id="athenasConfigSave">Guardar</button>
-              <span style="font-size:11px;color:var(--text-muted)">Clave gratuita en <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style="color:#1a7a4a">aistudio.google.com</a> · Guardada solo en este dispositivo.</span>
+              <span style="font-size:11px;color:var(--text-muted)">Las claves se guardan solo en este dispositivo.</span>
             </div>
           </div>
         </div>
@@ -4591,7 +4599,7 @@
     teamTab:'collaborators',
     systemUsers:[],
     clientsPrivate:{},
-    athenas:{apiKey:'',model:'gemini-1.5-flash'},
+    athenas:{apiKey:'',model:'gemini-1.5-flash',provider:'google',groqApiKey:''},
     commsTab:'templates',
     comms:{
       bizName:'GLAMB',
@@ -9635,6 +9643,72 @@ CLIENTES (${state.clients.length} total, con última visita):
     }
 
     async function sendToAthenas(userMessage){
+      const provider=state.athenas?.provider||'google';
+      // ── GROQ path ──────────────────────────────────────────────────────────
+      if(provider==='groq'){
+        const groqKey=(state.athenas?.groqApiKey||'').trim();
+        if(!groqKey){
+          appendAthenasMsg('ai','Para usar Groq necesitás configurar la API key. Hacé clic en **Configurar IA** → elegí Groq e ingresá tu clave de console.groq.com (es gratis).');
+          return;
+        }
+        const cacheKey=userMessage.trim().toLowerCase();
+        const cached=athenasCacheMap.get(cacheKey);
+        if(cached&&Date.now()-cached.ts<5*60*1000){
+          appendAthenasMsg('user',userMessage);
+          athenasHistory.push({role:'user',content:userMessage});
+          athenasHistory.push({role:'assistant',content:cached.reply});
+          const el=appendAthenasMsg('ai',cached.reply);
+          if(el) el.querySelector('.athenas-bubble')?.insertAdjacentHTML('beforeend','<div style="font-size:10px;color:var(--text-muted);margin-top:4px">↩ respuesta guardada (5 min)</div>');
+          return;
+        }
+        appendAthenasMsg('user',userMessage);
+        appendAthenasMsg('ai','',true);
+        athenasHistory.push({role:'user',content:userMessage});
+        const context=buildAthenaContext();
+        const systemPrompt=`Sos **Athenas**, la asistente inteligente de GLAMB OS — el sistema de gestión del salón de belleza GLAMB.\n\n## Tu estilo\nProfesional, cálida y directa. Respondés en español rioplatense (usás "vos"). Respondés de forma concisa. Podés usar emojis con moderación. Usás markdown para organizar respuestas largas.\n\n## Lo que podés hacer\n- Responder preguntas sobre los datos del negocio (turnos, facturación, clientes, ocupación, servicios)\n- Guiar al equipo en el uso de la app\n- Dar insights, alertas y recomendaciones basadas en los datos\n- Redactar mensajes para clientes (WhatsApp, email) si te lo piden\n- Proponer acciones concretas para mejorar el negocio\n\n${context}`;
+        const messages=[
+          {role:'system',content:systemPrompt},
+          ...athenasHistory.slice(-16).map(m=>({role:m.role==='assistant'?'assistant':'user',content:m.content}))
+        ];
+        const GROQ_RETRY=[3000,6000];
+        let data,lastErr;
+        for(let attempt=0;attempt<=GROQ_RETRY.length;attempt++){
+          if(attempt>0){
+            const b=$('ath-thinking-msg')?.querySelector('.athenas-bubble');
+            if(b) b.innerHTML=`<span style="font-size:12px;color:var(--text-muted)">Mucha demanda, reintentando ${attempt}/${GROQ_RETRY.length}…</span>`;
+            await new Promise(r=>setTimeout(r,GROQ_RETRY[attempt-1]));
+          }
+          try{
+            const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+              method:'POST',
+              headers:{'Content-Type':'application/json','Authorization':`Bearer ${groqKey}`},
+              body:JSON.stringify({model:'llama-3.3-70b-versatile',messages,max_tokens:900,temperature:0.7})
+            });
+            data=await res.json();
+          }catch(e){lastErr='red';break;}
+          const errMsg=(data.error?.message||'').toLowerCase();
+          const retry=errMsg.includes('overloaded')||errMsg.includes('unavailable')||data.error?.code===503;
+          if(!retry||attempt===GROQ_RETRY.length) break;
+        }
+        const thinkEl=$('ath-thinking-msg'); if(thinkEl) thinkEl.remove();
+        let reply;
+        if(lastErr==='red') reply='No pude conectarme. Verificá tu conexión.';
+        else if(data?.choices?.[0]?.message?.content){
+          reply=data.choices[0].message.content;
+          athenasCacheMap.set(cacheKey,{reply,ts:Date.now()});
+        } else if(data?.error?.message){
+          const em=data.error.message;
+          if(em.toLowerCase().includes('rate limit')||em.toLowerCase().includes('quota'))
+            reply='Groq alcanzó el límite por minuto. Esperá 60 segundos y volvé a intentar.';
+          else if(em.toLowerCase().includes('invalid')||em.toLowerCase().includes('api key'))
+            reply='La API key de Groq no es válida. Revisala en Configurar IA.';
+          else reply=`Error Groq: ${em}`;
+        } else reply='Sin respuesta. Intentá de nuevo.';
+        athenasHistory.push({role:'assistant',content:reply});
+        appendAthenasMsg('ai',reply);
+        return;
+      }
+      // ── GOOGLE path ────────────────────────────────────────────────────────
       const keys=(state.athenas?.apiKey||'').split(',').map(k=>k.trim()).filter(Boolean);
       if(!keys.length){
         appendAthenasMsg('ai','Para usar Athenas necesitás configurar una API key de Google AI Studio. Hacé clic en **Configurar IA** arriba — es gratis en aistudio.google.com.');
@@ -9768,7 +9842,8 @@ ${context}`;
       const msgs=$('athenasMessages'); if(!msgs) return;
       // Show welcome screen if no messages
       if(!msgs.children.length){
-        msgs.innerHTML=`<div id="ath-welcome-msg" class="ath-welcome"><div class="ath-logo">✦</div><h3>Hola, soy Athenas</h3><p style="font-size:13px;max-width:280px;margin:0 auto">Tu asistente inteligente para GLAMB. Preguntame sobre los datos del negocio, cómo usar la app o cualquier otra cosa.</p>${!state.athenas?.apiKey?'<div style="margin-top:14px;padding:10px 14px;background:var(--surface-2);border-radius:8px;font-size:12px;color:var(--text-muted)">Necesitás configurar una API key para empezar. Hacé clic en <strong>Configurar IA</strong> arriba.</div>':''}</div>`;
+        const hasKey=(state.athenas?.provider==='groq'?state.athenas?.groqApiKey:state.athenas?.apiKey)||'';
+        msgs.innerHTML=`<div id="ath-welcome-msg" class="ath-welcome"><div class="ath-logo">✦</div><h3>Hola, soy Athenas</h3><p style="font-size:13px;max-width:280px;margin:0 auto">Tu asistente inteligente para GLAMB. Preguntame sobre los datos del negocio, cómo usar la app o cualquier otra cosa.</p>${!hasKey?'<div style="margin-top:14px;padding:10px 14px;background:var(--surface-2);border-radius:8px;font-size:12px;color:var(--text-muted)">Necesitás configurar una API key para empezar. Hacé clic en <strong>Configurar IA</strong> arriba.</div>':''}</div>`;
       }
       // Suggestions
       const sug=$('athenasSuggestions'); if(sug) sug.innerHTML=ATHENAS_SUGGESTIONS.slice(0,6).map(s=>`<button class="ath-suggestion" data-ath-q="${esc(s)}">${esc(s)}</button>`).join('');
@@ -9776,6 +9851,9 @@ ${context}`;
       const keyInp=$('athenasApiKey');
       if(keyInp && document.activeElement!==keyInp) keyInp.value=state.athenas?.apiKey||'';
       if($('athenasModel')) $('athenasModel').value=state.athenas?.model||'gemini-1.5-flash';
+      if($('athenasProvider')) $('athenasProvider').value=state.athenas?.provider||'google';
+      const groqInp=$('athenasGroqKey');
+      if(groqInp && document.activeElement!==groqInp) groqInp.value=state.athenas?.groqApiKey||'';
       // Handlers
       const sendFn=async()=>{
         const inp=$('athenasInput'); if(!inp||!inp.value.trim()) return;
@@ -9791,12 +9869,17 @@ ${context}`;
       const cfg=$('athenasConfigSave');
       if(cfg) cfg.onclick=()=>{
         if(!state.athenas)state.athenas={};
-        const k=($('athenasApiKey')?.value||'').trim();
-        if(!k){showToast('Ingresá una API key antes de guardar');return;}
-        state.athenas.apiKey=k;
-        state.athenas.model=$('athenasModel')?.value||'gemini-2.0-flash';
+        const provider=$('athenasProvider')?.value||'google';
+        const gKey=($('athenasApiKey')?.value||'').trim();
+        const grKey=($('athenasGroqKey')?.value||'').trim();
+        if(provider==='google'&&!gKey){showToast('Ingresá la API key de Google');return;}
+        if(provider==='groq'&&!grKey){showToast('Ingresá la API key de Groq');return;}
+        state.athenas.provider=provider;
+        state.athenas.apiKey=gKey;
+        state.athenas.groqApiKey=grKey;
+        state.athenas.model=$('athenasModel')?.value||'gemini-1.5-flash';
         saveState();
-        showToast('API key guardada ✓');
+        showToast('Configuración guardada ✓');
         renderAthenas();
       };
       const detectBtn=$('athenasDetectModels');
