@@ -4620,7 +4620,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -5488,6 +5488,7 @@
     }
 
     function deleteCollaborator(id){
+      if(curRole()!=='admin') return showToast('Solo admin puede eliminar colaboradoras.');
       const col = state.collaborators.find(c=>c.id===id);
       if(!col) return;
       const apptCount = state.appointments.filter(a=>a.memberId===id).length;
@@ -5844,17 +5845,21 @@
       const oldPrice = info.variant.price;
       const priceChanged = price !== oldPrice && affectedTurns.length > 0;
 
+      const applyUpdate = () => {
+        info.variant.name=name; info.variant.price=price; info.variant.duration=duration;
+        saveState(); closeDrawers(); renderCatalog(); updateServiceGroupFromCatalog(); renderAgenda();
+      };
+
       if(priceChanged){
         const msg = `Este servicio tiene ${affectedTurns.length} turno(s) agendado(s) con precio $${oldPrice}. ¿Querés actualizar los precios automáticamente?`;
         showConfirm(msg,
-          ()=>{ affectedTurns.forEach(a=>a.price=price); saveState(); renderAgenda(); showToast(`Precio actualizado en ${affectedTurns.length} turno(s).`); },
-          ()=>{ showToast('Precio actualizado. Turnos existentes mantienen precio anterior.'); }
+          ()=>{ affectedTurns.forEach(a=>a.price=price); applyUpdate(); showToast(`Variante y ${affectedTurns.length} turno(s) actualizados.`); },
+          ()=>{ applyUpdate(); showToast('Variante actualizada. Turnos existentes mantienen precio anterior.'); }
         );
+        return;
       }
 
-      info.variant.name=name; info.variant.price=price; info.variant.duration=duration;
-      saveState(); closeDrawers();renderCatalog();updateServiceGroupFromCatalog();
-      renderAgenda();
+      applyUpdate();
       showToast('Variante actualizada.');
     }
 
@@ -6097,9 +6102,7 @@
         $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja cerrada</strong><span>Para registrar ventas del día, primero abrí caja con monto inicial obligatorio.</span><div style="margin-top:8px"><button class="small-btn primary" data-action="openCashSession">Abrir caja</button></div></div>`;
         return;
       }
-      const cashSales = sessionCashIn();
-      const withdrawals = session.withdrawals.reduce((s,w)=>s+Number(w.amount||0),0);
-      const expected = Number(session.openingAmount||0) + cashSales - withdrawals;
+      const expected = cashExpectedAmount();
       $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja abierta</strong><span>Apertura: ${money(session.openingAmount)} · Efectivo esperado ahora: ${money(expected)} · Abrió: ${session.openedBy||'Admin caja'}</span></div>`;
     }
     function openCashSession(){
@@ -6951,7 +6954,7 @@
         expectedCash,
         countedCash: counted,
         difference: counted - expectedCash,
-        paymentsTotal: state.payments.filter(p=>!p.voided&&(p.createdAt||'')>=(state.cashSession.openedAt||'')).reduce((sum,p)=>sum+Number(p.amount||0),0),
+        paymentsTotal: state.payments.filter(p=>!p.voided&&(p.type==='service'||p.type==='deposit_applied')&&(p.createdAt||'')>=(state.cashSession.openedAt||'')).reduce((sum,p)=>sum+Number(p.amount||0),0),
         withdrawalsTotal: state.cashSession.withdrawals.reduce((sum,w)=>sum+Number(w.amount||0),0),
         pendingCount: state.pendingCharges.filter(p=>p.status==='pending').length,
         closedBy: 'Admin caja',
@@ -8017,6 +8020,9 @@
         const original = state.appointments.find(x=>x.id===state.editingAppointmentId);
         if(!original) return showToast('No se encontró el turno a editar.');
         const oldBookingId = original.bookingId;
+        for(const line of lines){
+          if(mins(addMinutes(line.start,line.duration))<=mins(line.start)) return showToast('Revisá horarios: el fin debe ser después del inicio.');
+        }
         const existingRelated = state.appointments.filter(x=>x.bookingId===oldBookingId);
         state.appointments = state.appointments.filter(x=>x.bookingId!==oldBookingId);
 
@@ -8088,6 +8094,12 @@
         closeDrawers();showPage('agenda');showToast('Turno actualizado');
       } else {
         const bookingId = 'booking'+Date.now();
+        // Validar TODAS las líneas antes de crear (return en forEach no aborta el loop)
+        for(const line of lines){
+          if(mins(line.end)<=mins(line.start)) return showToast('Revisá horarios: el fin debe ser después del inicio.');
+          const tempAppt={memberId:line.memberId,start:line.start,end:line.end,date:appointmentDate};
+          if(overlaps(tempAppt,null,bookingId)) return showToast('No se puede crear: hay solapamiento con otro turno.');
+        }
         let apptIndex = 0;
         lines.forEach((line,lineIdx)=>{
           const vInfo = getVariantName(line.variantId, line.serviceId);
@@ -8110,11 +8122,9 @@
             depositAmount:lineIdx===0?depositAmount:0,
             bookingDepositAmount:depositAmount,
             depositMethod,
-            note:note||'Turno creado desde demo.',
+            note:note||'',
             isAdditional:false
           };
-          if(mins(mainAppt.end)<=mins(mainAppt.start)) return showToast('Revisá horarios de servicios.');
-          if(overlaps(mainAppt,null,bookingId)) return showToast('No se puede crear: hay solapamiento con otro turno.');
           addAppointment(mainAppt);
           apptIndex++;
 
@@ -8232,6 +8242,8 @@
       showConfirm(msg, ()=>{
         deleteClientPrivate(id);
         state.clients = state.clients.filter(x=>x.id!==id);
+        state.payments.forEach(p=>{ if(p.clientId===id) p.clientId=null; });
+        state.pendingCharges.forEach(p=>{ if(p.clientId===id) p.clientId=null; });
         saveState();
         closeDrawers();
         renderClients();
