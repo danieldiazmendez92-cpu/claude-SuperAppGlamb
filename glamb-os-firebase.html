@@ -3960,7 +3960,7 @@
       <section class="profile-section">
         <h3>Contacto</h3>
         <div class="mini-row"><strong>WhatsApp</strong><span id="profileWhatsapp">—</span></div>
-        <button class="small-btn primary" data-action="showToast" data-msg="Abriendo WhatsApp...">WhatsApp</button>
+        <button id="profileContactWA" class="small-btn primary" data-action="showToast" data-msg="Abriendo WhatsApp...">WhatsApp</button>
         <div class="mini-row"><strong>Email</strong><span id="profileEmail">—</span></div>
       </section>
       <section class="profile-section">
@@ -5209,8 +5209,8 @@
       const pendingHtml = (cmd==='full' && pendingAmount>0)
         ? `<div class="athenas-section"><div class="athenas-section-label">💸 Cobros pendientes</div><div class="athenas-card"><div class="athenas-card-title">${money(pendingAmount)} sin cobrar</div><div class="athenas-card-body">Verificar antes del cierre de caja.</div><button class="athenas-copy-btn" data-action="showPage" data-page="cash">Ir a Caja</button></div></div>`
         : '';
-      // Reactivación: tarea de recepción/admin, no para rol bajo
-      const reactivationSection = cmd==='min' ? '' : `<div class="athenas-section"><div class="athenas-section-label">🔁 Reactivación</div>${reactivationHtml}</div>`;
+      // Reactivación con link WA: solo admin (evita exponer datos de contacto a otros roles)
+      const reactivationSection = (cmd==='min' || !canSeeClientData()) ? '' : `<div class="athenas-section"><div class="athenas-section-label">🔁 Reactivación</div>${reactivationHtml}</div>`;
 
       el.innerHTML = `
         <div class="athenas-greeting">${greeting}</div>
@@ -8246,9 +8246,12 @@
       $('profileMessage').onclick = ()=>showToast('Abriendo WhatsApp...');
       $('profileVip').onclick = ()=>{ if(!c.tags.includes('VIP')) c.tags.push('VIP'); renderClients(); openClientProfile(c.id); showToast('Cliente marcado como VIP.'); };
       $('profileEditClient').onclick = ()=>{ closeDrawers(); editClient(c.id); };
-      // Editar/eliminar datos del cliente (incluye teléfono/email) → solo admin
-      if($('profileEditClient')) $('profileEditClient').style.display = canSeeClientData() ? '' : 'none';
-      if($('profileDeleteClient')) $('profileDeleteClient').style.display = canSeeClientData() ? '' : 'none';
+      // Comunicación y edición/eliminación → solo admin (evita exponer teléfono/email)
+      const _adminOnly = canSeeClientData() ? '' : 'none';
+      if($('profileContactWA'))   $('profileContactWA').style.display   = _adminOnly;
+      if($('profileMessage'))     $('profileMessage').style.display     = _adminOnly;
+      if($('profileEditClient'))  $('profileEditClient').style.display  = _adminOnly;
+      if($('profileDeleteClient')) $('profileDeleteClient').style.display = _adminOnly;
       $('profileDeleteClient').onclick = ()=>deleteClient(c.id);
       openDrawer('clientProfileDrawer');
     }
