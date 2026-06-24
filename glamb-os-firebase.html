@@ -3840,9 +3840,9 @@
               <div class="field"><label>API Key (Google AI Studio)</label><input id="athenasApiKey" type="password" placeholder="AIza…" style="width:100%"></div>
               <div class="field"><label>Modelo</label>
                 <select id="athenasModel" style="width:100%">
-                  <option value="gemini-1.5-flash">Gemini 1.5 Flash (gratis ✓)</option>
-                  <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                  <option value="gemini-2.0-flash">Gemini 2.0 Flash (requiere billing)</option>
+                  <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (gratis ✓)</option>
+                  <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro</option>
+                  <option value="gemini-2.0-flash-001">Gemini 2.0 Flash</option>
                 </select>
               </div>
             </div>
@@ -4553,7 +4553,7 @@
     teamTab:'collaborators',
     systemUsers:[],
     clientsPrivate:{},
-    athenas:{apiKey:'',model:'gemini-1.5-flash'},
+    athenas:{apiKey:'',model:'gemini-1.5-flash-latest'},
     commsTab:'templates',
     comms:{
       bizName:'GLAMB',
@@ -9340,7 +9340,7 @@ Profesional, cálida y directa. Respondés en español rioplatense (usás "vos")
 
 ${context}`;
       try{
-        const model=state.athenas?.model||'gemini-1.5-flash';
+        const model=state.athenas?.model||'gemini-1.5-flash-latest';
         // Google Generative Language API format
         const contents=athenasHistory.slice(-16).map(m=>({
           role:m.role==='assistant'?'model':'user',
@@ -9385,7 +9385,7 @@ ${context}`;
       // Config panel prefill — solo si el usuario no está escribiendo en el campo
       const keyInp=$('athenasApiKey');
       if(keyInp && document.activeElement!==keyInp) keyInp.value=state.athenas?.apiKey||'';
-      if($('athenasModel')) $('athenasModel').value=state.athenas?.model||'gemini-1.5-flash';
+      if($('athenasModel')) $('athenasModel').value=state.athenas?.model||'gemini-1.5-flash-latest';
       // Handlers
       const sendFn=async()=>{
         const inp=$('athenasInput'); if(!inp||!inp.value.trim()) return;
@@ -9404,7 +9404,7 @@ ${context}`;
         const k=($('athenasApiKey')?.value||'').trim();
         if(!k){showToast('Ingresá una API key antes de guardar');return;}
         state.athenas.apiKey=k;
-        state.athenas.model=$('athenasModel')?.value||'gemini-1.5-flash';
+        state.athenas.model=$('athenasModel')?.value||'gemini-1.5-flash-latest';
         saveState();
         showToast('API key guardada ✓');
         renderAthenas();
