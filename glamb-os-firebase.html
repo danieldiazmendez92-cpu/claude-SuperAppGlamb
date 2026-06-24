@@ -5954,6 +5954,8 @@
           useBtn.style.display = 'inline-block';
           useBtn.onclick = ()=>{
             if($('apDepositAmount')){ $('apDepositAmount').value = freeBalance; $('apDepositAmount').readOnly = true; }
+            const methodField = $('apDepositMethod');
+            if(methodField){ methodField.closest('.field').style.display = 'none'; }
             state.apDepositIsPreExisting = true;
             useBtn.style.display = 'none';
             if(bannerText) bannerText.textContent = `${esc(fullName(c))} — ${money(freeBalance)} de seña asignados a este turno (ya acreditados, no se genera nuevo pago).`;
@@ -7204,7 +7206,7 @@
           showApClientChip(c);
           state.apDepositIsPreExisting = false;
           if($('apDepositAmount')){ $('apDepositAmount').value = 0; $('apDepositAmount').readOnly = false; }
-          if($('apDepositMethod')) $('apDepositMethod').disabled = false;
+          if($('apDepositMethod')){ $('apDepositMethod').disabled = false; $('apDepositMethod').closest('.field').style.display=''; }
           updateApDepositBanner(c);
           updateApPreview();
         });
@@ -7450,7 +7452,7 @@
       if($('apClientSuggestions')) $('apClientSuggestions').classList.remove('open');
       if($('apDepositAvailableBanner') && !prefClient) $('apDepositAvailableBanner').style.display='none';
       if(!prefClient && $('apDepositAmount')){ $('apDepositAmount').value=0; $('apDepositAmount').readOnly = false; }
-      if($('apDepositMethod')){ $('apDepositMethod').value='Transferencia'; if(!prefClient) $('apDepositMethod').disabled=false; }
+      if($('apDepositMethod')){ $('apDepositMethod').value='Transferencia'; $('apDepositMethod').disabled=false; $('apDepositMethod').closest('.field').style.display=''; }
       if($('apNote')) $('apNote').value='';
       if($('apDate')) $('apDate').value = dateKey(state.agenda.currentDate);
       if($('appointmentServiceLines')) { $('appointmentServiceLines').innerHTML=''; addAppointmentServiceLine(); }
@@ -8874,6 +8876,9 @@
       // Si el usuario edita manualmente el campo de seña del turno, ya no es pre-existente
       if($('apDepositAmount')) $('apDepositAmount').oninput=()=>{
         state.apDepositIsPreExisting=false;
+        const methodField=$('apDepositMethod');
+        if(methodField) methodField.closest('.field').style.display='';
+        if($('apDepositAmount')) $('apDepositAmount').readOnly=false;
         if($('apDepositUseBtn')) $('apDepositUseBtn').style.display='inline-block';
       };
     }
