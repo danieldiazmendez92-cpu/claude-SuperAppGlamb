@@ -3850,11 +3850,12 @@
               <div class="field"><label>API Key (Google AI Studio)</label><input id="athenasApiKey" type="password" placeholder="AIza…" style="width:100%"></div>
               <div class="field"><label>Modelo <button type="button" class="small-btn" id="athenasDetectModels" style="margin-left:6px;font-size:10px">Detectar disponibles</button></label>
                 <select id="athenasModel" style="width:100%">
-                  <option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest</option>
-                  <option value="gemini-2.0-flash-001">gemini-2.0-flash-001</option>
                   <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                  <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                  <option value="gemini-2.5-pro">gemini-2.5-pro</option>
                   <option value="gemini-1.5-flash">gemini-1.5-flash</option>
                   <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                  <option value="gemini-2.0-flash-001">gemini-2.0-flash-001</option>
                 </select>
                 <span id="athenasModelHint" style="font-size:10px;color:var(--text-muted);margin-top:3px;display:block"></span>
               </div>
@@ -4566,7 +4567,7 @@
     teamTab:'collaborators',
     systemUsers:[],
     clientsPrivate:{},
-    athenas:{apiKey:'',model:'gemini-1.5-flash-latest'},
+    athenas:{apiKey:'',model:'gemini-2.0-flash'},
     commsTab:'templates',
     comms:{
       bizName:'GLAMB',
@@ -9364,7 +9365,7 @@ Profesional, cálida y directa. Respondés en español rioplatense (usás "vos")
 
 ${context}`;
       try{
-        const model=state.athenas?.model||'gemini-1.5-flash-latest';
+        const model=state.athenas?.model||'gemini-2.0-flash';
         // Historial en formato Google; el system prompt va como primer turno user+model
         const history=athenasHistory.slice(-16).map(m=>({
           role:m.role==='assistant'?'model':'user',
@@ -9376,7 +9377,7 @@ ${context}`;
           {role:'model', parts:[{text:'Entendido. Soy Athenas, lista para ayudarte.'}]},
           ...history
         ];
-        const res=await fetch(`https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`,{
+        const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,{
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body:JSON.stringify({contents,generationConfig:{maxOutputTokens:900}})
@@ -9411,7 +9412,7 @@ ${context}`;
       // Config panel prefill — solo si el usuario no está escribiendo en el campo
       const keyInp=$('athenasApiKey');
       if(keyInp && document.activeElement!==keyInp) keyInp.value=state.athenas?.apiKey||'';
-      if($('athenasModel')) $('athenasModel').value=state.athenas?.model||'gemini-1.5-flash-latest';
+      if($('athenasModel')) $('athenasModel').value=state.athenas?.model||'gemini-2.0-flash';
       // Handlers
       const sendFn=async()=>{
         const inp=$('athenasInput'); if(!inp||!inp.value.trim()) return;
@@ -9430,7 +9431,7 @@ ${context}`;
         const k=($('athenasApiKey')?.value||'').trim();
         if(!k){showToast('Ingresá una API key antes de guardar');return;}
         state.athenas.apiKey=k;
-        state.athenas.model=$('athenasModel')?.value||'gemini-1.5-flash-latest';
+        state.athenas.model=$('athenasModel')?.value||'gemini-2.0-flash';
         saveState();
         showToast('API key guardada ✓');
         renderAthenas();
@@ -9442,7 +9443,7 @@ ${context}`;
         detectBtn.textContent='Buscando…'; detectBtn.disabled=true;
         const hint=$('athenasModelHint');
         try{
-          const r=await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${k}`);
+          const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${k}`);
           const d=await r.json();
           if(d.error){if(hint)hint.textContent='Error: '+d.error.message;detectBtn.textContent='Detectar disponibles';detectBtn.disabled=false;return;}
           const sel=$('athenasModel');
