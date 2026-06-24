@@ -9310,8 +9310,19 @@
       const weekRev=state.payments.filter(p=>(p.date||p.createdAt||'').slice(0,10)>=weekStart&&!p.voided&&(p.type==='service'||p.type==='deposit_applied')).reduce((s,p)=>s+Number(p.amount||0),0);
       // Collab stats
       const collabStats=state.collaborators.filter(c=>c.can).map(c=>({name:fullName(c),hoy:todayAppts.filter(a=>a.memberId===c.id).length,semana:weekAppts.filter(a=>a.memberId===c.id).length}));
-      // Upcoming appts (next 7 days)
-      const upcomingAppts=state.appointments.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)&&!a.isAdditional&&(a.date||'')>today).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).slice(0,10);
+      // Upcoming appts this month + next 30 days
+      const monthEnd=dateKey(new Date(now.getFullYear(),now.getMonth()+1,0));
+      const futureLimit=dateKey(new Date(now.getTime()+30*86400000));
+      const upcomingAppts=state.appointments.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)&&!a.isAdditional&&(a.date||'')>today&&(a.date||'')<=futureLimit).sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+      // Month appointments (for income projections)
+      const monthStart=dateKey(new Date(now.getFullYear(),now.getMonth(),1));
+      const monthAppts=activeAppts.filter(a=>(a.date||'')>=monthStart&&(a.date||'')<=monthEnd);
+      // Build catalog price lookup: serviceName → price (lowest variant or first)
+      const catalogPrices={};
+      (state.catalog?.groups||[]).forEach(g=>g.services.forEach(s=>{
+        const prices=(s.variants||[]).map(v=>Number(v.price||0)).filter(p=>p>0);
+        catalogPrices[s.name]=prices.length?prices[0]:null;
+      }));
       // All clients (names only for search)
       const clientList=state.clients.slice(0,200).map(c=>`${fullName(c)} (${clientCode(c)})`).join(', ');
       const todayStr=`${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} (${['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][now.getDay()]})`;
@@ -9321,24 +9332,23 @@
 RESUMEN GENERAL:
 - Clientes registrados: ${state.clients.length}
 - Profesionales activas: ${state.collaborators.filter(c=>c.can).length}
-- Turnos hoy: ${todayAppts.length} | Esta semana: ${weekAppts.length}
-- Próximos turnos (7d): ${upcomingAppts.length}
+- Turnos hoy: ${todayAppts.length} | Esta semana: ${weekAppts.length} | Este mes (hasta fin): ${monthAppts.length}
 - Facturación semana: $${weekRev.toLocaleString('es-AR')}
 
 TURNOS DE HOY:
-${todayAppts.length?todayAppts.sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`  ${a.start} · ${fullName(client(a.clientId))} · ${a.service} · ${fullName(member(a.memberId))} [${a.status||'confirmado'}]`).join('\n'):'  Sin turnos hoy'}
+${todayAppts.length?todayAppts.sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`  ${a.start} · ${fullName(client(a.clientId))} · ${a.service}${catalogPrices[a.service]!=null?' ($'+catalogPrices[a.service].toLocaleString('es-AR')+')':''} · ${fullName(member(a.memberId))} [${a.status||'confirmado'}]`).join('\n'):'  Sin turnos hoy'}
 
-PRÓXIMOS TURNOS (hasta 7 días):
-${upcomingAppts.length?upcomingAppts.map(a=>`  ${a.date} ${a.start} · ${fullName(client(a.clientId))} · ${a.service} · ${fullName(member(a.memberId))}`).join('\n'):'  Sin turnos próximos'}
+PRÓXIMOS TURNOS (próximos 30 días, ${upcomingAppts.length} total):
+${upcomingAppts.length?upcomingAppts.map(a=>`  ${a.date} ${a.start} · ${fullName(client(a.clientId))} · ${a.service}${catalogPrices[a.service]!=null?' ($'+catalogPrices[a.service].toLocaleString('es-AR')+')':''} · ${fullName(member(a.memberId))}`).join('\n'):'  Sin turnos próximos'}
 
 SERVICIOS ESTA SEMANA (top):
-${topSvcs.length?topSvcs.map(([s,n])=>`  ${s}: ${n}`).join('\n'):'  Sin datos'}
+${topSvcs.length?topSvcs.map(([s,n])=>`  ${s}: ${n} turno${n!==1?'s':''}`).join('\n'):'  Sin datos'}
 
 OCUPACIÓN SEMANA POR PROFESIONAL:
 ${collabStats.map(c=>`  ${c.name}: ${c.semana} turnos semana / ${c.hoy} hoy`).join('\n')||'  Sin datos'}
 
-CATÁLOGO:
-${state.catalog.groups.map(g=>`  ${g.name}: ${g.services.map(s=>s.name).join(', ')}`).join('\n')}
+CATÁLOGO (servicios con precios):
+${(state.catalog?.groups||[]).map(g=>`  ${g.name}:\n${(g.services||[]).map(s=>`    - ${s.name}: ${(s.variants||[]).map(v=>`${v.name} $${Number(v.price||0).toLocaleString('es-AR')} (${v.duration}min)`).join(' / ')||'sin variantes'}`).join('\n')}`).join('\n')||'  Sin catálogo'}
 
 EQUIPO (colaboradoras):
 ${state.collaborators.map(c=>`  ${fullName(c)} — ${(c.groups||[]).join(', ')||c.type} — ${c.can?'Recibe turnos':'No asignable'} — Días: ${c.days||'?'}`).join('\n')}
