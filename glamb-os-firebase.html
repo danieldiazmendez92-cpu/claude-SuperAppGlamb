@@ -4414,7 +4414,15 @@
     // Firestore (un documento por registro). Dos usuarios editando registros
     // distintos dejan de pisarse (el blob único hacía last-writer-wins sobre
     // TODO el estado). Para sumar otra entidad, agregala a esta lista.
-    const SYNCED_COLLECTIONS=[ {key:'appointments', coll:'appointments'} ];
+    // sort: función de comparación para mantener el orden visual correcto al
+    //       reconstruir desde el snapshot (Firestore ordena por doc-id).
+    const _byDateDesc=(a,b)=>String(b.createdAt||'')>String(a.createdAt||'')?1:-1;
+    const SYNCED_COLLECTIONS=[
+      {key:'appointments',   coll:'appointments'},
+      {key:'payments',       coll:'payments',       sort:_byDateDesc},
+      {key:'salesTickets',   coll:'salesTickets',   sort:_byDateDesc},
+      {key:'pendingCharges', coll:'pendingCharges', sort:_byDateDesc},
+    ];
     const _syncShadow={};   // key -> Map(docId -> JSON conocido en el server)
     const _syncUnsub={};    // key -> función de desuscripción del onSnapshot
     const _syncInit={};     // key -> ya llegó el primer snapshot
@@ -4578,14 +4586,15 @@
     // pendientes ya vienen reflejadas en el snapshot (sin parpadeo).
     function subscribeCollectionsSync(){
       if(!fbReady || !db) return;
-      SYNCED_COLLECTIONS.forEach(({key,coll})=>{
+      SYNCED_COLLECTIONS.forEach(cfg=>{
+        const {key,coll,sort}=cfg;
         if(_syncUnsub[key]) return;
         _syncUnsub[key]=db.collection(coll).onSnapshot(snap=>{
           _applyingRemote=true;
           if(!_syncInit[key]){
             const arr=[]; const shadow=new Map();
             snap.docs.forEach(d=>{ const rec=d.data(); if(rec&&rec.id==null) rec.id=d.id; arr.push(rec); shadow.set(d.id,JSON.stringify(rec)); });
-            state[key]=arr; _syncShadow[key]=shadow; _syncInit[key]=true;
+            state[key]=sort?arr.sort(sort):arr; _syncShadow[key]=shadow; _syncInit[key]=true;
           }else{
             const arr=Array.isArray(state[key])?state[key].slice():[];
             const idx=new Map(); arr.forEach((r,i)=>{ if(r&&r.id!=null) idx.set(_docId(r.id),i); });
@@ -4593,9 +4602,10 @@
             snap.docChanges().forEach(ch=>{
               const id=ch.doc.id;
               if(ch.type==='removed'){ if(idx.has(id)) arr[idx.get(id)]=null; shadow.delete(id); }
-              else { const rec=ch.doc.data(); if(rec&&rec.id==null) rec.id=id; if(idx.has(id)) arr[idx.get(id)]=rec; else { idx.set(id,arr.length); arr.push(rec); } shadow.set(id,JSON.stringify(rec)); }
+              else { const rec=ch.doc.data(); if(rec&&rec.id==null) rec.id=id; if(idx.has(id)) arr[idx.get(id)]=rec; else { arr.push(rec); } shadow.set(id,JSON.stringify(rec)); }
             });
-            state[key]=arr.filter(r=>r); _syncShadow[key]=shadow;
+            const filtered=arr.filter(r=>r);
+            state[key]=sort?filtered.sort(sort):filtered; _syncShadow[key]=shadow;
           }
           mergeClientsPrivate();
           try{ renderAll(); }catch(e){ console.error(e); }
@@ -6264,7 +6274,7 @@
       const list = state.pendingCharges.filter(p=>p.status==='pending');
       $('pendingChargesList').innerHTML = list.length ? list.map(p=>`<div class="mini-row"><strong>${p.clientNameSnapshot}</strong><span>${p.service} · ${p.serviceOf||fullName(member(p.collaboratorId))} · ${money(p.finalPrice)}<br>Creado por: ${p.createdBy||'—'} · ${new Date(p.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span><div style="margin-top:8px"><button class="small-btn primary" data-action="injectPending" data-id="${p.id}">Cobrar</button><button class="small-btn" data-action="voidPending" data-id="${p.id}">Anular</button></div></div>`).join('') : '<div class="mini-row"><strong>Sin pendientes</strong><span>No hay servicios pendientes de cobro.</span></div>';
     }
-    function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
+    function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; saveState(); renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
     function renderCashDaily(){
       if(!$('cashMovements')) return;
       // Panel resumen financiero
