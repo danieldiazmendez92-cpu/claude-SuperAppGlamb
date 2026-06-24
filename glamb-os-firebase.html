@@ -3101,6 +3101,25 @@
     .glamb-dialog-msg { margin:0 0 16px; font-size:15px; line-height:1.5; color:var(--text); }
     .glamb-dialog-actions { display:flex; gap:8px; justify-content:flex-end; }
 
+    /* === COMUNICACIONES MODULE === */
+    .comms-tabs{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--line);background:var(--surface);flex-shrink:0}
+    .comms-tab-btn{padding:10px 18px;border:none;background:none;color:var(--text-muted);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:color .15s;position:relative}
+    .comms-tab-btn.active{color:#1a7a4a;border-bottom-color:#1a7a4a}
+    .comms-panel{display:none;padding:24px;overflow-y:auto;max-height:calc(100vh - 160px)}
+    .comms-panel.active{display:block}
+    .comms-badge{display:inline-flex;align-items:center;justify-content:center;background:#e53e3e;color:#fff;font-size:9px;font-weight:700;border-radius:50%;width:16px;height:16px;margin-left:4px;vertical-align:middle}
+    .reminder-card{margin-bottom:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    .var-chip{display:inline-block;padding:2px 8px;background:var(--surface-2);border:1px solid var(--line);border-radius:20px;font-size:11px;cursor:pointer;font-family:monospace;transition:background .12s}
+    .var-chip:hover{background:var(--line-strong);color:var(--surface)}
+    .toggle-switch{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0}
+    .toggle-switch input{opacity:0;width:0;height:0}
+    .toggle-track{position:absolute;inset:0;background:var(--line-strong);border-radius:20px;transition:.2s;cursor:pointer}
+    .toggle-track::before{position:absolute;content:'';width:14px;height:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
+    .toggle-switch input:checked + .toggle-track{background:#1a7a4a}
+    .toggle-switch input:checked + .toggle-track::before{transform:translateX(16px)}
+    .comms-log-table{width:100%;border-collapse:collapse;font-size:12px}
+    .comms-log-table th{text-align:left;padding:6px 8px;color:var(--text-muted);font-size:11px;font-weight:500;border-bottom:1px solid var(--line)}
+    .comms-log-table td{padding:8px;border-top:1px solid var(--line)}
     /* === FINANZAS MODULE === */
     .finanzas-tabs{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
     .finanzas-tab-btn{padding:10px 18px;border:none;background:none;color:var(--text-muted);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:color .15s}
@@ -3275,6 +3294,7 @@
         <button data-page="team" title="Equipo">✦</button>
         <button data-page="rrhh" title="RRHH">◉</button>
         <button data-page="finanzas" title="Finanzas">₿</button>
+        <button data-page="comms" title="Comunicaciones">✉</button>
       </nav>
       <button class="side-reset-btn" data-action="resetDemo" title="Resetear demo">↺</button>
     </aside>
@@ -3289,6 +3309,7 @@
       <button data-page="team">Equipo</button>
       <button data-page="rrhh">RRHH</button>
       <button data-page="finanzas">Finanzas</button>
+      <button data-page="comms">Comunicaciones</button>
     </nav>
 
     <main>
@@ -3741,6 +3762,26 @@
         <div id="finanzas-cfo" class="finanzas-panel active"></div>
         <div id="finanzas-contador" class="finanzas-panel"></div>
         <div id="finanzas-analista" class="finanzas-panel"></div>
+      </section>
+
+      <section class="page" id="page-comms">
+        <div class="topbar">
+          <div>
+            <div class="eyebrow">GLAMB OS</div>
+            <h1>Comunicaciones</h1>
+            <p class="subtitle">Recordatorios automáticos por email y WhatsApp con plantillas personalizables.</p>
+          </div>
+        </div>
+        <div class="comms-tabs">
+          <button class="comms-tab-btn active" data-comms-tab="templates">Plantillas</button>
+          <button class="comms-tab-btn" data-comms-tab="config">Configuración</button>
+          <button class="comms-tab-btn" data-comms-tab="pending">Pendientes <span class="comms-badge" id="commsWABadge" style="display:none"></span></button>
+          <button class="comms-tab-btn" data-comms-tab="log">Historial</button>
+        </div>
+        <div class="comms-panel active" id="comms-templates"></div>
+        <div class="comms-panel" id="comms-config"></div>
+        <div class="comms-panel" id="comms-pending"></div>
+        <div class="comms-panel" id="comms-log"></div>
       </section>
     </main>
   </div>
@@ -4429,7 +4470,19 @@
     currentUserId:null,
     teamTab:'collaborators',
     systemUsers:[],
-    clientsPrivate:{}
+    clientsPrivate:{},
+    commsTab:'templates',
+    comms:{
+      bizName:'GLAMB',
+      emailjs:{serviceId:'',templateId:'',publicKey:''},
+      templates:{
+        booking:{enabled:true,subject:'Tu turno en {{bizName}} está confirmado ✓',body:'Hola {{nombre}},\n\nTu turno en {{bizName}} está confirmado.\n\n📅 {{fecha}}\n🕐 {{hora}}\n💅 {{servicio}} con {{profesional}}\n\n¡Te esperamos!\n{{bizName}}'},
+        preEmail:{enabled:true,hoursBeforeEmail:4,subject:'Recordatorio: tu turno hoy a las {{hora}} en {{bizName}}',body:'Hola {{nombre}},\n\nTe recordamos que hoy a las {{hora}} tenés tu turno:\n\n💅 {{servicio}} con {{profesional}}\n📍 {{bizName}}\n\n¡Hasta pronto!'},
+        preWA:{enabled:true,hoursBeforeWA:5,message:'Hola {{nombre}} 👋 Te recordamos tu turno de hoy a las *{{hora}}* — {{servicio}} con {{profesional}}. ¡Te esperamos! {{bizName}} 💅'},
+        retention:{enabled:true,daysAfter:27,subject:'¿Cuándo nos volvemos a ver? — {{bizName}}',body:'Hola {{nombre}},\n\nTu último turno fue hace {{dias}} días y nos encantaría verte de nuevo 💅\n\nReservá tu próximo turno respondiendo este mail o escribiéndonos al {{bizPhone}}.\n\n¡El equipo de {{bizName}} te espera!'}
+      },
+      sentLog:[]
+    }
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -4438,7 +4491,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','withdrawalReasons','ownerName'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','withdrawalReasons','ownerName','comms'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -8730,6 +8783,7 @@
       if(!state.appointments) state.appointments=[];
       state.appointments.push(appt);
       saveState();
+      if(!appt.isAdditional) triggerBookingReminder(appt);
     }
     function updateAppointment(id, props){
       const a=state.appointments.find(x=>x.id===id);
@@ -8823,7 +8877,251 @@
     }
     // === FIN STATE MUTATION FUNCTIONS ===
 
-    function renderAll(){applyPermissions();renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
+    // ── COMUNICACIONES / REMINDERS ───────────────────────────────────────────
+    function fillTemplate(str,vars){return (str||'').replace(/\{\{(\w+)\}\}/g,(_,k)=>vars[k]!==undefined?vars[k]:`{{${k}}}`);}
+    function getTemplateVars(appt,c){
+      const m=member(appt?.memberId||'');
+      const biz=state.comms?.bizName||'GLAMB';
+      const d=appt?.date?new Date(appt.date+'T12:00:00'):new Date();
+      const dayN=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+      const monN=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      const lastApptDays=appt?Math.round((new Date()-d)/86400000):'?';
+      return {nombre:c?.first||'',apellido:c?.last||'',nombreCompleto:fullName(c||{}),servicio:appt?.service||'',profesional:fullName(m),fecha:`${dayN[d.getDay()]} ${d.getDate()} de ${monN[d.getMonth()]}`,hora:appt?.start||'',bizName:biz,dias:lastApptDays>0?lastApptDays:'27'};
+    }
+    function alreadySentReminder(type,apptId){return (state.comms?.sentLog||[]).some(e=>e.type===type&&e.apptId===apptId);}
+    function logReminder(type,apptId,channel,status='sent'){
+      if(!state.comms) return;
+      if(!state.comms.sentLog) state.comms.sentLog=[];
+      state.comms.sentLog.unshift({id:uid('log'),type,apptId,channel,status,sentAt:new Date().toISOString()});
+      if(state.comms.sentLog.length>100) state.comms.sentLog=state.comms.sentLog.slice(0,100);
+      saveState();
+    }
+    async function sendReminderEmail(type,appt,c){
+      const cfg=state.comms?.emailjs;
+      if(!cfg?.serviceId||!cfg?.publicKey||!cfg?.templateId) return false;
+      const toEmail=c?.email||(c?.id&&state.clientsPrivate?.[c.id]?.email);
+      if(!toEmail) return false;
+      const tpl=state.comms?.templates?.[type];
+      if(!tpl?.enabled) return false;
+      const vars=getTemplateVars(appt,c);
+      const subject=fillTemplate(tpl.subject||'',vars);
+      const body=fillTemplate(tpl.body||'',vars);
+      try{
+        const res=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:cfg.serviceId,template_id:cfg.templateId,user_id:cfg.publicKey,template_params:{to_email:toEmail,to_name:c.first||'',subject,body}})});
+        const ok=res.status===200||res.ok;
+        logReminder(type,appt?.id||'',type==='retention'?'email':'email',ok?'sent':'error');
+        return ok;
+      }catch(e){logReminder(type,appt?.id||'','email','error');return false;}
+    }
+    function getWALink(phone,message){
+      const digits=(phone||'').replace(/\D/g,'');
+      const num=digits.startsWith('549')?digits:digits.startsWith('54')?'549'+digits.slice(2):'549'+digits;
+      return `https://wa.me/${num}?text=${encodeURIComponent(message)}`;
+    }
+    function getPendingWA(){
+      if(!state.comms?.templates?.preWA?.enabled) return [];
+      const now=new Date(),today=dateKey(now),nowMins=now.getHours()*60+now.getMinutes();
+      const hBefore=Number(state.comms.templates.preWA.hoursBeforeWA||5);
+      return state.appointments.filter(a=>{
+        if(a.date!==today||a.isAdditional) return false;
+        if(['cancelled','cancelado','voided','completed','no_show'].includes(a.status)) return false;
+        const apptMins=mins(a.start);
+        if(nowMins<apptMins-hBefore*60||nowMins>=apptMins) return false;
+        if(alreadySentReminder('preWA',a.id)) return false;
+        return !!(client(a.clientId)?.phone);
+      }).map(a=>({appt:a,c:client(a.clientId)}));
+    }
+    function getRetentionCandidates(){
+      if(!state.comms?.templates?.retention?.enabled) return [];
+      const now=new Date(),today=dateKey(now);
+      const daysAfter=Number(state.comms.templates.retention.daysAfter||27);
+      const cutoff=dateKey(new Date(now.getTime()-daysAfter*86400000));
+      return state.clients.filter(c=>{
+        if(!c.email&&!c.phone) return false;
+        const cas=state.appointments.filter(a=>a.clientId===c.id&&!['cancelled','cancelado','voided'].includes(a.status)&&!a.isAdditional);
+        if(!cas.length) return false;
+        const last=cas.filter(a=>(a.date||'')<=today).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).find(Boolean);
+        if(!last||(last.date||'')>cutoff) return false;
+        return !cas.some(a=>(a.date||'')>today);
+      });
+    }
+    function checkAndSendScheduledReminders(){
+      if(!state.comms) return;
+      const now=new Date(),today=dateKey(now),nowMins=now.getHours()*60+now.getMinutes();
+      const tpls=state.comms.templates||{};
+      const todayAppts=state.appointments.filter(a=>a.date===today&&!a.isAdditional&&!['cancelled','cancelado','voided','completed','no_show'].includes(a.status));
+      for(const appt of todayAppts){
+        const c=client(appt.clientId); if(!c?.id) continue;
+        const apptMins=mins(appt.start);
+        if(tpls.preEmail?.enabled&&nowMins>=apptMins-Number(tpls.preEmail.hoursBeforeEmail||4)*60&&nowMins<apptMins&&!alreadySentReminder('preEmail',appt.id)){
+          sendReminderEmail('preEmail',appt,c).then(ok=>{if(ok) showToast(`Recordatorio email enviado a ${c.first}`);});
+        }
+      }
+      if(tpls.retention?.enabled){
+        for(const c of getRetentionCandidates()){
+          const cas=state.appointments.filter(a=>a.clientId===c.id&&!a.isAdditional&&a.date);
+          const last=cas.sort((a,b)=>b.date.localeCompare(a.date)).find(Boolean);
+          const logKey=c.id+'-'+(last?.date||'');
+          if(!alreadySentReminder('retention',logKey)){
+            sendReminderEmail('retention',last||{},c).then(ok=>{if(ok) logReminder('retention',logKey,'email');});
+          }
+        }
+      }
+    }
+    function triggerBookingReminder(appt){
+      if(!state.comms?.templates?.booking?.enabled) return;
+      const c=client(appt.clientId);
+      if(!c?.id) return;
+      sendReminderEmail('booking',appt,c).then(ok=>{if(ok) showToast(`Confirmación enviada a ${c.first}`);});
+    }
+    function sendRetentionEmailForClient(clientId){
+      const c=state.clients.find(x=>x.id===clientId); if(!c) return;
+      const cas=state.appointments.filter(a=>a.clientId===clientId&&!a.isAdditional&&a.date);
+      const last=cas.sort((a,b)=>b.date.localeCompare(a.date)).find(Boolean);
+      sendReminderEmail('retention',last||{},c).then(ok=>{showToast(ok?`Email enviado a ${c.first}`:'Error al enviar');renderComms();});
+    }
+
+    function renderCommsTemplates(){
+      const tpls=state.comms?.templates||{};
+      const varsList=[['nombre','Nombre'],['apellido','Apellido'],['nombreCompleto','Nombre completo'],['servicio','Servicio'],['profesional','Profesional'],['fecha','Fecha del turno'],['hora','Hora del turno'],['bizName','Nombre del local'],['dias','Días sin turno']];
+      const varChips=varsList.map(([k,l])=>`<span class="var-chip" data-var="${k}" title="${l}">{{${k}}}</span>`).join('');
+      const defs=[
+        {key:'booking',icon:'✉',title:'Confirmación al reservar',channel:'email',desc:'Email inmediato al guardar el turno.',timingKey:null},
+        {key:'preEmail',icon:'⏰',title:'Recordatorio previo — Email',channel:'email',desc:'Email de recordatorio antes del turno.',timingKey:'hoursBeforeEmail',timingLabel:'Horas antes del turno'},
+        {key:'preWA',icon:'💬',title:'Recordatorio previo — WhatsApp',channel:'wa',desc:'Link de WhatsApp listo para enviar desde la pestaña Pendientes.',timingKey:'hoursBeforeWA',timingLabel:'Horas antes del turno'},
+        {key:'retention',icon:'🔄',title:'Reactivación de clienta',channel:'email',desc:'Email si la clienta no tiene turno próximo después de N días.',timingKey:'daysAfter',timingLabel:'Días sin turno para activar'}
+      ];
+      return defs.map(def=>{
+        const tpl=tpls[def.key]||{};const enabled=tpl.enabled!==false;const isWA=def.channel==='wa';
+        const timingHtml=def.timingKey?`<div class="field" style="margin-bottom:10px"><label>${def.timingLabel}</label><input type="number" min="1" max="365" style="width:80px" class="comms-timing-input" data-tpl="${def.key}" data-field="${def.timingKey}" value="${tpl[def.timingKey]||(def.timingKey==='daysAfter'?27:def.timingKey==='hoursBeforeWA'?5:4)}"></div>`:'' ;
+        const subjectHtml=!isWA?`<div class="field" style="margin-bottom:10px"><label>Asunto del email</label><input type="text" class="comms-text-input" data-tpl="${def.key}" data-field="subject" value="${esc(tpl.subject||'')}" style="width:100%"></div>`:'';
+        const bodyHtml=`<div class="field" style="margin-bottom:10px"><label>${isWA?'Mensaje de WhatsApp':'Cuerpo del email'}</label><textarea rows="5" class="comms-text-input" data-tpl="${def.key}" data-field="${isWA?'message':'body'}" style="width:100%;font-family:inherit;font-size:12px;resize:vertical;box-sizing:border-box">${esc(tpl[isWA?'message':'body']||'')}</textarea></div>`;
+        return `<div class="reminder-card"><div style="display:flex;align-items:center;gap:10px;padding:14px 16px;cursor:pointer" data-toggle-rcard="${def.key}"><span style="font-size:20px">${def.icon}</span><div style="flex:1"><strong style="font-size:13px">${def.title}</strong><div style="font-size:11px;color:var(--text-muted);margin-top:2px">${def.desc}</div></div><label class="toggle-switch" onclick="event.stopPropagation()"><input type="checkbox" ${enabled?'checked':''} class="comms-toggle" data-tpl="${def.key}" data-field="enabled"><span class="toggle-track"></span></label></div><div id="rcard-body-${def.key}" style="padding:14px 16px;border-top:1px solid var(--line)">${timingHtml}${subjectHtml}${bodyHtml}<div><div style="font-size:11px;color:var(--text-muted);margin-bottom:6px">Variables disponibles (clic para insertar en el campo activo):</div><div class="template-vars" style="display:flex;flex-wrap:wrap;gap:6px">${varChips}</div></div></div></div>`;
+      }).join('');
+    }
+    function renderCommsConfig(){
+      const cfg=state.comms?.emailjs||{};
+      return `<div class="form-card" style="margin-bottom:16px"><h3>Identidad del local</h3><div class="field" style="margin-top:10px"><label>Nombre del local ({{bizName}} en las plantillas)</label><input id="commsBizName" value="${esc(state.comms?.bizName||'GLAMB')}" style="width:100%"></div><button class="btn primary" id="saveCommsConfig" style="margin-top:12px">Guardar</button></div>
+      <div class="form-card" style="margin-bottom:16px"><h3>✉ Email — EmailJS</h3><div class="meta" style="margin-bottom:14px">EmailJS envía emails directo desde el navegador sin servidor.<br><a href="https://www.emailjs.com" target="_blank" style="color:#1a7a4a;text-decoration:none">emailjs.com</a> — plan gratuito: 200 emails/mes.<br><br><strong>Pasos rápidos:</strong><ol style="margin:8px 0 0 16px;padding:0;font-size:12px;line-height:1.8"><li>Creá cuenta en EmailJS</li><li>Conectá tu Gmail en <em>Email Services</em> → copiá el <strong>Service ID</strong></li><li>Creá un template con variables <code style="background:var(--surface-2);padding:1px 4px;border-radius:3px">{{to_email}}</code> <code style="background:var(--surface-2);padding:1px 4px;border-radius:3px">{{to_name}}</code> <code style="background:var(--surface-2);padding:1px 4px;border-radius:3px">{{subject}}</code> <code style="background:var(--surface-2);padding:1px 4px;border-radius:3px">{{body}}</code> → copiá el <strong>Template ID</strong></li><li>En Account → <strong>Public Key</strong> copialo acá</li></ol></div><div class="form-grid"><div class="field"><label>Service ID</label><input id="commsEjsService" value="${esc(cfg.serviceId||'')}" placeholder="service_xxxxxxx"></div><div class="field"><label>Template ID</label><input id="commsEjsTemplate" value="${esc(cfg.templateId||'')}" placeholder="template_xxxxxxx"></div><div class="field full"><label>Public Key</label><input id="commsEjsKey" value="${esc(cfg.publicKey||'')}" placeholder="xxxxxxxxxxxxxxx"></div></div><div style="display:flex;gap:8px;margin-top:12px"><button class="btn primary" id="saveCommsEmailCfg">Guardar credenciales</button><button class="btn" id="testCommsEmail">Enviar email de prueba</button></div></div>
+      <div class="form-card"><h3>💬 WhatsApp</h3><div class="meta">Los recordatorios de WhatsApp se generan como links <em>wa.me</em> con el mensaje ya escrito. Aparecen en la pestaña <strong>Pendientes</strong> para enviarlos con un toque desde el celular.<br><br>Para envíos 100% automáticos (sin click manual) se necesita integrar la API oficial de Meta WhatsApp Business o Twilio. Consultanos si lo necesitás.</div></div>`;
+    }
+    function renderCommsPending(){
+      const pwa=getPendingWA();const ret=getRetentionCandidates();
+      let html='';
+      if(pwa.length){
+        html+=`<div class="form-card" style="margin-bottom:16px"><h3 style="margin-bottom:12px">💬 WhatsApp a enviar hoy (${pwa.length})</h3>`;
+        html+=pwa.map(({appt,c})=>{
+          const msg=fillTemplate(state.comms.templates.preWA.message||'',getTemplateVars(appt,c));
+          const link=getWALink(c.phone,msg);
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><div style="flex:1"><strong>${esc(fullName(c))}</strong><div style="font-size:11px;color:var(--text-muted)">${esc(c.phone)} · ${esc(appt.start)} · ${esc(appt.service)}</div></div><a href="${esc(link)}" target="_blank" rel="noopener" onclick="logReminder('preWA','${appt.id}','whatsapp');setTimeout(()=>renderComms(),600)" style="display:inline-block;padding:5px 14px;background:#25d366;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">Abrir WA →</a></div>`;
+        }).join('');
+        html+='</div>';
+      }
+      if(ret.length){
+        const daysAfter=state.comms.templates.retention.daysAfter||27;
+        html+=`<div class="form-card" style="margin-bottom:16px"><h3 style="margin-bottom:4px">🔄 Clientas a reactivar (${ret.length})</h3><div class="meta" style="margin-bottom:12px">Sin turno próximo hace más de ${daysAfter} días.</div>`;
+        html+=ret.slice(0,30).map(c=>{
+          const cas=state.appointments.filter(a=>a.clientId===c.id&&!a.isAdditional&&a.date).sort((a,b)=>b.date.localeCompare(a.date));
+          const last=cas.find(Boolean);
+          const daysAgo=last?Math.round((new Date()-new Date(last.date+'T12:00:00'))/86400000):'?';
+          const waMsg=fillTemplate(state.comms.templates.preWA.message||'',getTemplateVars(last,c));
+          const waLink=c.phone?getWALink(c.phone,waMsg):'';
+          const retLogKey=c.id+'-'+(last?.date||'');
+          const sent=alreadySentReminder('retention',retLogKey);
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><div style="flex:1"><strong>${esc(fullName(c))}</strong><div style="font-size:11px;color:var(--text-muted)">Último turno: hace ${daysAgo} días${last?' · '+esc(last.service):''}</div></div><div style="display:flex;gap:6px;flex-shrink:0">${c.email&&!sent?`<button class="small-btn primary" onclick="sendRetentionEmailForClient('${c.id}')">Email</button>`:sent?'<span style="font-size:11px;color:#1a7a4a">✓ Enviado</span>':''} ${waLink?`<a href="${esc(waLink)}" target="_blank" rel="noopener" class="small-btn" style="text-decoration:none">WA</a>`:''}</div></div>`;
+        }).join('');
+        html+='</div>';
+      }
+      if(!pwa.length&&!ret.length) html='<div class="mini-row"><strong>Sin pendientes</strong><span>No hay WhatsApps para enviar ahora ni clientas a reactivar.</span></div>';
+      return html;
+    }
+    function renderCommsLog(){
+      const log=state.comms?.sentLog||[];
+      if(!log.length) return '<div class="mini-row"><strong>Sin historial</strong><span>Los recordatorios enviados aparecen acá.</span></div>';
+      const typeLabel={booking:'Confirmación',preEmail:'Recordatorio email',preWA:'Recordatorio WA',retention:'Reactivación'};
+      return `<table class="comms-log-table"><thead><tr><th>Tipo</th><th>Canal</th><th>Estado</th><th>Fecha</th></tr></thead><tbody>${log.slice(0,80).map(e=>`<tr><td>${typeLabel[e.type]||e.type}</td><td>${e.channel==='email'?'✉ Email':'💬 WhatsApp'}</td><td style="color:${e.status==='sent'?'#1a7a4a':'#c0392b'}">${e.status==='sent'?'✓ Enviado':'✗ Error'}</td><td style="color:var(--text-muted)">${e.sentAt?new Date(e.sentAt).toLocaleString('es-AR'):'—'}</td></tr>`).join('')}</tbody></table>`;
+    }
+    function renderComms(){
+      const tpl=$('comms-templates'),cfg=$('comms-config'),pnd=$('comms-pending'),log=$('comms-log');
+      if(!tpl) return;
+      const currentTab=state.commsTab||'templates';
+      tpl.innerHTML=renderCommsTemplates();
+      cfg.innerHTML=renderCommsConfig();
+      pnd.innerHTML=renderCommsPending();
+      log.innerHTML=renderCommsLog();
+      // Badge
+      const badge=$('commsWABadge'),pwaLen=getPendingWA().length;
+      if(badge){badge.textContent=pwaLen;badge.style.display=pwaLen?'inline-flex':'none';}
+      // Set active panel
+      document.querySelectorAll('.comms-panel').forEach(p=>p.classList.toggle('active',p.id===`comms-${currentTab}`));
+      document.querySelectorAll('.comms-tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.commsTab===currentTab));
+      // Tab switching
+      document.querySelectorAll('.comms-tab-btn').forEach(btn=>btn.onclick=()=>{
+        state.commsTab=btn.dataset.commsTab;
+        document.querySelectorAll('.comms-tab-btn').forEach(b=>b.classList.toggle('active',b===btn));
+        document.querySelectorAll('.comms-panel').forEach(p=>p.classList.toggle('active',p.id===`comms-${btn.dataset.commsTab}`));
+        if(btn.dataset.commsTab==='pending') renderComms();
+      });
+      // Template toggles
+      document.querySelectorAll('.comms-toggle').forEach(cb=>cb.onchange=()=>{
+        const key=cb.dataset.tpl;if(!state.comms.templates[key])state.comms.templates[key]={};
+        state.comms.templates[key].enabled=cb.checked;saveState();
+      });
+      // Text inputs (subject, body, message)
+      let lastFocused=null;
+      document.querySelectorAll('.comms-text-input').forEach(el=>{
+        el.onfocus=()=>lastFocused=el;
+        el.oninput=()=>{const key=el.dataset.tpl,field=el.dataset.field;if(!state.comms.templates[key])state.comms.templates[key]={};state.comms.templates[key][field]=el.value;saveState();}
+      });
+      // Timing inputs
+      document.querySelectorAll('.comms-timing-input').forEach(el=>el.oninput=()=>{
+        const key=el.dataset.tpl,field=el.dataset.field;if(!state.comms.templates[key])state.comms.templates[key]={};
+        state.comms.templates[key][field]=Number(el.value);saveState();
+      });
+      // Var chips
+      document.querySelectorAll('.var-chip').forEach(chip=>chip.onclick=()=>{
+        if(!lastFocused) return showToast('Hacé clic en el campo de texto primero');
+        const v=`{{${chip.dataset.var}}}`,s=lastFocused.selectionStart,e=lastFocused.selectionEnd,val=lastFocused.value;
+        lastFocused.value=val.slice(0,s)+v+val.slice(e);
+        lastFocused.selectionStart=lastFocused.selectionEnd=s+v.length;
+        lastFocused.focus();lastFocused.dispatchEvent(new Event('input'));
+      });
+      // Card expand/collapse
+      document.querySelectorAll('[data-toggle-rcard]').forEach(el=>el.onclick=()=>{
+        const body=$(`rcard-body-${el.dataset.toggleRcard}`);
+        if(body) body.style.display=body.style.display==='none'?'block':'none';
+      });
+      // Config save (biz name)
+      const saveCommsBtn=$('saveCommsConfig');
+      if(saveCommsBtn) saveCommsBtn.onclick=()=>{if(!state.comms)state.comms={};state.comms.bizName=$('commsBizName')?.value.trim()||'GLAMB';saveState();showToast('Guardado');};
+      // Email credentials save
+      const saveEmailBtn=$('saveCommsEmailCfg');
+      if(saveEmailBtn) saveEmailBtn.onclick=()=>{
+        if(!state.comms)state.comms={};if(!state.comms.emailjs)state.comms.emailjs={};
+        state.comms.emailjs.serviceId=$('commsEjsService')?.value.trim()||'';
+        state.comms.emailjs.templateId=$('commsEjsTemplate')?.value.trim()||'';
+        state.comms.emailjs.publicKey=$('commsEjsKey')?.value.trim()||'';
+        saveState();showToast('Credenciales guardadas');
+      };
+      // Test email
+      const testBtn=$('testCommsEmail');
+      if(testBtn) testBtn.onclick=async()=>{
+        if(!state.comms?.emailjs?.serviceId||!state.comms?.emailjs?.publicKey||!state.comms?.emailjs?.templateId) return showToast('Guardá las credenciales primero');
+        const toEmail=prompt('¿A qué email enviamos el test?'); if(!toEmail) return;
+        testBtn.textContent='Enviando…';testBtn.disabled=true;
+        const fakeAppt={id:'test',service:'Servicio de prueba',start:'10:00',date:dateKey(new Date()),memberId:(state.collaborators[0]||{}).id};
+        const fakeClient={id:'test',first:'Test',last:'GLAMB',email:toEmail};
+        const ok=await sendReminderEmail('booking',fakeAppt,fakeClient);
+        testBtn.textContent='Enviar email de prueba';testBtn.disabled=false;
+        showToast(ok?'✓ Email de prueba enviado':'✗ Error. Verificá las credenciales.');
+      };
+    }
+    // Run reminder check on load and every 30 min
+    setTimeout(checkAndSendScheduledReminders, 8000);
+    setInterval(checkAndSendScheduledReminders, 30*60*1000);
+    // ── FIN COMUNICACIONES ────────────────────────────────────────────────────
+
+    function renderAll(){applyPermissions();renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();renderComms();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
