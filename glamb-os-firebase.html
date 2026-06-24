@@ -4554,6 +4554,7 @@
     finanzasPeriod:'month',
     finanzasCustomFrom:'',
     finanzasCustomTo:'',
+    finanzasCFOMonth:'',
     budgets:{},
     expenseCategories:null,
     withdrawalReasons:null,
@@ -4587,7 +4588,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -8590,21 +8591,33 @@
     }
     function renderFinanzasCFO(){
       const panel=$('finanzas-cfo'); if(!panel) return;
-      const {from:mFrom,to:mTo}=finDateRange('month');
-      const {from:tFrom,to:tTo}=finDateRange('today');
+      const today=dateKey(new Date());
+      const curYM=today.slice(0,7);
+      const selMonth=state.finanzasCFOMonth||curYM;
+      const [selY,selM]=selMonth.split('-').map(Number);
+      const mFrom=`${selMonth}-01`;
+      const isCurrentMonth=selMonth===curYM;
+      const lastDayDate=new Date(selY,selM,0);
+      const mTo=isCurrentMonth?today:dateKey(lastDayDate);
       const rev=finRevenue(mFrom,mTo), exp=finExpenses(mFrom,mTo), payroll=finPayrollCost(mFrom,mTo);
-      const net=rev-exp-payroll, revToday=finRevenue(tFrom,tTo);
+      const net=rev-exp-payroll;
+      const revToday=isCurrentMonth?finRevenue(today,today):null;
       const tickets=finTicketCount(mFrom,mTo), avg=finAvgTicket(mFrom,mTo);
       const mono=finMonotributoCheck();
       const {breakEven,fixedExp,grossMargin}=finBreakEven();
       const monoAlert=mono.pct>=80?'danger':mono.pct>=60?'warn':'ok';
       const topGroup=finRevenueByGroup(mFrom,mTo)[0];
       const topCollab=finRevenueByCollaborator(mFrom,mTo)[0];
-      const monthName=new Date().toLocaleDateString('es-AR',{month:'long',year:'numeric'});
       const beReached=breakEven>0?Math.min(100,Math.round((rev/breakEven)*100)):0;
+      const monthName=new Date(selY,selM-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'});
       panel.innerHTML=`
         <div class="fin-section">
-          <div class="fin-section-title">Resumen ${monthName}</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+            <div class="fin-section-title" style="margin-bottom:0;flex:1">Resumen ${monthName}</div>
+            <input type="month" value="${selMonth}" max="${curYM}"
+              style="font-size:13px;padding:5px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;cursor:pointer;min-width:0;"
+              onchange="setFinanzasCFOMonth(this.value)">
+          </div>
           <div class="kpi-grid">
             <div class="kpi-card ${net<0?'kpi-danger':''}">
               <div class="kpi-label">Resultado neto</div>
@@ -8614,7 +8627,7 @@
             <div class="kpi-card">
               <div class="kpi-label">Ingresos del mes</div>
               <div class="kpi-value">${money(rev)}</div>
-              <div class="kpi-sub">${tickets} ticket${tickets!==1?'s':''} · Hoy ${money(revToday)}</div>
+              <div class="kpi-sub">${tickets} ticket${tickets!==1?'s':''}${revToday!==null?' · Hoy '+money(revToday):''}</div>
             </div>
             <div class="kpi-card">
               <div class="kpi-label">Egresos del mes</div>
@@ -8654,6 +8667,12 @@
           </div>
         </div>`:''}
       `;
+    }
+    function setFinanzasCFOMonth(val){
+      if(!val) return;
+      state.finanzasCFOMonth=val;
+      saveState();
+      renderFinanzasCFO();
     }
     function renderFinanzasContador(){
       const panel=$('finanzas-contador'); if(!panel) return;
@@ -9866,6 +9885,7 @@ ${context}`;
       setCatalogFilter, setCatalogView,
       showPage, showRrhhTab, showToast,
       toggleAgendaFilters, toggleApptAdditionals, togglePaid,
+      setFinanzasCFOMonth,
       updateApptStatus, voidDeposit, voidPending, voidTicket,
       wizGoTo, wizSetPayMode
     });
