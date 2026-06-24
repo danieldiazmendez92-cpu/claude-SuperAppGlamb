@@ -3120,6 +3120,42 @@
     .comms-log-table{width:100%;border-collapse:collapse;font-size:12px}
     .comms-log-table th{text-align:left;padding:6px 8px;color:var(--text-muted);font-size:11px;font-weight:500;border-bottom:1px solid var(--line)}
     .comms-log-table td{padding:8px;border-top:1px solid var(--line)}
+    /* === ATHENAS AI ASSISTANT === */
+    #page-athenas{display:flex;flex-direction:column;height:100%}
+    .athenas-header{padding:16px 24px 0;flex-shrink:0}
+    .athenas-chat{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+    .athenas-messages{flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
+    .athenas-msg{display:flex;gap:10px;align-items:flex-end;max-width:100%}
+    .athenas-msg.user{flex-direction:row-reverse}
+    .athenas-bubble{max-width:82%;padding:10px 14px;border-radius:16px;font-size:13px;line-height:1.55;word-break:break-word}
+    .athenas-msg.user .athenas-bubble{background:var(--accent);color:#fff;border-radius:16px 16px 4px 16px}
+    .athenas-msg.ai .athenas-bubble{background:var(--surface-2);border:1px solid var(--line);border-radius:16px 16px 16px 4px;color:var(--text)}
+    .athenas-bubble strong{font-weight:600}
+    .athenas-bubble code{background:rgba(0,0,0,.08);padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace}
+    .athenas-bubble ul{margin:6px 0 4px 16px;padding:0}
+    .athenas-bubble li{margin-bottom:3px}
+    .ath-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#1a0f0a 0%,#3d2010 100%);color:#cbb8a6;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+    .ath-thinking{display:flex;gap:4px;align-items:center;height:20px;padding:0 4px}
+    .ath-thinking span{width:7px;height:7px;border-radius:50%;background:var(--text-muted);animation:athDot 1.3s infinite ease-in-out}
+    .ath-thinking span:nth-child(2){animation-delay:.15s}
+    .ath-thinking span:nth-child(3){animation-delay:.3s}
+    @keyframes athDot{0%,60%,100%{transform:scale(.7);opacity:.4}30%{transform:scale(1);opacity:1}}
+    .athenas-suggestions{display:flex;gap:6px;padding:6px 16px 2px;flex-wrap:wrap;flex-shrink:0}
+    .ath-suggestion{padding:5px 12px;border:1px solid var(--line);border-radius:20px;font-size:11px;cursor:pointer;background:var(--surface);color:var(--text-muted);white-space:nowrap;transition:background .1s}
+    .ath-suggestion:hover{background:var(--surface-2);color:var(--text)}
+    .athenas-input-row{display:flex;gap:8px;padding:12px 16px 16px;flex-shrink:0;border-top:1px solid var(--line);background:var(--surface)}
+    .athenas-input-row input{flex:1;border:1.5px solid var(--line);border-radius:24px;padding:9px 16px;font-size:13px;background:var(--surface-2);outline:none;font-family:inherit;transition:border-color .15s}
+    .athenas-input-row input:focus{border-color:var(--accent)}
+    .ath-send-btn{width:38px;height:38px;border-radius:50%;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s}
+    .ath-send-btn:disabled{opacity:.4;cursor:default}
+    .ath-config-panel{background:var(--surface-2);border-bottom:1px solid var(--line);padding:14px 20px;display:none}
+    .ath-welcome{text-align:center;padding:32px 20px;color:var(--text-muted)}
+    .ath-welcome .ath-logo{font-size:48px;margin-bottom:12px}
+    .ath-welcome h3{font-size:16px;color:var(--text);margin-bottom:6px}
+    /* Floating button */
+    #athenasFloat{position:fixed;bottom:22px;right:18px;z-index:900}
+    #athenasFloat button{width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#1a0f0a,#3d2010);color:#cbb8a6;border:none;cursor:pointer;font-size:21px;box-shadow:0 4px 18px rgba(0,0,0,.28);display:flex;align-items:center;justify-content:center;transition:transform .15s}
+    #athenasFloat button:hover{transform:scale(1.08)}
     /* === FINANZAS MODULE === */
     .finanzas-tabs{display:flex;gap:4px;padding:0 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
     .finanzas-tab-btn{padding:10px 18px;border:none;background:none;color:var(--text-muted);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:color .15s}
@@ -3295,6 +3331,7 @@
         <button data-page="rrhh" title="RRHH">◉</button>
         <button data-page="finanzas" title="Finanzas">₿</button>
         <button data-page="comms" title="Comunicaciones">✉</button>
+        <button data-page="athenas" title="Athenas IA">✦</button>
       </nav>
       <button class="side-reset-btn" data-action="resetDemo" title="Resetear demo">↺</button>
     </aside>
@@ -3310,6 +3347,7 @@
       <button data-page="rrhh">RRHH</button>
       <button data-page="finanzas">Finanzas</button>
       <button data-page="comms">Comunicaciones</button>
+      <button data-page="athenas">✦ Athenas</button>
     </nav>
 
     <main>
@@ -3783,8 +3821,53 @@
         <div class="comms-panel" id="comms-pending"></div>
         <div class="comms-panel" id="comms-log"></div>
       </section>
+
+      <section class="page" id="page-athenas">
+        <div class="athenas-header">
+          <div class="topbar" style="padding-bottom:0">
+            <div>
+              <div class="eyebrow">GLAMB OS</div>
+              <h1>✦ Athenas</h1>
+              <p class="subtitle">Tu asistente inteligente — datos del negocio, guía de la app y más.</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn" id="athenasToggleConfig">Configurar IA</button>
+              <button class="btn" id="athenaClear">Limpiar</button>
+            </div>
+          </div>
+          <div class="ath-config-panel" id="athenasConfigPanel">
+            <div class="form-grid">
+              <div class="field"><label>API Key (OpenRouter)</label><input id="athenasApiKey" type="password" placeholder="sk-or-v1-…" style="width:100%"></div>
+              <div class="field"><label>Modelo</label>
+                <select id="athenasModel" style="width:100%">
+                  <option value="anthropic/claude-haiku-4-5">Claude Haiku 4.5 (recomendado)</option>
+                  <option value="anthropic/claude-3-haiku">Claude 3 Haiku</option>
+                  <option value="meta-llama/llama-3.1-70b-instruct">Llama 3.1 70B</option>
+                  <option value="google/gemini-flash-1.5">Gemini Flash 1.5</option>
+                  <option value="openai/gpt-4o-mini">GPT-4o mini</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
+              <button class="btn primary" id="athenasConfigSave">Guardar</button>
+              <span style="font-size:11px;color:var(--text-muted)">Clave guardada solo en este dispositivo. Obtené una gratis en <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:#1a7a4a">openrouter.ai</a></span>
+            </div>
+          </div>
+        </div>
+        <div class="athenas-chat">
+          <div class="athenas-messages" id="athenasMessages"></div>
+          <div class="athenas-suggestions" id="athenasSuggestions"></div>
+          <div class="athenas-input-row">
+            <input id="athenasInput" type="text" placeholder="Preguntale algo a Athenas…" autocomplete="off" maxlength="800">
+            <button class="ath-send-btn" id="athenasSend">↑</button>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
+
+  <!-- Botón flotante Athenas — visible desde cualquier módulo -->
+  <div id="athenasFloat"><button onclick="showPage('athenas')" title="Abrir Athenas IA">✦</button></div>
 
   <div class="detail-popover" id="detailPopover"></div>
   <div class="overlay" id="overlay"></div>
@@ -4359,6 +4442,7 @@
       'Beauty Extras':['Retiro','Reparación','Diseño premium','Tratamiento fortalecedor']
     };
     const startHour=9,endHour=22; let slotMinutes=30; let pxPerMin=1.05;
+    let athenasHistory=[]; // historial de chat de la sesión (no persiste)
     const state={page:'command',clientSearch:'',clients:[
       {id:'cl1',code:'GL-000001',first:'Martina',last:'López',phone:'+54 9 11 5555-1201',email:'martina@email.com',tags:['Prefiere silencio','Acepta upgrades'],note:'Cuidar tiempos de espera. Prefiere café sin azúcar.'},
       {id:'cl2',code:'GL-000002',first:'Valentina',last:'Paz',phone:'+54 9 11 5555-8821',email:'valentina@email.com',tags:['VIP','Nail art minimalista'],note:'Ama nail art minimalista. Evitar diseños cargados.'},
@@ -4471,6 +4555,7 @@
     teamTab:'collaborators',
     systemUsers:[],
     clientsPrivate:{},
+    athenas:{apiKey:'',model:'anthropic/claude-haiku-4-5'},
     commsTab:'templates',
     comms:{
       bizName:'GLAMB',
@@ -4490,7 +4575,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','withdrawalReasons','ownerName','comms'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -4861,9 +4946,9 @@
     // REAL (filtrado server-side por rol) llega con Firebase Auth + security
     // rules. NO usar con datos reales sensibles hasta completar esa etapa.
     const PERMISSIONS = {
-      admin: { pages:['command','clients','agenda','cash','catalog','team','rrhh','finanzas','comms'], agenda:'all',   clientData:'full',   cash:'full',  command:'full'   },
-      medio: { pages:['command','clients','agenda','cash'],                                             agenda:'today', clientData:'masked', cash:'full',  command:'simple' },
-      bajo:  { pages:['command','agenda','cash'],                                                       agenda:'today', clientData:'masked', cash:'sales', command:'min'    }
+      admin: { pages:['command','clients','agenda','cash','catalog','team','rrhh','finanzas','comms','athenas'], agenda:'all',   clientData:'full',   cash:'full',  command:'full'   },
+      medio: { pages:['command','clients','agenda','cash'],                                                       agenda:'today', clientData:'masked', cash:'full',  command:'simple' },
+      bajo:  { pages:['command','agenda','cash'],                                                                 agenda:'today', clientData:'masked', cash:'sales', command:'min'    }
     };
     const ROLE_LABELS={admin:'Administrador',medio:'Recepción',bajo:'Colaboradora'};
     function curUser(){ return state.authUser || null; }
@@ -4984,10 +5069,10 @@
       const lowAlert = cmd==='min' ? '' : `<div class="mini-row"><strong>${lowCollaborators} colaboradora(s) bajo objetivo</strong><span>Controlar ocupación y facturación por profesional.</span></div>`;
       $('commandAlerts').innerHTML=`<div class="mini-row"><strong>${clientsAtRisk} clientas en riesgo</strong><span>Sin turno activo cargado para hoy. Priorizar contacto por WhatsApp.</span></div><div class="mini-row"><strong>${openSlots} huecos vendibles</strong><span>Revisar lista de espera y servicios de mayor margen.</span></div>${lowAlert}${moneyAlert}`;
       $('commandAppointments').innerHTML=appts.slice(0,4).map(a=>`<div class="mini-row"><strong>${esc(a.start)} · ${esc(client(a.clientId).first)} ${esc(client(a.clientId).last)}</strong><span>${esc(a.service)} con ${esc(member(a.memberId).first)}</span></div>`).join('') || '<div class="mini-row"><strong>Sin turnos activos</strong><span>La agenda está libre para vender huecos.</span></div>';
-      renderAthenas({appts, pendingAmount, openSlots, lowCollaborators, cmd});
+      renderAthenasWidget({appts, pendingAmount, openSlots, lowCollaborators, cmd});
     }
 
-    function renderAthenas({appts, pendingAmount, openSlots, lowCollaborators, cmd}){
+    function renderAthenasWidget({appts, pendingAmount, openSlots, lowCollaborators, cmd}){
       const el = $('athenasSummary'); if(!el) return;
       cmd = cmd || permCfg().command;
       const today = dateKey(new Date());
@@ -9140,7 +9225,179 @@
     setInterval(checkAndSendScheduledReminders, 30*60*1000);
     // ── FIN COMUNICACIONES ────────────────────────────────────────────────────
 
-    function renderAll(){applyPermissions();renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();renderComms();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
+    // ── ATHENAS IA ────────────────────────────────────────────────────────────
+    function buildAthenaContext(){
+      const now=new Date(), today=dateKey(now);
+      const dow=now.getDay(), weekStart=dateKey(new Date(now.getTime()-(dow===0?6:dow-1)*86400000));
+      const activeAppts=state.appointments.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)&&!a.isAdditional);
+      const todayAppts=activeAppts.filter(a=>a.date===today);
+      const weekAppts=activeAppts.filter(a=>(a.date||'')>=weekStart&&(a.date||'')<=today);
+      // Service counts this week
+      const svcCount={};weekAppts.forEach(a=>{svcCount[a.service]=(svcCount[a.service]||0)+1;});
+      const topSvcs=Object.entries(svcCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+      // Revenue this week
+      const weekRev=state.payments.filter(p=>(p.date||p.createdAt||'').slice(0,10)>=weekStart&&!p.voided&&(p.type==='service'||p.type==='deposit_applied')).reduce((s,p)=>s+Number(p.amount||0),0);
+      // Collab stats
+      const collabStats=state.collaborators.filter(c=>c.can).map(c=>({name:fullName(c),hoy:todayAppts.filter(a=>a.memberId===c.id).length,semana:weekAppts.filter(a=>a.memberId===c.id).length}));
+      // Upcoming appts (next 7 days)
+      const upcomingAppts=state.appointments.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)&&!a.isAdditional&&(a.date||'')>today).sort((a,b)=>(a.date||'').localeCompare(b.date||'')).slice(0,10);
+      // All clients (names only for search)
+      const clientList=state.clients.slice(0,200).map(c=>`${fullName(c)} (${clientCode(c)})`).join(', ');
+      const todayStr=`${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} (${['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][now.getDay()]})`;
+      return `
+=== DATOS EN TIEMPO REAL (${todayStr}) ===
+
+RESUMEN GENERAL:
+- Clientes registrados: ${state.clients.length}
+- Profesionales activas: ${state.collaborators.filter(c=>c.can).length}
+- Turnos hoy: ${todayAppts.length} | Esta semana: ${weekAppts.length}
+- Próximos turnos (7d): ${upcomingAppts.length}
+- Facturación semana: $${weekRev.toLocaleString('es-AR')}
+
+TURNOS DE HOY:
+${todayAppts.length?todayAppts.sort((a,b)=>a.start.localeCompare(b.start)).map(a=>`  ${a.start} · ${fullName(client(a.clientId))} · ${a.service} · ${fullName(member(a.memberId))} [${a.status||'confirmado'}]`).join('\n'):'  Sin turnos hoy'}
+
+PRÓXIMOS TURNOS (hasta 7 días):
+${upcomingAppts.length?upcomingAppts.map(a=>`  ${a.date} ${a.start} · ${fullName(client(a.clientId))} · ${a.service} · ${fullName(member(a.memberId))}`).join('\n'):'  Sin turnos próximos'}
+
+SERVICIOS ESTA SEMANA (top):
+${topSvcs.length?topSvcs.map(([s,n])=>`  ${s}: ${n}`).join('\n'):'  Sin datos'}
+
+OCUPACIÓN SEMANA POR PROFESIONAL:
+${collabStats.map(c=>`  ${c.name}: ${c.semana} turnos semana / ${c.hoy} hoy`).join('\n')||'  Sin datos'}
+
+CATÁLOGO:
+${state.catalog.groups.map(g=>`  ${g.name}: ${g.services.map(s=>s.name).join(', ')}`).join('\n')}
+
+EQUIPO (colaboradoras):
+${state.collaborators.map(c=>`  ${fullName(c)} — ${(c.groups||[]).join(', ')||c.type} — ${c.can?'Recibe turnos':'No asignable'} — Días: ${c.days||'?'}`).join('\n')}
+
+CLIENTES (${state.clients.length} total):
+${clientList}`;
+    }
+
+    function renderMarkdown(text){
+      return text
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g,'<em>$1</em>')
+        .replace(/`(.+?)`/g,'<code>$1</code>')
+        .replace(/^### (.+)$/gm,'<strong>$1</strong>')
+        .replace(/^## (.+)$/gm,'<strong>$1</strong>')
+        .replace(/^# (.+)$/gm,'<strong>$1</strong>')
+        .replace(/^[-•] (.+)$/gm,'<li>$1</li>')
+        .replace(/(<li>.*<\/li>)/gs,s=>`<ul>${s}</ul>`)
+        .replace(/\n\n+/g,'</p><p>')
+        .replace(/\n/g,'<br>');
+    }
+
+    function appendAthenasMsg(role,content,isThinking=false){
+      const box=$('athenasMessages'); if(!box) return;
+      const welcome=$('ath-welcome-msg'); if(welcome) welcome.remove();
+      const div=document.createElement('div');
+      div.className=`athenas-msg ${role}`;
+      if(role==='ai'){
+        div.innerHTML=`<div class="ath-avatar">✦</div><div class="athenas-bubble">${isThinking?`<div class="ath-thinking"><span></span><span></span><span></span></div>`:renderMarkdown(content)}</div>`;
+        if(isThinking) div.id='ath-thinking-msg';
+      } else {
+        div.innerHTML=`<div class="athenas-bubble">${esc(content)}</div>`;
+      }
+      box.appendChild(div);
+      box.scrollTop=box.scrollHeight;
+      return div;
+    }
+
+    async function sendToAthenas(userMessage){
+      const apiKey=(state.athenas?.apiKey||'').trim();
+      if(!apiKey){
+        appendAthenasMsg('ai','Para usar Athenas necesitás configurar una API key de OpenRouter. Hacé clic en **Configurar IA** arriba.');
+        return;
+      }
+      appendAthenasMsg('user',userMessage);
+      appendAthenasMsg('ai','',true); // thinking indicator
+      athenasHistory.push({role:'user',content:userMessage});
+      const context=buildAthenaContext();
+      const systemPrompt=`Sos **Athenas**, la asistente inteligente de GLAMB OS — el sistema de gestión del salón de belleza GLAMB.
+
+## Tu estilo
+Profesional, cálida y directa. Respondés en español rioplatense (usás "vos"). Respondés de forma concisa. Podés usar emojis con moderación. Usás markdown para organizar respuestas largas.
+
+## Lo que podés hacer
+- Responder preguntas sobre los datos del negocio (turnos, facturación, clientes, ocupación, servicios)
+- Guiar al equipo en el uso de la app (cómo crear turnos, agregar clientes, configurar recordatorios, etc.)
+- Dar insights, alertas y recomendaciones basadas en los datos
+- Redactar mensajes para clientes (WhatsApp, email) si te lo piden
+- Proponer acciones concretas para mejorar el negocio
+
+## Cómo usar GLAMB OS (módulos)
+- **Agenda (◷)**: Vista diaria/semanal por profesional. Clic en un hueco para crear turno. Drag & drop para mover.
+- **Clientes (♡)**: Perfiles, historial, tags VIP. Buscar por nombre, apellido o teléfono. Importar CSV.
+- **Caja (◈)**: Registrar ventas, señas, propinas, pagos mixtos. Arqueo diario, retiros, gastos.
+- **Catálogo (⬡)**: Servicios por grupo/variante con precio y duración. Adicionales agendables.
+- **Equipo (✦)**: Colaboradoras con foto, disponibilidad por día y horario, grupos habilitados.
+- **RRHH (◉)**: Liquidaciones de sueldo, comisiones, presentismo, viáticos.
+- **Finanzas (₿)**: P&L, flujo de caja, análisis por período (CFO / Contador / Analista).
+- **Comunicaciones (✉)**: Recordatorios email (Firebase Trigger Email) y WhatsApp, plantillas personalizables.
+- **Athenas (✦)**: Vos misma 🙂
+
+${context}`;
+      try{
+        const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`,'HTTP-Referer':window.location.origin,'X-Title':'GLAMB OS — Athenas'},
+          body:JSON.stringify({model:state.athenas?.model||'anthropic/claude-haiku-4-5',messages:[{role:'system',content:systemPrompt},...athenasHistory.slice(-16)],max_tokens:900})
+        });
+        const data=await res.json();
+        const reply=data.choices?.[0]?.message?.content||(data.error?.message?`Error: ${data.error.message}`:'Sin respuesta de la IA.');
+        const thinkEl=$('ath-thinking-msg'); if(thinkEl) thinkEl.remove();
+        athenasHistory.push({role:'assistant',content:reply});
+        appendAthenasMsg('ai',reply);
+      }catch(e){
+        const thinkEl=$('ath-thinking-msg'); if(thinkEl) thinkEl.remove();
+        appendAthenasMsg('ai','No pude conectarme. Verificá tu API key y la conexión a internet.');
+      }
+    }
+
+    const ATHENAS_SUGGESTIONS=[
+      '¿Cuántos turnos hay hoy?','¿Qué servicios se hicieron esta semana?','¿Quién tiene más turnos hoy?',
+      '¿Qué clientes no vinieron hace más de 30 días?','Resumen del día','¿Cuál es el servicio más popular?',
+      '¿Cómo agrego un nuevo turno?','¿Cómo configuro los recordatorios de email?',
+      'Redactame un WhatsApp de recordatorio','¿Qué debería mejorar el negocio?'
+    ];
+
+    function renderAthenas(){
+      const msgs=$('athenasMessages'); if(!msgs) return;
+      // Show welcome screen if no messages
+      if(!msgs.children.length){
+        msgs.innerHTML=`<div id="ath-welcome-msg" class="ath-welcome"><div class="ath-logo">✦</div><h3>Hola, soy Athenas</h3><p style="font-size:13px;max-width:280px;margin:0 auto">Tu asistente inteligente para GLAMB. Preguntame sobre los datos del negocio, cómo usar la app o cualquier otra cosa.</p>${!state.athenas?.apiKey?'<div style="margin-top:14px;padding:10px 14px;background:var(--surface-2);border-radius:8px;font-size:12px;color:var(--text-muted)">Necesitás configurar una API key para empezar. Hacé clic en <strong>Configurar IA</strong> arriba.</div>':''}</div>`;
+      }
+      // Suggestions
+      const sug=$('athenasSuggestions'); if(sug) sug.innerHTML=ATHENAS_SUGGESTIONS.slice(0,6).map(s=>`<button class="ath-suggestion" data-ath-q="${esc(s)}">${esc(s)}</button>`).join('');
+      // Config panel prefill
+      if($('athenasApiKey')) $('athenasApiKey').value=state.athenas?.apiKey||'';
+      if($('athenasModel')) $('athenasModel').value=state.athenas?.model||'anthropic/claude-haiku-4-5';
+      // Handlers
+      const sendFn=async()=>{
+        const inp=$('athenasInput'); if(!inp||!inp.value.trim()) return;
+        const q=inp.value.trim(); inp.value='';
+        const btn=$('athenasSend'); if(btn){btn.disabled=true;}
+        await sendToAthenas(q);
+        if(btn){btn.disabled=false;} inp.focus();
+      };
+      const sendBtn=$('athenasSend'); if(sendBtn) sendBtn.onclick=sendFn;
+      const inp=$('athenasInput');
+      if(inp){ inp.onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendFn();}}; }
+      document.querySelectorAll('[data-ath-q]').forEach(b=>b.onclick=()=>{if($('athenasInput'))$('athenasInput').value=b.dataset.athQ;sendFn();});
+      const cfg=$('athenasConfigSave');
+      if(cfg) cfg.onclick=()=>{if(!state.athenas)state.athenas={};state.athenas.apiKey=$('athenasApiKey')?.value.trim()||'';state.athenas.model=$('athenasModel')?.value||'anthropic/claude-haiku-4-5';saveState();showToast('Configuración guardada');renderAthenas();};
+      const toggle=$('athenasToggleConfig');
+      if(toggle) toggle.onclick=()=>{const p=$('athenasConfigPanel');if(p)p.style.display=p.style.display==='block'?'none':'block';};
+      const clear=$('athenaClear');
+      if(clear) clear.onclick=()=>{athenasHistory=[];if(msgs)msgs.innerHTML='';renderAthenas();};
+    }
+    // ── FIN ATHENAS ───────────────────────────────────────────────────────────
+
+    function renderAll(){applyPermissions();renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();renderComms();renderAthenas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
