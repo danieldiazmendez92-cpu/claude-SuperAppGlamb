@@ -4409,6 +4409,17 @@
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
     const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','cashMode','cashCurrentCollaboratorId','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','budgets','expenseCategories','withdrawalReasons','ownerName'];
 
+    // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
+    // Cada entrada {key,coll} mueve un array del estado a una colección de
+    // Firestore (un documento por registro). Dos usuarios editando registros
+    // distintos dejan de pisarse (el blob único hacía last-writer-wins sobre
+    // TODO el estado). Para sumar otra entidad, agregala a esta lista.
+    const SYNCED_COLLECTIONS=[ {key:'appointments', coll:'appointments'} ];
+    const _syncShadow={};   // key -> Map(docId -> JSON conocido en el server)
+    const _syncUnsub={};    // key -> función de desuscripción del onSnapshot
+    const _syncInit={};     // key -> ya llegó el primer snapshot
+    const _docId=v=>String(v).replace(/[\/.]/g,'_'); // id seguro para Firestore
+
     // ── Firebase ──────────────────────────────────────────────────────
     const firebaseConfig = {
       apiKey: "AIzaSyAkTmM7r_Srfh0ccco4Dhf2PX1KZOTfPaI",
@@ -4431,8 +4442,12 @@
     function serializeState(){ const out={}; PERSIST_KEYS.forEach(k=>{ if(state[k]!==undefined) out[k]=state[k]; }); return out; }
     // Versión sin datos sensibles para el blob compartido en Firestore.
     // phone/email van a la colección clientsPrivate (solo lectura para admin).
-    function serializeForCloud(){ const out=serializeState(); if(out.clients) out.clients=out.clients.map(({phone:_p,email:_e,...rest})=>rest); return out; }
-    function applyPersisted(data){ if(!data) return; PERSIST_KEYS.forEach(k=>{ if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
+    function serializeForCloud(){ const out=serializeState(); if(out.clients) out.clients=out.clients.map(({phone:_p,email:_e,...rest})=>rest); SYNCED_COLLECTIONS.forEach(({key})=>{ delete out[key]; }); return out; }
+    // fromCloud=true: el blob compartido NO es fuente de verdad para las
+    // entidades sincronizadas (viven en su colección); se omiten para que un
+    // blob viejo no pise lo que llega por onSnapshot. El cache local (offline)
+    // sí las carga (fromCloud falso) porque ahí no hay colección disponible.
+    function applyPersisted(data, fromCloud){ if(!data) return; const skip=fromCloud?new Set(SYNCED_COLLECTIONS.map(s=>s.key)):null; PERSIST_KEYS.forEach(k=>{ if(skip&&skip.has(k)) return; if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
 
     function saveState(){
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); }catch(e){}
@@ -4440,7 +4455,9 @@
         clearTimeout(_cloudTimer);
         _cloudTimer = setTimeout(()=>{
           // Fase B: el blob compartido NO lleva phone/email de clientes
+          // Fase 3: tampoco lleva las entidades sincronizadas (van por colección)
           stateDoc.set(serializeForCloud(),{merge:false}).catch(e=>console.error('[GLAMB] guardado en nube falló:', e));
+          syncCollections();
         }, 800);
       }
     }
@@ -4451,7 +4468,7 @@
       if(!fbReady) return;
       try{
         const snap=await stateDoc.get();
-        if(snap.exists){ applyPersisted(snap.data()); }
+        if(snap.exists){ applyPersisted(snap.data(), true); }
         else { await stateDoc.set(serializeForCloud(),{merge:false}); } // primer arranque: sembrar demo
       }catch(e){ console.error('[GLAMB] carga desde nube falló:', e); }
     }
@@ -4460,7 +4477,7 @@
       _cloudUnsub = stateDoc.onSnapshot(snap=>{
         if(!snap.exists || snap.metadata.hasPendingWrites) return; // ignorar el eco de mi propia escritura
         _applyingRemote=true;
-        applyPersisted(snap.data());
+        applyPersisted(snap.data(), true);
         try{ renderAll(); }catch(e){ console.error(e); }
         _applyingRemote=false;
       }, e=>console.error('[GLAMB] sync en vivo falló:', e));
@@ -4524,6 +4541,102 @@
         localStorage.setItem('glamb-cp-migrated-v1','1');
         console.log('[GLAMB] migración clientsPrivate completada:',toMigrate.length,'clientes');
       }catch(e){ console.error('[GLAMB] migración clientsPrivate falló:',e); }
+    }
+
+    // ── Fase 3: sincronización por colección ─────────────────────────
+    // Empuja a Firestore solo los registros que cambiaron (diff contra la
+    // sombra) y borra los que se quitaron. Por-documento => no se pisan.
+    function syncCollections(){
+      if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
+      SYNCED_COLLECTIONS.forEach(({key,coll})=>{
+        const arr=Array.isArray(state[key])?state[key]:[];
+        const prev=_syncShadow[key]||new Map();
+        const next=new Map();
+        const cref=db.collection(coll);
+        const writes=[];
+        arr.forEach(rec=>{
+          if(!rec || rec.id==null) return;
+          const id=_docId(rec.id);
+          const json=JSON.stringify(rec);
+          next.set(id,json);
+          if(prev.get(id)!==json) writes.push(['set',id,rec]);
+        });
+        prev.forEach((_v,id)=>{ if(!next.has(id)) writes.push(['del',id,null]); });
+        _syncShadow[key]=next;
+        for(let i=0;i<writes.length;i+=450){               // límite de 500 ops/batch
+          const batch=db.batch();
+          writes.slice(i,i+450).forEach(([op,id,rec])=>{ op==='set'?batch.set(cref.doc(id),rec):batch.delete(cref.doc(id)); });
+          batch.commit().catch(e=>console.error('[GLAMB] sync '+coll+' falló:',e));
+        }
+      });
+    }
+
+    // onSnapshot: el primer snapshot reemplaza por completo (descarta la demo
+    // o el cache local); los siguientes aplican solo los cambios de cada
+    // documento (docChanges), así una edición remota a OTRO registro no pisa
+    // mi edición local pendiente. Firestore compensa latencia => mis escrituras
+    // pendientes ya vienen reflejadas en el snapshot (sin parpadeo).
+    function subscribeCollectionsSync(){
+      if(!fbReady || !db) return;
+      SYNCED_COLLECTIONS.forEach(({key,coll})=>{
+        if(_syncUnsub[key]) return;
+        _syncUnsub[key]=db.collection(coll).onSnapshot(snap=>{
+          _applyingRemote=true;
+          if(!_syncInit[key]){
+            const arr=[]; const shadow=new Map();
+            snap.docs.forEach(d=>{ const rec=d.data(); if(rec&&rec.id==null) rec.id=d.id; arr.push(rec); shadow.set(d.id,JSON.stringify(rec)); });
+            state[key]=arr; _syncShadow[key]=shadow; _syncInit[key]=true;
+          }else{
+            const arr=Array.isArray(state[key])?state[key].slice():[];
+            const idx=new Map(); arr.forEach((r,i)=>{ if(r&&r.id!=null) idx.set(_docId(r.id),i); });
+            const shadow=_syncShadow[key]||new Map();
+            snap.docChanges().forEach(ch=>{
+              const id=ch.doc.id;
+              if(ch.type==='removed'){ if(idx.has(id)) arr[idx.get(id)]=null; shadow.delete(id); }
+              else { const rec=ch.doc.data(); if(rec&&rec.id==null) rec.id=id; if(idx.has(id)) arr[idx.get(id)]=rec; else { idx.set(id,arr.length); arr.push(rec); } shadow.set(id,JSON.stringify(rec)); }
+            });
+            state[key]=arr.filter(r=>r); _syncShadow[key]=shadow;
+          }
+          mergeClientsPrivate();
+          try{ renderAll(); }catch(e){ console.error(e); }
+          _applyingRemote=false;
+        }, e=>console.error('[GLAMB] sync '+coll+' falló:',e));
+      });
+    }
+
+    function unsubscribeCollections(){
+      Object.keys(_syncUnsub).forEach(k=>{ try{ _syncUnsub[k](); }catch(e){} delete _syncUnsub[k]; });
+      Object.keys(_syncShadow).forEach(k=>{ delete _syncShadow[k]; });
+      Object.keys(_syncInit).forEach(k=>{ delete _syncInit[k]; });
+    }
+
+    // Siembra única y GLOBAL: copia los registros del blob viejo (o de la demo)
+    // a la colección, una sola vez. El hito queda marcado en appState/migrations
+    // para no re-sembrar nunca más; si la colección queda vacía a propósito, se
+    // respeta (no resucita registros borrados desde un cache local viejo).
+    async function migrateCollectionsIfNeeded(){
+      if(!fbReady || !db) return;
+      const migRef=db.collection('appState').doc('migrations');
+      let mig={}; try{ const s=await migRef.get(); if(s.exists) mig=s.data()||{}; }catch(e){}
+      let blob={}; try{ const s=await stateDoc.get(); if(s.exists) blob=s.data()||{}; }catch(e){}
+      for(const {key,coll} of SYNCED_COLLECTIONS){
+        const fkey=coll+'V1';
+        if(mig[fkey]) continue;
+        try{
+          const existing=await db.collection(coll).limit(1).get();
+          if(existing.empty){
+            const src=(blob[key]!==undefined)?blob[key]:state[key];
+            const seed=(Array.isArray(src)?src:[]).filter(r=>r&&r.id!=null);
+            for(let i=0;i<seed.length;i+=450){
+              const batch=db.batch();
+              seed.slice(i,i+450).forEach(r=>batch.set(db.collection(coll).doc(_docId(r.id)),r));
+              await batch.commit();
+            }
+            if(seed.length) console.log('[GLAMB] migración '+coll+':',seed.length,'registros');
+          }
+          await migRef.set({[fkey]:true},{merge:true});
+        }catch(e){ console.error('[GLAMB] migración '+coll+' falló:',e); }
+      }
     }
     async function ensureUserRole(user){
       const uref = db.collection('users').doc(user.uid);
@@ -8792,7 +8905,9 @@
               await auth.signOut(); return;
             }
             await loadStateFromCloud();
+            await migrateCollectionsIfNeeded();   // siembra la colección antes de suscribir
             subscribeStateSync();
+            subscribeCollectionsSync();           // turnos en vivo para todos los roles
             if(curRole()==='admin'){
               subscribeUsersSync();
               subscribeClientsPrivateSync();
@@ -8814,6 +8929,7 @@
           if(_cloudUnsub){ _cloudUnsub(); _cloudUnsub=null; }
           if(_usersUnsub){ _usersUnsub(); _usersUnsub=null; }
           if(_cpUnsub){ _cpUnsub(); _cpUnsub=null; }
+          unsubscribeCollections();
           state.authUser=null;
           state.systemUsers=[];
           state.clientsPrivate={};

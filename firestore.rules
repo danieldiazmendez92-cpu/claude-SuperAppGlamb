@@ -37,6 +37,13 @@ service cloud.firestore {
       allow write: if hasAccess();
     }
 
+    // Turnos/agenda (Fase 3): un documento por turno en vez del blob único,
+    // para que dos usuarios editando turnos distintos no se pisen. Mismo
+    // nivel de acceso que el estado compartido (cualquier usuario habilitado).
+    match /appointments/{id} {
+      allow read, write: if hasAccess();
+    }
+
     // Todo lo demás: denegado
     match /{document=**} {
       allow read, write: if false;
