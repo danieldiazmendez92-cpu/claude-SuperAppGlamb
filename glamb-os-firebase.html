@@ -3980,9 +3980,12 @@
       </section>
       <section class="form-card">
         <h3>Seña del turno</h3>
-        <div id="apDepositAvailableBanner" style="display:none;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;color:#166534;">
+        <div id="apDepositAvailableBanner" style="display:none;align-items:flex-start;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;color:#166534;">
           <span style="font-size:16px;">💰</span>
-          <span id="apDepositAvailableText">Seña disponible</span>
+          <div style="flex:1">
+            <div id="apDepositAvailableText">Seña disponible</div>
+            <button id="apDepositUseBtn" type="button" style="display:none;margin-top:6px;font-size:11px;padding:3px 10px;border-radius:6px;background:#166534;color:#fff;border:none;cursor:pointer;font-family:inherit;"></button>
+          </div>
         </div>
         <div class="form-grid">
           <div class="field"><label>Seña</label><input id="apDepositAmount" type="number" value="0" min="0" placeholder="0"></div>
@@ -5921,9 +5924,46 @@
 
     function clientAvailableDeposit(clientId){
       if(!clientId) return 0;
-      const received = state.payments.filter(p=>p.type==='deposit_received' && p.clientId===clientId).reduce((s,p)=>s+Number(p.amount||0),0);
-      const applied = state.payments.filter(p=>p.type==='deposit_applied' && p.clientId===clientId).reduce((s,p)=>s+Number(p.amount||0),0);
+      const received = state.payments.filter(p=>p.type==='deposit_received' && p.clientId===clientId&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      const applied = state.payments.filter(p=>p.type==='deposit_applied' && p.clientId===clientId&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
       return Math.max(0, received - applied);
+    }
+    // Saldo "libre": recibido menos aplicado menos lo ya comprometido a turnos aún no cobrados.
+    // Es el dinero que realmente está disponible para asignar a un nuevo turno.
+    function clientFreeDeposit(clientId){
+      if(!clientId) return 0;
+      const total = clientAvailableDeposit(clientId);
+      const committed = state.payments.filter(p=>
+        p.type==='deposit_received'&&p.clientId===clientId&&!p.voided&&p.bookingId&&!reservationCharged(p.bookingId)
+      ).reduce((s,p)=>s+Number(p.amount||0),0);
+      return Math.max(0, total - committed);
+    }
+    // Actualiza el banner de seña en el formulario de turno.
+    // freeBalance = saldo libre (sin comprometer a otro turno).
+    function updateApDepositBanner(c){
+      const freeBalance = clientFreeDeposit(c ? c.id : null);
+      const banner = $('apDepositAvailableBanner');
+      const bannerText = $('apDepositAvailableText');
+      const useBtn = $('apDepositUseBtn');
+      if(!banner) return;
+      if(freeBalance > 0){
+        banner.style.display = 'flex';
+        if(bannerText) bannerText.textContent = `${esc(fullName(c))} tiene ${money(freeBalance)} de seña sin asignar a ningún turno.`;
+        if(useBtn){
+          useBtn.textContent = `Asignar ${money(freeBalance)} a este turno`;
+          useBtn.style.display = 'inline-block';
+          useBtn.onclick = ()=>{
+            if($('apDepositAmount')){ $('apDepositAmount').value = freeBalance; $('apDepositAmount').readOnly = true; }
+            state.apDepositIsPreExisting = true;
+            useBtn.style.display = 'none';
+            if(bannerText) bannerText.textContent = `${esc(fullName(c))} — ${money(freeBalance)} de seña asignados a este turno (ya acreditados, no se genera nuevo pago).`;
+            updateApPreview();
+          };
+        }
+      } else {
+        banner.style.display = 'none';
+        if(useBtn) useBtn.style.display = 'none';
+      }
     }
     function initDepositClientAutocomplete(){
       const input = $('depositClientInput');
@@ -6092,7 +6132,11 @@
         $('saleLines').innerHTML='';
         const related = reservationAppointments(appt);
         const additionals = activeAppointments().filter(a=>reservationKey(a)===reservationKey(appt) && a.isAdditional);
-        const deposit = clientAvailableDeposit(c.id);
+        // Preferir el monto que se comprometió específicamente para este turno;
+        // si no hay pago específico, usar el saldo total disponible del cliente.
+        const thisKey = reservationKey(appt);
+        const committedHere = thisKey ? state.payments.filter(p=>p.type==='deposit_received'&&p.clientId===c.id&&!p.voided&&p.bookingId===thisKey).reduce((s,p)=>s+Number(p.amount||0),0) : 0;
+        const deposit = committedHere > 0 ? committedHere : clientAvailableDeposit(c.id);
         if($('reservationDeposit')) $('reservationDeposit').value = deposit;
         related.forEach(line=>{
           addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
@@ -7158,18 +7202,10 @@
           state.appointmentClient = {clientId:c.id, clientName:fullName(c)};
           box.classList.remove('open');
           showApClientChip(c);
-          const avail = clientAvailableDeposit(c.id);
           state.apDepositIsPreExisting = false;
-          const banner = $('apDepositAvailableBanner');
-          const bannerText = $('apDepositAvailableText');
-          if(avail > 0){
-            if(banner){ banner.style.display='flex'; }
-            if(bannerText) bannerText.textContent = `${esc(fullName(c))} tiene ${money(avail)} de seña disponible — se aplica al cobrar. Completá el campo solo si deja una seña adicional ahora.`;
-          } else {
-            if(banner) banner.style.display='none';
-          }
           if($('apDepositAmount')){ $('apDepositAmount').value = 0; $('apDepositAmount').readOnly = false; }
           if($('apDepositMethod')) $('apDepositMethod').disabled = false;
+          updateApDepositBanner(c);
           updateApPreview();
         });
       };
@@ -7406,16 +7442,10 @@
         const c = client(prefClient);
         state.appointmentClient = {clientId:c.id, clientName:fullName(c)};
         showApClientChip(c);
-        const avail = clientAvailableDeposit(c.id);
         state.apDepositIsPreExisting = false;
-        if(avail > 0){
-          if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='flex';
-          if($('apDepositAvailableText')) $('apDepositAvailableText').textContent = `${esc(fullName(c))} tiene ${money(avail)} de seña disponible — se aplica al cobrar. Completá el campo solo si deja una seña adicional ahora.`;
-        } else {
-          if($('apDepositAvailableBanner')) $('apDepositAvailableBanner').style.display='none';
-        }
         if($('apDepositAmount')){ $('apDepositAmount').value=0; $('apDepositAmount').readOnly = false; }
         if($('apDepositMethod')) $('apDepositMethod').disabled = false;
+        updateApDepositBanner(c);
       } else { hideApClientChip(); }
       if($('apClientSuggestions')) $('apClientSuggestions').classList.remove('open');
       if($('apDepositAvailableBanner') && !prefClient) $('apDepositAvailableBanner').style.display='none';
@@ -8841,6 +8871,11 @@
       if($('checkoutPaymentPrimary')) $('checkoutPaymentPrimary').oninput=updateSaleSummary;
       if($('checkoutPaymentSecondary')) $('checkoutPaymentSecondary').oninput=updateSaleSummary;
       if($('reservationDeposit')) $('reservationDeposit').oninput=updateSaleSummary;
+      // Si el usuario edita manualmente el campo de seña del turno, ya no es pre-existente
+      if($('apDepositAmount')) $('apDepositAmount').oninput=()=>{
+        state.apDepositIsPreExisting=false;
+        if($('apDepositUseBtn')) $('apDepositUseBtn').style.display='inline-block';
+      };
     }
     initCheckoutPayment();
     document.querySelectorAll('[data-sale-source]').forEach(b=>b.onclick=()=>{setSaleSource(b.dataset.saleSource); document.querySelectorAll('.wiz-source-card').forEach(c=>c.classList.toggle('active',c.dataset.saleSource===b.dataset.saleSource));});
