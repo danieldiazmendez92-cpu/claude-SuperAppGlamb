@@ -4862,9 +4862,9 @@
     // REAL (filtrado server-side por rol) llega con Firebase Auth + security
     // rules. NO usar con datos reales sensibles hasta completar esa etapa.
     const PERMISSIONS = {
-      admin: { pages:['command','clients','agenda','cash','catalog','team','rrhh','finanzas'], agenda:'all',   clientData:'full',   cash:'full',  command:'full'   },
-      medio: { pages:['command','clients','agenda','cash'],                                    agenda:'today', clientData:'masked', cash:'full',  command:'simple' },
-      bajo:  { pages:['command','agenda','cash'],                                              agenda:'today', clientData:'masked', cash:'sales', command:'min'    }
+      admin: { pages:['command','clients','agenda','cash','catalog','team','rrhh','finanzas','comms'], agenda:'all',   clientData:'full',   cash:'full',  command:'full'   },
+      medio: { pages:['command','clients','agenda','cash','comms'],                                    agenda:'today', clientData:'masked', cash:'full',  command:'simple' },
+      bajo:  { pages:['command','agenda','cash'],                                                      agenda:'today', clientData:'masked', cash:'sales', command:'min'    }
     };
     const ROLE_LABELS={admin:'Administrador',medio:'Recepción',bajo:'Colaboradora'};
     function curUser(){ return state.authUser || null; }
