@@ -3838,12 +3838,15 @@
           <div class="ath-config-panel" id="athenasConfigPanel">
             <div class="form-grid">
               <div class="field"><label>API Key (Google AI Studio)</label><input id="athenasApiKey" type="password" placeholder="AIza…" style="width:100%"></div>
-              <div class="field"><label>Modelo</label>
+              <div class="field"><label>Modelo <button type="button" class="small-btn" id="athenasDetectModels" style="margin-left:6px;font-size:10px">Detectar disponibles</button></label>
                 <select id="athenasModel" style="width:100%">
-                  <option value="gemini-1.5-flash-latest">Gemini 1.5 Flash (gratis ✓)</option>
-                  <option value="gemini-1.5-pro-latest">Gemini 1.5 Pro</option>
-                  <option value="gemini-2.0-flash-001">Gemini 2.0 Flash</option>
+                  <option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest</option>
+                  <option value="gemini-2.0-flash-001">gemini-2.0-flash-001</option>
+                  <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro</option>
                 </select>
+                <span id="athenasModelHint" style="font-size:10px;color:var(--text-muted);margin-top:3px;display:block"></span>
               </div>
             </div>
             <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
@@ -9410,6 +9413,27 @@ ${context}`;
         saveState();
         showToast('API key guardada ✓');
         renderAthenas();
+      };
+      const detectBtn=$('athenasDetectModels');
+      if(detectBtn) detectBtn.onclick=async()=>{
+        const k=($('athenasApiKey')?.value||'').trim();
+        if(!k){showToast('Primero ingresá la API key');return;}
+        detectBtn.textContent='Buscando…'; detectBtn.disabled=true;
+        const hint=$('athenasModelHint');
+        try{
+          const r=await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${k}`);
+          const d=await r.json();
+          if(d.error){if(hint)hint.textContent='Error: '+d.error.message;detectBtn.textContent='Detectar disponibles';detectBtn.disabled=false;return;}
+          const sel=$('athenasModel');
+          const models=(d.models||[]).filter(m=>m.supportedGenerationMethods?.includes('generateContent'));
+          if(!models.length){if(hint)hint.textContent='No se encontraron modelos compatibles.';detectBtn.textContent='Detectar disponibles';detectBtn.disabled=false;return;}
+          const prev=sel?.value;
+          if(sel){sel.innerHTML=models.map(m=>{const id=m.name.replace('models/','');return`<option value="${id}">${id}</option>`;}).join('');}
+          // mantener selección previa si sigue disponible
+          if(sel&&models.some(m=>m.name.replace('models/','')===prev)) sel.value=prev;
+          if(hint)hint.textContent=`${models.length} modelos encontrados. Elegí uno y guardá.`;
+        }catch(e){if(hint)hint.textContent='No se pudo conectar.';}
+        detectBtn.textContent='Detectar disponibles'; detectBtn.disabled=false;
       };
       const toggle=$('athenasToggleConfig');
       if(toggle) toggle.onclick=()=>{const p=$('athenasConfigPanel');if(p)p.style.display=p.style.display==='block'?'none':'block';};
