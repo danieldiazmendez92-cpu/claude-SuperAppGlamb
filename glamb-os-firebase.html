@@ -3235,7 +3235,6 @@
       <div id="loginError" class="login-error"></div>
       <button class="btn primary login-go" data-action="loginSubmit">Ingresar</button>
       <div id="loginStatus" class="login-demo">Conectando con Firebase…</div>
-      <div class="login-warn">⚠️ Fase A: autenticación real activa. La protección de datos a nivel de servidor (que ciertos roles no puedan descargar datos sensibles) llega en la Fase B. Aún no usar con datos reales sensibles.</div>
     </div>
   </div>
   <!-- Chip de usuario / cierre de sesión -->
@@ -4428,6 +4427,14 @@
     const _syncInit={};     // key -> ya llegó el primer snapshot
     const _docId=v=>String(v).replace(/[\/.]/g,'_'); // id seguro para Firestore
 
+    // ── Fase B.2: datos financieros solo-admin (protección server-side) ──
+    // Estas claves (nómina, comisiones, gastos, impuestos, presupuestos) viven
+    // en financePrivate/main, que SOLO el admin puede leer según las reglas de
+    // Firestore. Recepción y colaboradoras nunca las descargan: ni siquiera por
+    // la consola del navegador. No las usa ninguna página de rol bajo (solo
+    // RRHH y Finanzas, ambas exclusivas de admin).
+    const FINANCE_KEYS=['liquidations','payrollDeductions','expenses','taxRecords','budgets','expenseCategories'];
+
     // ── Firebase ──────────────────────────────────────────────────────
     const firebaseConfig = {
       apiKey: "AIzaSyAkTmM7r_Srfh0ccco4Dhf2PX1KZOTfPaI",
@@ -4437,7 +4444,7 @@
       messagingSenderId: "733109093638",
       appId: "1:733109093638:web:720da3c212b9da24a9ca87"
     };
-    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _usersUnsub=null, _cpUnsub=null;
+    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _usersUnsub=null, _cpUnsub=null, _fpUnsub=null;
     state.authUser = null;
     try {
       firebase.initializeApp(firebaseConfig);
@@ -4450,12 +4457,12 @@
     function serializeState(){ const out={}; PERSIST_KEYS.forEach(k=>{ if(state[k]!==undefined) out[k]=state[k]; }); return out; }
     // Versión sin datos sensibles para el blob compartido en Firestore.
     // phone/email van a la colección clientsPrivate (solo lectura para admin).
-    function serializeForCloud(){ const out=serializeState(); if(out.clients) out.clients=out.clients.map(({phone:_p,email:_e,...rest})=>rest); SYNCED_COLLECTIONS.forEach(({key})=>{ delete out[key]; }); return out; }
+    function serializeForCloud(){ const out=serializeState(); if(out.clients) out.clients=out.clients.map(({phone:_p,email:_e,...rest})=>rest); SYNCED_COLLECTIONS.forEach(({key})=>{ delete out[key]; }); FINANCE_KEYS.forEach(k=>{ delete out[k]; }); return out; }
     // fromCloud=true: el blob compartido NO es fuente de verdad para las
     // entidades sincronizadas (viven en su colección); se omiten para que un
     // blob viejo no pise lo que llega por onSnapshot. El cache local (offline)
     // sí las carga (fromCloud falso) porque ahí no hay colección disponible.
-    function applyPersisted(data, fromCloud){ if(!data) return; const skip=fromCloud?new Set(SYNCED_COLLECTIONS.map(s=>s.key)):null; PERSIST_KEYS.forEach(k=>{ if(skip&&skip.has(k)) return; if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
+    function applyPersisted(data, fromCloud){ if(!data) return; const skip=fromCloud?new Set([...SYNCED_COLLECTIONS.map(s=>s.key),...FINANCE_KEYS]):null; PERSIST_KEYS.forEach(k=>{ if(skip&&skip.has(k)) return; if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
 
     function saveState(){
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); }catch(e){}
@@ -4466,6 +4473,7 @@
           // Fase 3: tampoco lleva las entidades sincronizadas (van por colección)
           stateDoc.set(serializeForCloud(),{merge:false}).catch(e=>console.error('[GLAMB] guardado en nube falló:', e));
           syncCollections();
+          saveFinancePrivate();
         }, 800);
       }
     }
@@ -4647,6 +4655,43 @@
           await migRef.set({[fkey]:true},{merge:true});
         }catch(e){ console.error('[GLAMB] migración '+coll+' falló:',e); }
       }
+    }
+
+    // ── Fase B.2: datos financieros en área solo-admin ───────────────
+    // Solo el admin escribe/lee financePrivate/main. Las reglas de Firestore
+    // bloquean la lectura para todos los demás roles.
+    function saveFinancePrivate(){
+      if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
+      if(curRole()!=='admin') return;
+      const out={}; FINANCE_KEYS.forEach(k=>{ if(state[k]!==undefined) out[k]=state[k]; });
+      db.collection('financePrivate').doc('main').set(out,{merge:false})
+        .catch(e=>console.error('[GLAMB] guardado finanzas falló:',e));
+    }
+    function subscribeFinancePrivateSync(){
+      if(!fbReady || !db || _fpUnsub) return;
+      _fpUnsub=db.collection('financePrivate').doc('main').onSnapshot(snap=>{
+        if(!snap.exists || snap.metadata.hasPendingWrites) return; // ignorar eco propio
+        _applyingRemote=true;
+        const d=snap.data()||{};
+        FINANCE_KEYS.forEach(k=>{ if(d[k]!==undefined) state[k]=d[k]; });
+        try{ renderAll(); }catch(e){ console.error(e); }
+        _applyingRemote=false;
+      }, e=>console.error('[GLAMB] finanzas sync falló:',e));
+    }
+    // Siembra única: copia los datos financieros del blob viejo a financePrivate.
+    // Tras esto, serializeForCloud deja de incluirlos en el blob compartido.
+    async function migrateFinancePrivateIfNeeded(){
+      if(!fbReady || !db || curRole()!=='admin') return;
+      const ref=db.collection('financePrivate').doc('main');
+      try{
+        const snap=await ref.get();
+        if(snap.exists) return; // ya migrado
+        let blob={}; try{ const s=await stateDoc.get(); if(s.exists) blob=s.data()||{}; }catch(e){}
+        const out={};
+        FINANCE_KEYS.forEach(k=>{ const v=(blob[k]!==undefined)?blob[k]:state[k]; if(v!==undefined) out[k]=v; });
+        await ref.set(out,{merge:false});
+        console.log('[GLAMB] migración financePrivate completada');
+      }catch(e){ console.error('[GLAMB] migración financePrivate falló:',e); }
     }
     async function ensureUserRole(user){
       const uref = db.collection('users').doc(user.uid);
@@ -8922,6 +8967,8 @@
               subscribeUsersSync();
               subscribeClientsPrivateSync();
               await migrateClientsPrivateIfNeeded();
+              await migrateFinancePrivateIfNeeded();   // sembrar antes de suscribir
+              subscribeFinancePrivateSync();
             }
             bootAppData();
             if($('loginOverlay')) $('loginOverlay').style.display='none';
@@ -8939,7 +8986,12 @@
           if(_cloudUnsub){ _cloudUnsub(); _cloudUnsub=null; }
           if(_usersUnsub){ _usersUnsub(); _usersUnsub=null; }
           if(_cpUnsub){ _cpUnsub(); _cpUnsub=null; }
+          if(_fpUnsub){ _fpUnsub(); _fpUnsub=null; }
           unsubscribeCollections();
+          // limpiar datos financieros en memoria (que un login de rol bajo
+          // en el mismo navegador no herede lo del admin anterior)
+          state.liquidations=[]; state.payrollDeductions=[]; state.expenses=[];
+          state.taxRecords=[]; state.budgets={}; state.expenseCategories=null;
           state.authUser=null;
           state.systemUsers=[];
           state.clientsPrivate={};
