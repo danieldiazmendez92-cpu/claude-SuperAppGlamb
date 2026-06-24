@@ -9414,31 +9414,59 @@ Profesional, cálida y directa. Respondés en español rioplatense (usás "vos")
 ${context}`;
       try{
         const model=state.athenas?.model||'gemini-2.0-flash';
-        // Historial en formato Google; el system prompt va como primer turno user+model
         const history=athenasHistory.slice(-16).map(m=>({
           role:m.role==='assistant'?'model':'user',
           parts:[{text:m.content}]
         }));
-        // Inyectar system prompt como primer par user/model (compatible con v1 y v1beta)
         const contents=[
           {role:'user',  parts:[{text:`[INSTRUCCIONES DEL SISTEMA]\n${systemPrompt}`}]},
           {role:'model', parts:[{text:'Entendido. Soy Athenas, lista para ayudarte.'}]},
           ...history
         ];
-        const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({contents,generationConfig:{maxOutputTokens:900}})
-        });
-        const data=await res.json();
-        const reply=data.candidates?.[0]?.content?.parts?.[0]?.text
-          ||(data.error?.message?`Error de API: ${data.error.message}`:'Sin respuesta de la IA.');
+        const RETRY_DELAYS=[3000,6000,12000];
+        let data, lastErr;
+        for(let attempt=0;attempt<=RETRY_DELAYS.length;attempt++){
+          if(attempt>0){
+            const thinkBubble=$('ath-thinking-msg')?.querySelector('.athenas-bubble');
+            if(thinkBubble) thinkBubble.innerHTML=`<span style="font-size:12px;color:var(--text-muted)">Mucha demanda, reintentando ${attempt}/${RETRY_DELAYS.length}…</span>`;
+            await new Promise(r=>setTimeout(r,RETRY_DELAYS[attempt-1]));
+          }
+          try{
+            const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({contents,generationConfig:{maxOutputTokens:900}})
+            });
+            data=await res.json();
+          }catch(netErr){ lastErr='red'; break; }
+          const errMsg=(data.error?.message||'').toLowerCase();
+          const isRetryable=errMsg.includes('high demand')||errMsg.includes('overloaded')||errMsg.includes('unavailable')||(data.error?.code===503);
+          if(!isRetryable||attempt===RETRY_DELAYS.length) break;
+        }
         const thinkEl=$('ath-thinking-msg'); if(thinkEl) thinkEl.remove();
+        let reply;
+        if(lastErr==='red'){
+          reply='No pude conectarme. Verificá tu conexión a internet.';
+        } else if(data?.candidates?.[0]?.content?.parts?.[0]?.text){
+          reply=data.candidates[0].content.parts[0].text;
+        } else if(data?.error?.message){
+          const em=data.error.message;
+          if(em.toLowerCase().includes('high demand')||em.toLowerCase().includes('overloaded'))
+            reply='El servicio de IA está con mucha demanda ahora. Esperá un minuto y volvé a preguntar.';
+          else if(em.toLowerCase().includes('quota')||em.toLowerCase().includes('rate limit'))
+            reply='Se alcanzó el límite de consultas de la API key. Esperá un rato o revisá tu cuota en Google AI Studio.';
+          else if(em.toLowerCase().includes('api key')||em.toLowerCase().includes('invalid'))
+            reply='La API key no es válida. Revisala en Configurar IA.';
+          else if(em.toLowerCase().includes('not found')||em.toLowerCase().includes('model'))
+            reply=`El modelo "${model}" no está disponible para tu API key. Hacé clic en **Detectar disponibles** para ver cuáles tenés.`;
+          else reply=`Error: ${em}`;
+        } else {
+          reply='Sin respuesta de la IA. Intentá de nuevo.';
+        }
         athenasHistory.push({role:'assistant',content:reply});
         appendAthenasMsg('ai',reply);
       }catch(e){
         const thinkEl=$('ath-thinking-msg'); if(thinkEl) thinkEl.remove();
-        appendAthenasMsg('ai','No pude conectarme. Verificá tu API key y la conexión a internet.');
+        appendAthenasMsg('ai','Error inesperado. Intentá de nuevo.');
       }
     }
 
