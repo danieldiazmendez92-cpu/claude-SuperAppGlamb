@@ -4799,7 +4799,15 @@
             snap.docChanges().forEach(ch=>{
               const id=ch.doc.id;
               if(ch.type==='removed'){ if(idx.has(id)) arr[idx.get(id)]=null; shadow.delete(id); }
-              else { const rec=ch.doc.data(); if(rec&&rec.id==null) rec.id=id; if(idx.has(id)) arr[idx.get(id)]=rec; else { arr.push(rec); } shadow.set(id,JSON.stringify(rec)); }
+              else {
+                const rec=ch.doc.data(); if(rec&&rec.id==null) rec.id=id;
+                // Turno nuevo desde otro dispositivo: no estaba en state local => avisar al staff
+                if(key==='appointments' && ch.type==='added' && !idx.has(id) && !rec.isAdditional){
+                  const c=client(rec.clientId);
+                  notifyStaff('Turno nuevo',`${fullName(c)} · ${rec.service||''} a las ${rec.start||''}`, 'sync-appt-'+id);
+                }
+                if(idx.has(id)) arr[idx.get(id)]=rec; else { arr.push(rec); } shadow.set(id,JSON.stringify(rec));
+              }
             });
             const filtered=arr.filter(r=>r);
             state[key]=sort?filtered.sort(sort):filtered; _syncShadow[key]=shadow;
@@ -4970,6 +4978,26 @@
     const mins=t=>{const[h,m]=t.split(':').map(Number);return h*60+m}; const topFor=t=>(mins(t)-startHour*60)*pxPerMin; const heightFor=(s,e)=>Math.max(24,(mins(e)-mins(s))*pxPerMin-3);
     const client=id=>state.clients.find(c=>c.id===id)||{id:null,code:'—',first:'Cliente',last:'eliminado',phone:'—',email:'',tags:[],note:''}; const member=id=>state.collaborators.find(c=>c.id===id)||{id:null,first:'Sin',last:'profesional',phone:'—',email:'',services:[],groups:[],can:false};
     function showToast(m){toast.textContent=m;toast.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>toast.classList.remove('show'),3000)}
+
+    // ── Notificaciones push al staff ────────────────────────────────────
+    async function requestNotifPermission(){
+      if(!('Notification' in window) || Notification.permission !== 'default') return;
+      await Notification.requestPermission();
+    }
+    function notifyStaff(title, body, tag){
+      if(!('Notification' in window) || Notification.permission !== 'granted') return;
+      try{ new Notification(title, {body, icon:'/icon-180.png', badge:'/icon-180.png', tag:tag||title}); }
+      catch(e){ console.error('[GLAMB] notificación falló:', e); }
+    }
+    let _cashReminderSent = false;
+    setInterval(()=>{
+      if(!state?.cashSession?.isOpen || !state.cashSession.openedAt){ _cashReminderSent=false; return; }
+      const hours=(Date.now()-new Date(state.cashSession.openedAt).getTime())/3600000;
+      if(hours>=4 && !_cashReminderSent && curRole()==='admin'){
+        _cashReminderSent=true;
+        notifyStaff('⚠️ Caja sin cerrar',`La caja lleva ${Math.floor(hours)}h abierta.`,'cash-reminder');
+      }
+    }, 5*60*1000);
 
     function showConfirm(msg, onOk, onCancel){
       const dlg = document.createElement('dialog');
@@ -6136,9 +6164,11 @@
       const amount = Number($('cashOpeningAmount')?.value || 0);
       if(!amount && amount !== 0) return showToast('Ingresá un monto válido.');
       state.cashSession = {isOpen:true, openingAmount:amount, openedBy:$('cashOpeningUser')?.value || 'Admin caja', openedAt:new Date().toISOString(), closedAt:null, countedCash:null, withdrawals:[], expenses:[]};
+      _cashReminderSent = false;
       closeDrawers();
       renderAll();
       showToast('Caja abierta');
+      notifyStaff('Caja abierta',`Apertura: ${money(amount)}`,'cash-open');
     }
 
     function renderWithdrawalReasonsConfig(){
@@ -6985,9 +7015,11 @@
       state.cashSession.countedCash = counted;
       state.cashSession.closedAt = snapshot.closedAt;
       state.cashSession.isOpen = false;
+      _cashReminderSent = false;
       closeDrawers();
       renderAll();
       showToast(`Caja cerrada. Diferencia: ${money(snapshot.difference)}`);
+      notifyStaff('Caja cerrada',`Diferencia: ${money(snapshot.difference)}`,'cash-close');
     }
 
     function groupClass(g){return g==='Manicuria'?'manicuria':g==='Eyebrow & Lash'?'eyes':g==='Depilación'?'depi':'extra'}
@@ -7312,7 +7344,13 @@
     function dropAppointment(e,col){e.preventDefault(); col.classList.remove('drop-target'); const id=state.agenda.dragging; const a=state.appointments.find(x=>x.id===id); if(!a)return; const rect=col.getBoundingClientRect(); const y=e.clientY-rect.top+window.scrollY; const duration=mins(a.end)-mins(a.start); const start=toTime(snapMinutes(startHour*60 + y/pxPerMin)); const moved={...a,memberId:col.dataset.memberCol,start,end:toTime(mins(start)+duration),date:dateKey(state.agenda.currentDate)}; if(overlaps(moved,a.id)){showToast('No se puede mover: hay solapamiento.'); return;} Object.assign(a,moved); saveState(); renderAgenda(); showToast('Turno movido.');}
     function resizeAppointment(id,delta){const a=state.appointments.find(x=>x.id===id); if(!a)return; const old=a.end; a.end=toTime(mins(a.end)+delta); if(mins(a.end)<=mins(a.start)+15 || overlaps(a,a.id)){a.end=old; showToast('No se puede ajustar duración.'); return;} saveState(); renderAgenda(); showToast('Duración actualizada.');}
     function togglePaid(id){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.deposit = a.deposit==='paid'?'pending':'paid'; saveState(); renderAgenda(); showToast(a.deposit==='paid'?'Pago/seña marcado OK.':'Pago/seña pendiente.');}
-    function cancelAppointment(id,status='cancelado'){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.status=status; saveState(); showToast(`Turno marcado como ${status}.`); openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();}
+    function cancelAppointment(id,status='cancelado'){
+      const a=state.appointments.find(x=>x.id===id); if(!a)return;
+      a.status=status; saveState();
+      showToast(`Turno marcado como ${status}.`);
+      notifyStaff('Turno cancelado',`${fullName(client(a.clientId))} · ${a.service} a las ${a.start}`,'appt-cancel-'+id);
+      openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();
+    }
     function deleteAppointment(id){
       showConfirm('¿Eliminar este turno permanentemente? No se puede deshacer.', ()=>{
         state.appointments = state.appointments.filter(a=>a.id!==id);
@@ -9226,7 +9264,11 @@
       if(!state.appointments) state.appointments=[];
       state.appointments.push(appt);
       saveState();
-      if(!appt.isAdditional) triggerBookingReminder(appt);
+      if(!appt.isAdditional){
+        triggerBookingReminder(appt);
+        const c=client(appt.clientId);
+        notifyStaff('Turno creado',`${fullName(c)} · ${appt.service} a las ${appt.start}`,'appt-new-'+appt.id);
+      }
     }
     function updateAppointment(id, props){
       const a=state.appointments.find(x=>x.id===id);
@@ -10285,6 +10327,7 @@ ${context}`;
             }
             bootAppData();
             if($('loginOverlay')) $('loginOverlay').style.display='none';
+            requestNotifPermission(); // solicitar permiso de notificaciones (no bloqueante)
             showPage(permCfg().pages[0]||'command');
             showToast(`Sesión iniciada: ${state.authUser.name} · ${ROLE_LABELS[state.authUser.role]||state.authUser.role}`);
           }catch(e){
