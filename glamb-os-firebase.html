@@ -3834,22 +3834,22 @@
             <div class="form-grid">
               <div class="field">
                 <label>Estado</label>
-                <select id="hscEnabled" onchange="updateHscPreview()">
+                <select id="hscEnabled">
                   <option value="true">Activado</option>
                   <option value="false">Desactivado</option>
                 </select>
               </div>
               <div class="field">
                 <label>Nombre de etiqueta</label>
-                <input id="hscLabel" type="text" placeholder="Alto gasto" maxlength="20" oninput="updateHscPreview()">
+                <input id="hscLabel" type="text" placeholder="Alto gasto" maxlength="20">
               </div>
               <div class="field">
                 <label>Monto mínimo ($)</label>
-                <input id="hscAmount" type="number" min="0" step="1000" placeholder="50000" oninput="updateHscPreview()">
+                <input id="hscAmount" type="number" min="0" step="1000" placeholder="50000">
               </div>
               <div class="field">
                 <label>Período</label>
-                <select id="hscPeriod" onchange="updateHscPreview()">
+                <select id="hscPeriod">
                   <option value="30">Últimos 30 días</option>
                   <option value="60">Últimos 60 días</option>
                   <option value="90">Últimos 90 días</option>
@@ -3860,7 +3860,7 @@
               </div>
             </div>
             <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
-              <button class="btn primary" onclick="saveHighSpenderConfig()">Guardar</button>
+              <button class="btn primary" id="hscSaveBtn">Guardar</button>
               <span id="hscPreview" style="font-size:12px;color:var(--text-muted)"></span>
             </div>
           </div>
@@ -5837,6 +5837,11 @@
       if($('hscLabel'))   $('hscLabel').value=cfg.label||'Alto gasto';
       if($('hscAmount'))  $('hscAmount').value=cfg.amount!=null?cfg.amount:50000;
       if($('hscPeriod'))  $('hscPeriod').value=String(cfg.periodDays!=null?cfg.periodDays:90);
+      if($('hscEnabled')) $('hscEnabled').onchange=updateHscPreview;
+      if($('hscLabel'))   $('hscLabel').oninput=updateHscPreview;
+      if($('hscAmount'))  $('hscAmount').oninput=updateHscPreview;
+      if($('hscPeriod'))  $('hscPeriod').onchange=updateHscPreview;
+      if($('hscSaveBtn')) $('hscSaveBtn').onclick=saveHighSpenderConfig;
       updateHscPreview();
     }
     function updateHscPreview(){
