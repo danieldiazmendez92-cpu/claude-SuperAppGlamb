@@ -4043,13 +4043,18 @@
         <div id="profileHistory"></div>
       </section>
     </div>
-    <footer class="drawer-footer">
-      <button class="btn primary" id="profileCreateAppointment">Crear turno</button>
-      <button class="btn accent" id="profileMessage">Enviar mensaje</button>
-      <button class="btn" id="profileAddReview">Nueva reseña</button>
-      <button class="btn" id="profileEditClient">Editar datos</button>
-      <button class="btn" id="profileVip">Marcar VIP</button>
-      <button class="btn danger" id="profileDeleteClient">Eliminar</button>
+    <footer class="drawer-footer" style="flex-direction:column;gap:10px;">
+      <button class="btn primary" id="profileCreateAppointment" style="width:100%">Crear turno</button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%">
+        <button class="btn accent" id="profileMessage">Enviar mensaje</button>
+        <button class="btn" id="profileEditClient">Editar datos</button>
+        <button class="btn" id="profileAddReview">Nueva reseña</button>
+        <button class="btn" id="profileVip">Marcar VIP</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%">
+        <button class="btn danger" id="profileDeleteClient">Eliminar cliente</button>
+        <button class="btn" data-close>Volver</button>
+      </div>
     </footer>
   </aside>
 
