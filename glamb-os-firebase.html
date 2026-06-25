@@ -6441,7 +6441,7 @@
         const matches = state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c)].join(' ').toLowerCase().includes(q)).slice(0,4);
         box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-client-suggestion="${c.id}">${esc(fullName(c))}<span>${maskedPhone(c)} · ${maskedEmail(c)}</span></div>`).join('');
         box.classList.toggle('open', matches.length>0);
-        document.querySelectorAll('[data-client-suggestion]').forEach(item=>item.onclick=()=>{
+        box.querySelectorAll('[data-client-suggestion]').forEach(item=>item.onclick=()=>{
           const c = client(item.dataset.clientSuggestion);
           state.saleClient = {clientId:c.id, clientName:fullName(c)};
           input.value = fullName(c);
@@ -7568,7 +7568,7 @@
     document.addEventListener('click',e=>{if(!e.target.closest('.detail-popover')&&!e.target.closest('.appointment-block'))$('detailPopover').classList.remove('open')});
 
     function selectedTexts(sel){return Array.from(document.querySelectorAll(sel+'.selected')).map(x=>x.textContent.trim())}
-    function setupChips(){document.querySelectorAll('.select-chip').forEach(c=>c.onclick=()=>{c.classList.toggle('selected');updatePreviews()})}
+    function setupChips(){document.querySelectorAll('#coServices .select-chip').forEach(c=>c.onclick=()=>{c.classList.toggle('selected');updatePreviews()})}
     $('clientPrefChips').querySelectorAll('.select-chip').forEach(c=>c.onclick=()=>{c.classList.toggle('selected');updateClientPreview()});
     function updateClientPreview(){const n=[$('clFirst').value,$('clLast').value].filter(Boolean).join(' ')||'Nuevo cliente';$('clientPreviewName').textContent=n;$('clientPreviewMeta').textContent=$('clPhone').value||'WhatsApp pendiente';$('clientPreviewTags').innerHTML=selectedTexts('#clientPrefChips .select-chip').map(t=>`<span class="tag">${t}</span>`).join('')}
     ['clFirst','clLast','clPhone','clEmail'].forEach(id=>$(id).oninput=updateClientPreview);
@@ -7708,8 +7708,8 @@
       const days=['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo'];
       $('availabilityPlanner').innerHTML=days.map((d,i)=>`<div class="availability-row" data-day="${d}"><label class="day-check"><input type="checkbox" class="availability-enabled" ${i<5?'checked':''}> ${d}</label><input type="time" class="availability-start" value="10:00"><input type="time" class="availability-end" value="${i<5?'19:00':'16:00'}"></div>`).join('');
       setupChips();
-      document.querySelectorAll('.group-toggle').forEach(b=>b.onclick=()=>{document.querySelectorAll(`#coServices .select-chip[data-group="${b.dataset.group}"]`).forEach(ch=>ch.classList.add('selected'));updatePreviews()});
-      document.querySelectorAll('.availability-enabled,.availability-start,.availability-end').forEach(el=>el.onchange=updatePreviews)
+      document.querySelectorAll('#coServices .group-toggle').forEach(b=>b.onclick=()=>{document.querySelectorAll(`#coServices .select-chip[data-group="${b.dataset.group}"]`).forEach(ch=>ch.classList.add('selected'));updatePreviews()});
+      document.querySelectorAll('#availabilityPlanner .availability-enabled,#availabilityPlanner .availability-start,#availabilityPlanner .availability-end').forEach(el=>el.onchange=updatePreviews)
     }
     function availability(){return Array.from(document.querySelectorAll('.availability-row')).filter(r=>r.querySelector('.availability-enabled').checked).map(r=>({day:r.dataset.day,start:r.querySelector('.availability-start').value,end:r.querySelector('.availability-end').value}))}
     function updatePreviews(){
@@ -7858,7 +7858,7 @@
         }).slice(0,5);
         box.innerHTML = matches.map(c=>`<div class="autocomplete-item" data-ap-client="${c.id}">${esc(fullName(c))}<span>${esc(clientCode(c))} · ${maskedPhone(c)} · ${maskedEmail(c)}</span></div>`).join('');
         box.classList.add('open');
-        document.querySelectorAll('[data-ap-client]').forEach(item=>item.onclick=()=>{
+        box.querySelectorAll('[data-ap-client]').forEach(item=>item.onclick=()=>{
           const c = client(item.dataset.apClient);
           state.appointmentClient = {clientId:c.id, clientName:fullName(c)};
           box.classList.remove('open');
