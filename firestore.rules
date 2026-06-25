@@ -59,6 +59,14 @@ service cloud.firestore {
       allow create: if hasAccess();
     }
 
+    // Respuestas de encuestas de satisfacción (survey.html, página pública).
+    // Cualquier visitante puede CREAR (enviar su calificación, sin auth).
+    // Solo admin puede LEER para ver el panel de respuestas en la app.
+    match /surveyResponses/{id} {
+      allow create: if true;
+      allow read: if isAdmin();
+    }
+
     // Todo lo demás: denegado
     match /{document=**} {
       allow read, write: if false;

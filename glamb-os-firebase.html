@@ -3137,6 +3137,18 @@
     .review-stars-mini,.review-stars-line{letter-spacing:2px}
     .review-meta-mini{font-size:12px;color:var(--text-muted);margin-top:2px}
     .review-comment-mini{font-size:12px;color:var(--text-soft);font-style:italic;margin-top:2px}
+    /* Encuestas */
+    .survey-sub-tabs{display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid var(--line)}
+    .survey-sub-btn{background:none;border:none;border-bottom:2px solid transparent;padding:9px 16px;cursor:pointer;font-size:13px;color:var(--text-muted);transition:all .15s;margin-bottom:-1px;white-space:nowrap}
+    .survey-sub-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+    .survey-client-row{display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:0.5px solid var(--line);flex-wrap:wrap}
+    .survey-client-row:last-child{border-bottom:none}
+    .survey-client-info{flex:1;min-width:120px}
+    .survey-client-name{font-weight:600;font-size:14px}
+    .survey-client-meta{font-size:12px;color:var(--text-muted);margin-top:2px}
+    .survey-sent-badge{font-size:11px;background:#d1fae5;color:#065f46;border-radius:20px;padding:2px 8px;flex-shrink:0}
+    .survey-tag-chips{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}
+    .survey-tag-chip{background:var(--surface-2,#f3f4f6);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:11px;color:var(--text-muted)}
     /* === ATHENAS AI ASSISTANT === */
     #page-athenas{display:flex;flex-direction:column;height:100%}
     .athenas-header{padding:16px 24px 0;flex-shrink:0}
@@ -4636,7 +4648,15 @@
       },
       sentLog:[]
     },
-    reviews:[]
+    reviews:[],
+    surveySettings:{
+      googleMapsUrl:'',
+      emailSubject:'¿Cómo fue tu visita a {{bizName}}?',
+      emailBody:'Hola {{nombre}},\n\nGracias por visitarnos 💅\n\nNos importa tu opinión. Tomá 1 minuto para calificar tu experiencia:\n\n{{surveyLink}}\n\nEs completamente anónima.\n\n¡Hasta pronto!\n{{bizName}}',
+      waMessage:'Hola {{nombre}} 👋 ¡Gracias por visitarnos! ¿Podés calificarnos? Es anónima y tarda 1 minuto: {{surveyLink}} 💅'
+    },
+    sentSurveys:[],
+    surveyResponses:[]
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -4645,7 +4665,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews','surveySettings','sentSurveys'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -4683,7 +4703,7 @@
       messagingSenderId: "733109093638",
       appId: "1:733109093638:web:720da3c212b9da24a9ca87"
     };
-    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _blobReady=false, _usersUnsub=null, _cpUnsub=null, _fpUnsub=null;
+    let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _blobReady=false, _usersUnsub=null, _cpUnsub=null, _fpUnsub=null, _surveyResponsesUnsub=null;
     state.authUser = null;
     try {
       firebase.initializeApp(firebaseConfig);
@@ -9694,52 +9714,248 @@
       }).join('');
     }
 
+    // ── Módulo de Encuestas ───────────────────────────────────────────────
+    let _surveyTab = 'solicitar';
+    let _surveyDateSel = null;
+    const SURVEY_TAG_LABELS = {great:'Servicio excelente', attention:'Buena atención', quality:'Calidad', price:'Buenos precios'};
+
+    function getSurveyLink(apptId, clientId, collabId){
+      const ss = state.surveySettings||{};
+      const payload = {a:apptId||'', c:clientId||'', co:collabId||'', g:ss.googleMapsUrl||'', biz:state.comms?.bizName||'GLAMB'};
+      const token = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+      return `https://glamb-os.web.app/survey.html?t=${token}`;
+    }
+
+    function isSurveySent(clientId, apptId){
+      return (state.sentSurveys||[]).includes(`${clientId}__${apptId}`);
+    }
+
+    function markSurveySent(clientId, apptId){
+      if(!state.sentSurveys) state.sentSurveys=[];
+      const key=`${clientId}__${apptId}`;
+      if(!state.sentSurveys.includes(key)){ state.sentSurveys.push(key); saveState(); }
+    }
+
+    function buildSurveyEmailPayload(c, appt, link){
+      const ss=state.surveySettings||{};
+      const biz=state.comms?.bizName||'GLAMB';
+      const servicio=(appt.lines||[]).map(l=>l.name||l.serviceId||'').filter(Boolean).join(', ')||'';
+      const vars={nombre:c.first||'',apellido:c.last||'',bizName:biz,surveyLink:link,servicio};
+      const subjectTpl=ss.emailSubject||'¿Cómo fue tu visita a {{bizName}}?';
+      const bodyTpl=ss.emailBody||'Hola {{nombre}},\n\nGracias por visitarnos 💅\n\nCalificá tu experiencia:\n{{surveyLink}}\n\n{{bizName}}';
+      const subject=fillTemplate(subjectTpl,vars);
+      const bodyText=fillTemplate(bodyTpl,vars);
+      return {subject, html:bodyText.replace(/\n/g,'<br>'), text:bodyText};
+    }
+
+    async function doSendSurveyEmail(clientId, apptId){
+      const c=state.clients.find(x=>x.id===clientId);
+      if(!c) return showToast('Cliente no encontrado.');
+      if(!c.email) return showToast(`${c.first} no tiene email registrado.`);
+      const appt=state.appointments.find(x=>x.id===apptId)||{id:apptId,lines:[]};
+      const collabId=(appt.lines||[])[0]?.collaboratorId||'';
+      const link=getSurveyLink(apptId,clientId,collabId);
+      const p=buildSurveyEmailPayload(c,appt,link);
+      try{
+        await db.collection('mail').add({to:[c.email],message:{subject:p.subject,html:p.html,text:p.text},createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+        markSurveySent(clientId,apptId);
+        showToast(`Encuesta enviada a ${c.email}`);
+        refreshSurveyPanel();
+      }catch(e){ showToast('Error al enviar: '+e.message); }
+    }
+
+    function doSendSurveyWA(clientId, apptId){
+      const c=state.clients.find(x=>x.id===clientId);
+      if(!c) return showToast('Cliente no encontrado.');
+      if(!c.phone) return showToast(`${c.first} no tiene WhatsApp.`);
+      const appt=state.appointments.find(x=>x.id===apptId)||{id:apptId,lines:[]};
+      const collabId=(appt.lines||[])[0]?.collaboratorId||'';
+      const link=getSurveyLink(apptId,clientId,collabId);
+      const ss=state.surveySettings||{};
+      const biz=state.comms?.bizName||'GLAMB';
+      const tpl=ss.waMessage||'Hola {{nombre}} 👋 ¡Gracias por visitarnos! Calificá tu experiencia (es anónima): {{surveyLink}} 💅';
+      const msg=fillTemplate(tpl,{nombre:c.first||'',bizName:biz,surveyLink:link});
+      window.open(getWALink(c.phone,msg),'_blank');
+      markSurveySent(clientId,apptId);
+      refreshSurveyPanel();
+    }
+
+    async function doSendAllSurveyEmails(){
+      const today=dateKey(new Date());
+      const selDate=_surveyDateSel||today;
+      const dayAppts=state.appointments.filter(a=>a.date===selDate&&!a.isAdditional&&!['cancelled','cancelado','voided'].includes(a.status));
+      const toSend=dayAppts.filter(a=>{ const c=state.clients.find(x=>x.id===a.clientId); return c&&c.email&&!isSurveySent(a.clientId,a.id); });
+      if(!toSend.length) return showToast('Sin emails pendientes para esta fecha.');
+      let sent=0;
+      for(const a of toSend){
+        try{
+          const c=state.clients.find(x=>x.id===a.clientId);
+          const collabId=(a.lines||[])[0]?.collaboratorId||'';
+          const link=getSurveyLink(a.id,a.clientId,collabId);
+          const p=buildSurveyEmailPayload(c,a,link);
+          await db.collection('mail').add({to:[c.email],message:{subject:p.subject,html:p.html,text:p.text},createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+          markSurveySent(a.clientId,a.id);
+          sent++;
+        }catch(e){ console.error(e); }
+      }
+      showToast(`${sent} encuesta${sent!==1?'s':''} enviada${sent!==1?'s':''} por email.`);
+      refreshSurveyPanel();
+    }
+
+    function switchSurveySubTab(el){ _surveyTab=el.dataset.tab||'solicitar'; refreshSurveyPanel(); }
+    function setSurveyDate(el){ _surveyDateSel=el.dataset.date||null; refreshSurveyPanel(); }
+
+    function refreshSurveyPanel(){
+      const panel=$('comms-reviews');
+      if(panel){ panel.innerHTML=renderCommsReviews(); bindSurveyHandlers(); }
+    }
+
+    function bindSurveyHandlers(){
+      const dp=$('surveyDatePicker');
+      if(dp) dp.onchange=()=>{ _surveyDateSel=dp.value||null; refreshSurveyPanel(); };
+      const bulkBtn=$('sendAllSurveyEmailsBtn');
+      if(bulkBtn) bulkBtn.onclick=doSendAllSurveyEmails;
+      const ssBtn=$('saveSurveySettings');
+      if(ssBtn) ssBtn.onclick=()=>{
+        if(!state.surveySettings) state.surveySettings={};
+        state.surveySettings.googleMapsUrl=$('surveyMapsUrl')?.value?.trim()||'';
+        state.surveySettings.emailSubject=$('surveyEmailSubject')?.value||'';
+        state.surveySettings.emailBody=$('surveyEmailBody')?.value||'';
+        state.surveySettings.waMessage=$('surveyWaMessage')?.value||'';
+        saveState(); showToast('Configuración guardada.');
+      };
+    }
+
+    function subscribeSurveyResponsesSync(){
+      if(!fbReady||!db||_surveyResponsesUnsub) return;
+      _surveyResponsesUnsub=db.collection('surveyResponses').onSnapshot(snap=>{
+        state.surveyResponses=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>{
+          const ta=a.submittedAt?.toDate?.()?.getTime?.()??0;
+          const tb=b.submittedAt?.toDate?.()?.getTime?.()??0;
+          return tb-ta;
+        });
+        if(state.commsTab==='reviews'){
+          const panel=$('comms-reviews');
+          if(panel){ panel.innerHTML=renderCommsReviews(); bindSurveyHandlers(); }
+        }
+      }, e=>console.error('[GLAMB] survey sync falló:',e));
+    }
+
     function renderCommsReviews(){
-      const revs=state.reviews||[];
-      const total=revs.length;
-      const avg=reviewAvg(revs);
-      const thisMonth=dateKey(new Date()).slice(0,7);
-      const monthCount=revs.filter(r=>(r.date||r.createdAt||'').slice(0,7)===thisMonth).length;
+      const ss=state.surveySettings||{};
+      const responses=state.surveyResponses||[];
+      const manualRevs=state.reviews||[];
 
-      const colMap={};
-      revs.forEach(r=>{
-        if(!r.collaboratorId) return;
-        if(!colMap[r.collaboratorId]) colMap[r.collaboratorId]={sum:0,cnt:0};
-        colMap[r.collaboratorId].sum+=r.stars; colMap[r.collaboratorId].cnt++;
-      });
-      const ranking=Object.entries(colMap)
-        .map(([id,{sum,cnt}])=>({id,avg:sum/cnt,cnt}))
-        .sort((a,b)=>b.avg-a.avg);
-      const rankHtml=ranking.length
-        ? ranking.map(r=>{ const m=member(r.id); return `<div class="mini-row"><strong>${esc(m.first)} ${esc(m.last)}</strong><span>${starsHtml(Math.round(r.avg))} ${r.avg.toFixed(1)} · ${r.cnt} reseña${r.cnt!==1?'s':''}</span></div>`; }).join('')
-        : '<div class="mini-row"><strong>Sin datos aún</strong><span>Las reseñas de colaboradoras van a aparecer acá.</span></div>';
+      const tabs=[
+        {id:'solicitar',label:'Solicitar'},
+        {id:'respuestas',label:`Respuestas${responses.length+manualRevs.length>0?` (${responses.length+manualRevs.length})`:''}`},
+        {id:'configurar',label:'Configurar'}
+      ];
+      const tabBar=`<div class="survey-sub-tabs">${tabs.map(t=>`<button class="survey-sub-btn${_surveyTab===t.id?' active':''}" data-action="switchSurveySubTab" data-tab="${t.id}">${esc(t.label)}</button>`).join('')}</div>`;
 
-      const listHtml=total
-        ? revs.slice(0,60).map(r=>{
-            const c=client(r.clientId), m=r.collaboratorId?member(r.collaboratorId):null;
+      if(_surveyTab==='solicitar'){
+        const today=dateKey(new Date());
+        const yst=dateKey(new Date(Date.now()-86400000));
+        const sel=_surveyDateSel||today;
+        const dayAppts=state.appointments.filter(a=>a.date===sel&&!a.isAdditional&&!['cancelled','cancelado','voided'].includes(a.status));
+        const hasEmailPending=dayAppts.some(a=>{ const c=state.clients.find(x=>x.id===a.clientId); return c&&c.email&&!isSurveySent(a.clientId,a.id); });
+        const rowsHtml=!dayAppts.length
+          ?'<div class="muted" style="padding:12px 0;font-size:13px">Sin turnos registrados en esta fecha.</div>'
+          :dayAppts.map(a=>{
+            const c=state.clients.find(x=>x.id===a.clientId);
+            if(!c) return '';
+            const col=a.lines?.[0]?.collaboratorId?member(a.lines[0].collaboratorId):null;
+            const svc=(a.lines||[]).map(l=>l.name||l.serviceId||'').filter(Boolean).join(', ')||'—';
+            const sent=isSurveySent(a.clientId,a.id);
+            return `<div class="survey-client-row">
+              <div class="survey-client-info">
+                <div class="survey-client-name">${esc(fullName(c))}</div>
+                <div class="survey-client-meta">${esc(svc)}${col?' · con '+esc(col.first):''}${a.start?' · '+esc(a.start):''}</div>
+              </div>
+              ${sent?'<span class="survey-sent-badge">✓ Enviado</span>':''}
+              <button class="btn small${c.phone?'':' disabled'}" data-action="doSendSurveyWA" data-client="${a.clientId}" data-appt="${a.id}" title="${c.phone?'Enviar por WhatsApp':'Sin WhatsApp'}">WA</button>
+              <button class="btn small primary${c.email?'':' disabled'}" data-action="doSendSurveyEmail" data-client="${a.clientId}" data-appt="${a.id}" title="${c.email?'Enviar por email':'Sin email'}">Email</button>
+            </div>`;
+          }).join('');
+        return `${tabBar}
+          <div class="form-card">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+              <strong style="flex-shrink:0;font-size:13px">Fecha:</strong>
+              <button class="btn small${sel===today?' primary':''}" data-action="setSurveyDate" data-date="${today}">Hoy</button>
+              <button class="btn small${sel===yst?' primary':''}" data-action="setSurveyDate" data-date="${yst}">Ayer</button>
+              <input type="date" id="surveyDatePicker" value="${sel}" style="border:1px solid var(--line);border-radius:6px;padding:4px 8px;font-size:13px;background:var(--surface);color:var(--text)">
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">${dayAppts.length} turno${dayAppts.length!==1?'s':''} · ${sel}</div>
+            ${rowsHtml}
+            ${dayAppts.length?`<div style="margin-top:14px;display:flex;justify-content:flex-end"><button class="btn primary" id="sendAllSurveyEmailsBtn"${!hasEmailPending?' disabled':''}>Enviar a todos por email</button></div>`:''}
+          </div>`;
+      }
+
+      if(_surveyTab==='respuestas'){
+        const allRevs=[...responses,...manualRevs.map(r=>({...r,_manual:true}))];
+        const total=allRevs.length;
+        const avg=total?allRevs.reduce((s,r)=>s+(r.stars||0),0)/total:0;
+        const thisMonth=dateKey(new Date()).slice(0,7);
+        const monthCount=responses.filter(r=>{
+          const t=r.submittedAt?.toDate?.()?.toISOString?.()??r.submittedAt??'';
+          return (typeof t==='string'?t:(t.seconds?new Date(t.seconds*1000).toISOString():'')).slice(0,7)===thisMonth;
+        }).length;
+        const colMap={};
+        allRevs.forEach(r=>{ if(!r.collaboratorId)return; if(!colMap[r.collaboratorId])colMap[r.collaboratorId]={sum:0,cnt:0}; colMap[r.collaboratorId].sum+=r.stars||0; colMap[r.collaboratorId].cnt++; });
+        const ranking=Object.entries(colMap).map(([id,{sum,cnt}])=>({id,avg:sum/cnt,cnt})).sort((a,b)=>b.avg-a.avg);
+        const listHtml=!allRevs.length
+          ?'<div class="mini-row"><strong>Sin respuestas todavía</strong><span>Las encuestas que completen las clientas van a aparecer acá.</span></div>'
+          :allRevs.slice(0,50).map(r=>{
+            const c=state.clients.find(x=>x.id===r.clientId);
+            const m=r.collaboratorId?state.collaborators.find(x=>x.id===r.collaboratorId):null;
+            let dateStr=r.date||'';
+            if(!dateStr&&r.submittedAt){
+              try{ dateStr=r.submittedAt?.toDate?.()?.toLocaleDateString('es-AR')??''; }catch(_){}
+            }
+            if(!dateStr&&r.createdAt) dateStr=(r.createdAt||'').slice(0,10);
+            const tags=r.tags?Object.entries(r.tags).filter(([,v])=>v).map(([k])=>SURVEY_TAG_LABELS[k]||k):[];
             return `<div class="review-card">
               <div class="review-card-top">
                 <span class="review-stars-line">${starsHtml(r.stars)}</span>
-                <span class="review-info">${esc(fullName(c))}${r.service?' · '+esc(r.service):''}${m?' · '+esc(m.first):''}</span>
-                <span class="review-date">${esc(r.date||'')}</span>
-                ${curRole()==='admin'?`<button class="small-btn danger" data-action="deleteReview" data-id="${r.id}" style="padding:2px 8px;font-size:11px">✕</button>`:''}
+                <span class="review-info">${esc(c?fullName(c):'Anónima')}${m?' · con '+esc(m.first):''}</span>
+                <span class="review-date">${esc(dateStr)}</span>
+                ${!r._manual?`<span style="font-size:10px;color:var(--text-muted);background:var(--surface-2,#f3f4f6);border-radius:10px;padding:1px 7px">encuesta</span>`:''}
+                ${r._manual&&curRole()==='admin'?`<button class="small-btn danger" data-action="deleteReview" data-id="${r.id}" style="padding:2px 8px;font-size:11px">✕</button>`:''}
               </div>
+              ${tags.length?`<div class="survey-tag-chips">${tags.map(t=>`<span class="survey-tag-chip">${esc(t)}</span>`).join('')}</div>`:''}
               ${r.comment?`<div class="review-comment">"${esc(r.comment)}"</div>`:''}
             </div>`;
-          }).join('')
-        : '<div class="mini-row"><strong>Sin reseñas todavía</strong><span>Se van acumulando a medida que registrás el feedback de las clientas.</span></div>';
+          }).join('');
+        return `${tabBar}
+          <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+            <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${avg?avg.toFixed(1):'—'}</div><div class="kpi-label">Promedio</div><span class="kpi-mini">${starsHtml(Math.round(avg))}</span></article>
+            <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${total}</div><div class="kpi-label">Total</div><span class="kpi-mini">encuestas y reseñas</span></article>
+            <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${monthCount}</div><div class="kpi-label">Este mes</div><span class="kpi-mini">encuestas recibidas</span></article>
+          </div>
+          ${ranking.length?`<div class="form-card" style="margin-bottom:16px"><h3 style="margin-bottom:12px">Ranking colaboradoras</h3>${ranking.map(r=>{const m=member(r.id);return `<div class="mini-row"><strong>${esc(m.first)} ${esc(m.last)}</strong><span>${starsHtml(Math.round(r.avg))} ${r.avg.toFixed(1)} · ${r.cnt}</span></div>`;}).join('')}</div>`:''}
+          <div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn primary" data-action="openReviewDrawer">+ Nueva reseña manual</button></div>
+          <div class="form-card"><h3 style="margin-bottom:12px">Respuestas</h3>${listHtml}</div>`;
+      }
 
-      return `
-        <div style="display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap">
-          <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${avg?avg.toFixed(1):'—'}</div><div class="kpi-label">Promedio</div><span class="kpi-mini">${starsHtml(Math.round(avg))}</span></article>
-          <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${total}</div><div class="kpi-label">Total reseñas</div><span class="kpi-mini">acumuladas</span></article>
-          <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${monthCount}</div><div class="kpi-label">Este mes</div><span class="kpi-mini">reseñas recibidas</span></article>
-        </div>
-        <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-          <button class="btn primary" data-action="openReviewDrawer">+ Nueva reseña</button>
-        </div>
-        <div class="form-card" style="margin-bottom:16px"><h3 style="margin-bottom:12px">Ranking colaboradoras</h3>${rankHtml}</div>
-        <div class="form-card"><h3 style="margin-bottom:12px">Últimas reseñas</h3>${listHtml}</div>`;
+      if(_surveyTab==='configurar'){
+        return `${tabBar}
+          <div class="form-card">
+            <h3 style="margin-bottom:14px">Configuración de encuestas</h3>
+            <div class="field"><label>URL de Google Maps <span style="font-size:11px;color:var(--text-muted)">(redirige automáticamente con 5 estrellas)</span></label>
+              <input id="surveyMapsUrl" type="url" value="${esc(ss.googleMapsUrl||'')}" placeholder="https://maps.google.com/maps?cid=..." style="width:100%"></div>
+            <div class="field"><label>Asunto del email</label>
+              <input id="surveyEmailSubject" type="text" value="${esc(ss.emailSubject||'¿Cómo fue tu visita a {{bizName}}?')}" style="width:100%"></div>
+            <div class="field"><label>Cuerpo del email</label>
+              <textarea id="surveyEmailBody" rows="7" style="width:100%;font-family:monospace;font-size:13px">${esc(ss.emailBody||'Hola {{nombre}},\n\nGracias por visitarnos 💅\n\nCalificá tu experiencia:\n{{surveyLink}}\n\nEs anónima y tarda menos de 1 minuto.\n\n¡Hasta pronto!\n{{bizName}}')}</textarea>
+              <small style="color:var(--text-muted)">Variables disponibles: {{nombre}}, {{bizName}}, {{surveyLink}}, {{servicio}}</small></div>
+            <div class="field"><label>Mensaje de WhatsApp</label>
+              <textarea id="surveyWaMessage" rows="3" style="width:100%;font-family:monospace;font-size:13px">${esc(ss.waMessage||'Hola {{nombre}} 👋 ¡Gracias por visitarnos! Calificá tu experiencia (es anónima): {{surveyLink}} 💅')}</textarea>
+              <small style="color:var(--text-muted)">Variables disponibles: {{nombre}}, {{bizName}}, {{surveyLink}}</small></div>
+            <button class="btn primary" id="saveSurveySettings" style="margin-top:8px">Guardar configuración</button>
+          </div>`;
+      }
+
+      return tabBar;
     }
 
     function showReviewAfterCheckout(ticket){
@@ -9784,7 +10000,7 @@
       pnd.innerHTML=renderCommsPending();
       log.innerHTML=renderCommsLog();
       const rvPanel=$('comms-reviews');
-      if(rvPanel) rvPanel.innerHTML=renderCommsReviews();
+      if(rvPanel){ rvPanel.innerHTML=renderCommsReviews(); bindSurveyHandlers(); }
       // Badge
       const badge=$('commsWABadge'),pwaLen=getPendingWA().length;
       if(badge){badge.textContent=pwaLen;badge.style.display=pwaLen?'inline-flex':'none';}
@@ -10546,6 +10762,7 @@ ${context}`;
               await migrateClientsPrivateIfNeeded();
               await migrateFinancePrivateIfNeeded();   // sembrar antes de suscribir
               subscribeFinancePrivateSync();
+              subscribeSurveyResponsesSync();
             }
             bootAppData();
             if($('loginOverlay')) $('loginOverlay').style.display='none';
@@ -10565,6 +10782,7 @@ ${context}`;
           if(_usersUnsub){ _usersUnsub(); _usersUnsub=null; }
           if(_cpUnsub){ _cpUnsub(); _cpUnsub=null; }
           if(_fpUnsub){ _fpUnsub(); _fpUnsub=null; }
+          if(_surveyResponsesUnsub){ _surveyResponsesUnsub(); _surveyResponsesUnsub=null; }
           unsubscribeCollections();
           // limpiar datos financieros en memoria (que un login de rol bajo
           // en el mismo navegador no herede lo del admin anterior)
@@ -10664,6 +10882,10 @@ ${context}`;
       saveReview:              () => saveReview(),
       pickReviewStar:          el => pickReviewStar(el),
       deleteReview:            el => deleteReview(el.dataset.id),
+      switchSurveySubTab:      el => switchSurveySubTab(el),
+      setSurveyDate:           el => setSurveyDate(el),
+      doSendSurveyWA:          el => doSendSurveyWA(el.dataset.client, el.dataset.appt),
+      doSendSurveyEmail:       el => doSendSurveyEmail(el.dataset.client, el.dataset.appt),
       cancelAppointment:       el => cancelAppointment(el.dataset.id),
       deleteAppointment:       el => deleteAppointment(el.dataset.id),
       chargeFromAppointment:   el => chargeFromAppointment(el.dataset.id),

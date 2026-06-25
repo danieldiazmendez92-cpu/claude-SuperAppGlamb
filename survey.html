@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Encuesta de satisfacción</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{min-height:100dvh;background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);display:flex;align-items:center;justify-content:center;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+    .card{background:#fff;border-radius:20px;padding:32px 28px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+    .brand{text-align:center;margin-bottom:24px}
+    .brand-name{font-size:22px;font-weight:800;letter-spacing:2px;color:#1a1a2e}
+    .brand-sub{font-size:12px;color:#9ca3af;margin-top:4px;letter-spacing:1px}
+    h2{font-size:18px;font-weight:700;color:#111827;margin-bottom:6px;text-align:center}
+    .subtitle{font-size:13px;color:#6b7280;text-align:center;margin-bottom:24px}
+    .stars-row{display:flex;justify-content:center;gap:8px;margin:20px 0 8px}
+    .star-btn{background:none;border:none;cursor:pointer;font-size:44px;color:#e5e7eb;padding:0;line-height:1;transition:color .1s,transform .1s}
+    .star-btn.selected,.star-btn:hover{color:#f59e0b}
+    .star-btn:active{transform:scale(.9)}
+    .stars-label{text-align:center;font-size:13px;color:#9ca3af;height:18px;margin-bottom:16px}
+    .tags-title{font-size:13px;font-weight:600;color:#374151;margin-bottom:10px}
+    .tags-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+    .tag-btn{background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:20px;padding:7px 14px;font-size:13px;color:#6b7280;cursor:pointer;transition:all .15s}
+    .tag-btn.selected{background:#fef3c7;border-color:#f59e0b;color:#92400e;font-weight:600}
+    .field{margin-bottom:16px}
+    label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:6px}
+    textarea{width:100%;border:1.5px solid #e5e7eb;border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit;resize:vertical;min-height:80px;color:#111827;transition:border-color .15s}
+    textarea:focus{outline:none;border-color:#a78bfa}
+    textarea.required{border-color:#ef4444}
+    .submit-btn{width:100%;background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;transition:opacity .15s;margin-top:4px}
+    .submit-btn:hover{opacity:.9}
+    .submit-btn:disabled{opacity:.4;cursor:not-allowed}
+    .anon-note{text-align:center;font-size:11px;color:#9ca3af;margin-top:16px}
+    .state-msg{text-align:center;padding:20px 0}
+    .state-msg .icon{font-size:52px;margin-bottom:12px}
+    .state-msg h3{font-size:20px;font-weight:700;color:#111827;margin-bottom:8px}
+    .state-msg p{font-size:14px;color:#6b7280;line-height:1.5}
+    .maps-btn{display:inline-block;margin-top:20px;background:#4285f4;color:#fff;border-radius:10px;padding:12px 24px;font-size:15px;font-weight:600;text-decoration:none;transition:opacity .15s}
+    .maps-btn:hover{opacity:.9}
+    .error-card{text-align:center;padding:20px 0}
+    .required-hint{font-size:11px;color:#ef4444;margin-top:4px}
+    .loading{text-align:center;color:#6b7280;font-size:15px;padding:40px 0}
+  </style>
+</head>
+<body>
+<div class="card" id="mainCard">
+  <div class="loading">Cargando...</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  const firebaseConfig = {
+    apiKey: "AIzaSyAkTmM7r_Srfh0ccco4Dhf2PX1KZOTfPaI",
+    authDomain: "glamb-os.firebaseapp.com",
+    projectId: "glamb-os",
+    storageBucket: "glamb-os.firebasestorage.app",
+    messagingSenderId: "733109093638",
+    appId: "1:733109093638:web:720da3c212b9da24a9ca87"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  const card = document.getElementById('mainCard');
+
+  // Parse token
+  let tokenData = null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('t');
+    if(!t) throw new Error('No token');
+    tokenData = JSON.parse(decodeURIComponent(escape(atob(t))));
+  } catch(e) {
+    card.innerHTML = `<div class="error-card">
+      <div style="font-size:48px;margin-bottom:12px">🔗</div>
+      <h3 style="font-size:18px;font-weight:700;color:#111827;margin-bottom:8px">Enlace inválido</h3>
+      <p style="font-size:13px;color:#6b7280">Este enlace no es válido o ya expiró. Pedile a tu salón un nuevo enlace de encuesta.</p>
+    </div>`;
+    return;
+  }
+
+  const bizName = tokenData.biz || 'GLAMB';
+  const googleMapsUrl = tokenData.g || '';
+  const appointmentId = tokenData.a || '';
+  const clientId = tokenData.c || '';
+  const collaboratorId = tokenData.co || '';
+
+  const TAGS = [
+    {id:'great', label:'Servicio excelente'},
+    {id:'attention', label:'Buena atención'},
+    {id:'quality', label:'Calidad'},
+    {id:'price', label:'Buenos precios'},
+  ];
+
+  const STAR_LABELS = ['','Muy malo','Regular','Bueno','Muy bueno','Excelente'];
+
+  let selectedStars = 0;
+  let selectedTags = {};
+  let submitted = false;
+
+  function render() {
+    card.innerHTML = `
+      <div class="brand">
+        <div class="brand-name">${esc(bizName)}</div>
+        <div class="brand-sub">ENCUESTA ANÓNIMA</div>
+      </div>
+      <h2>¿Cómo fue tu experiencia?</h2>
+      <p class="subtitle">Tus respuestas son anónimas y nos ayudan a mejorar.</p>
+
+      <div class="stars-row" id="starsRow">
+        ${[1,2,3,4,5].map(i=>`<button class="star-btn${i<=selectedStars?' selected':''}" data-s="${i}" aria-label="${i} estrella${i!==1?'s':''}">★</button>`).join('')}
+      </div>
+      <div class="stars-label" id="starsLabel">${STAR_LABELS[selectedStars]||''}</div>
+
+      ${selectedStars > 0 ? `
+      <div class="tags-title">¿Qué valorás más?</div>
+      <div class="tags-grid">
+        ${TAGS.map(t=>`<button class="tag-btn${selectedTags[t.id]?' selected':''}" data-tag="${t.id}">${esc(t.label)}</button>`).join('')}
+      </div>
+
+      <div class="field">
+        <label>${selectedStars <= 3 ? '¿Qué podemos mejorar? <span style="color:#ef4444">*</span>' : 'Comentario adicional (opcional)'}</label>
+        <textarea id="commentArea" placeholder="${selectedStars <= 3 ? 'Contanos qué falló para mejorar...' : 'Gracias por tu tiempo...'}" rows="3">${escAttr(_commentDraft||'')}</textarea>
+        ${selectedStars <= 3 ? '<div class="required-hint" id="commentHint" style="display:none">Este campo es obligatorio con 3 estrellas o menos.</div>' : ''}
+      </div>
+
+      <button class="submit-btn" id="submitBtn">Enviar calificación</button>
+      <p class="anon-note">🔒 Encuesta completamente anónima</p>
+      ` : `<p class="anon-note" style="margin-top:8px">Tocá una estrella para comenzar</p>`}
+    `;
+
+    // Star handlers
+    card.querySelectorAll('.star-btn').forEach(btn => {
+      btn.onclick = () => {
+        selectedStars = parseInt(btn.dataset.s);
+        render();
+      };
+    });
+
+    // Tag handlers
+    card.querySelectorAll('.tag-btn').forEach(btn => {
+      btn.onclick = () => {
+        selectedTags[btn.dataset.tag] = !selectedTags[btn.dataset.tag];
+        btn.classList.toggle('selected', !!selectedTags[btn.dataset.tag]);
+      };
+    });
+
+    // Save comment draft across renders
+    const ca = card.querySelector('#commentArea');
+    if(ca) {
+      ca.value = _commentDraft || '';
+      ca.oninput = () => { _commentDraft = ca.value; };
+    }
+
+    // Submit
+    const sb = card.querySelector('#submitBtn');
+    if(sb) sb.onclick = doSubmit;
+  }
+
+  let _commentDraft = '';
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escAttr(s){ return esc(s).replace(/"/g,'&quot;'); }
+
+  async function doSubmit() {
+    const comment = (card.querySelector('#commentArea')?.value||'').trim();
+    if(!selectedStars) return;
+    if(selectedStars <= 3 && !comment) {
+      const h = card.querySelector('#commentHint');
+      if(h) h.style.display='block';
+      const ca = card.querySelector('#commentArea');
+      if(ca) ca.classList.add('required');
+      return;
+    }
+
+    const sb = card.querySelector('#submitBtn');
+    if(sb) { sb.disabled=true; sb.textContent='Enviando...'; }
+
+    const tagsObj = {};
+    TAGS.forEach(t=>{ if(selectedTags[t.id]) tagsObj[t.id]=true; });
+
+    try {
+      await db.collection('surveyResponses').add({
+        appointmentId: appointmentId || null,
+        clientId: clientId || null,
+        collaboratorId: collaboratorId || null,
+        stars: selectedStars,
+        tags: tagsObj,
+        comment: comment || '',
+        submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        ua: navigator.userAgent.slice(0,120)
+      });
+
+      if(selectedStars === 5 && googleMapsUrl) {
+        card.innerHTML = `<div class="state-msg">
+          <div class="icon">⭐</div>
+          <h3>¡Gracias por tu 5 estrellas!</h3>
+          <p>¿Podés compartir tu experiencia en Google Maps? Nos ayuda muchísimo.</p>
+          <a class="maps-btn" href="${escAttr(googleMapsUrl)}" target="_blank" rel="noopener">Dejar reseña en Google Maps →</a>
+        </div>`;
+      } else {
+        card.innerHTML = `<div class="state-msg">
+          <div class="icon">${selectedStars >= 4 ? '💅' : '🙏'}</div>
+          <h3>¡Gracias por tu opinión!</h3>
+          <p>${selectedStars >= 4 ? '¡Nos alegra que hayas tenido una buena experiencia! Te esperamos pronto.' : 'Tu feedback nos ayuda a mejorar. Gracias por tomarte el tiempo.'}</p>
+        </div>`;
+      }
+    } catch(e) {
+      if(sb) { sb.disabled=false; sb.textContent='Enviar calificación'; }
+      card.insertAdjacentHTML('beforeend', `<p style="color:#ef4444;font-size:13px;text-align:center;margin-top:12px">Error al enviar. Intentá de nuevo.</p>`);
+      console.error(e);
+    }
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
