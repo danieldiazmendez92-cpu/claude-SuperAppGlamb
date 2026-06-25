@@ -3824,6 +3824,47 @@
         </div>
 
         <div id="catalogContent"></div>
+
+        <div id="highSpenderPanel" style="display:none;padding:0 0 40px">
+          <div style="margin:28px 0 14px;border-top:0.5px solid var(--line);padding-top:20px">
+            <h2 style="font-size:15px;font-weight:700;margin:0 0 4px">Etiqueta automática de alto gasto</h2>
+            <p style="font-size:13px;color:var(--text-muted);margin:0 0 16px">Si un cliente supera el monto en el período indicado, la etiqueta aparece sola en su perfil y en la lista de clientes.</p>
+          </div>
+          <div class="form-card">
+            <div class="form-grid">
+              <div class="field">
+                <label>Estado</label>
+                <select id="hscEnabled" onchange="updateHscPreview()">
+                  <option value="true">Activado</option>
+                  <option value="false">Desactivado</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Nombre de etiqueta</label>
+                <input id="hscLabel" type="text" placeholder="Alto gasto" maxlength="20" oninput="updateHscPreview()">
+              </div>
+              <div class="field">
+                <label>Monto mínimo ($)</label>
+                <input id="hscAmount" type="number" min="0" step="1000" placeholder="50000" oninput="updateHscPreview()">
+              </div>
+              <div class="field">
+                <label>Período</label>
+                <select id="hscPeriod" onchange="updateHscPreview()">
+                  <option value="30">Últimos 30 días</option>
+                  <option value="60">Últimos 60 días</option>
+                  <option value="90">Últimos 90 días</option>
+                  <option value="180">Últimos 6 meses</option>
+                  <option value="365">Último año</option>
+                  <option value="0">Histórico total</option>
+                </select>
+              </div>
+            </div>
+            <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
+              <button class="btn primary" onclick="saveHighSpenderConfig()">Guardar</button>
+              <span id="hscPreview" style="font-size:12px;color:var(--text-muted)"></span>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="page" id="page-finanzas">
@@ -4661,7 +4702,8 @@
       waMessage:'Hola {{nombre}} 👋 ¡Gracias por visitarnos! ¿Podés calificarnos? Es anónima y tarda 1 minuto: {{surveyLink}} 💅'
     },
     sentSurveys:[],
-    surveyResponses:[]
+    surveyResponses:[],
+    highSpenderConfig:{enabled:true,label:'Alto gasto',amount:50000,periodDays:90}
   };
     const $=id=>document.getElementById(id),toast=$('toast');
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -4670,7 +4712,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews','surveySettings','sentSurveys'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -5376,6 +5418,12 @@
       }
       if(frequency!==null && frequency<=21 && visits>=3) tags.push({label:'Frecuente',cls:'good'});
       if(avgTicket>0 && salonAvg>0 && avgTicket>=salonAvg*1.4) tags.push({label:'Alto valor',cls:'gold'});
+      const hsc=state.highSpenderConfig||{};
+      if(hsc.enabled!==false && Number(hsc.amount)>0){
+        const cutoff=Number(hsc.periodDays)>0?new Date(Date.now()-Number(hsc.periodDays)*86400000).toISOString().slice(0,10):null;
+        const periodSpent=(cutoff?tickets.filter(t=>(t.createdAt||t.confirmedAt||'').slice(0,10)>=cutoff):tickets).reduce((s,t)=>s+Number(t.grossTotal||0),0);
+        if(periodSpent>=Number(hsc.amount)) tags.push({label:hsc.label||'Alto gasto',cls:'gold'});
+      }
       const svcCount={};
       state.appointments.filter(a=>a.clientId===clientId&&!['cancelled','cancelado','voided'].includes(a.status)).forEach(a=>{if(a.service)svcCount[a.service]=(svcCount[a.service]||0)+1;});
       tickets.forEach(t=>(t.lines||[]).forEach(l=>{if(l.service)svcCount[l.service]=(svcCount[l.service]||0)+1;}));
@@ -5652,6 +5700,7 @@
       return 0;
     }
     function renderCatalog(){
+      renderHighSpenderConfig();
       const view = state.catalogView || 'grid';
       const filter = state.catalogFilter || 'all';
       const catalog = state.catalog;
@@ -5777,6 +5826,40 @@
 
     function setCatalogView(v){state.catalogView=v;renderCatalog()}
     function setCatalogFilter(f){state.catalogFilter=f;renderCatalog()}
+
+    function renderHighSpenderConfig(){
+      const panel=$('highSpenderPanel');
+      if(!panel) return;
+      panel.style.display = curRole()==='admin' ? '' : 'none';
+      if(curRole()!=='admin') return;
+      const cfg=state.highSpenderConfig||{};
+      if($('hscEnabled')) $('hscEnabled').value=String(cfg.enabled!==false);
+      if($('hscLabel'))   $('hscLabel').value=cfg.label||'Alto gasto';
+      if($('hscAmount'))  $('hscAmount').value=cfg.amount!=null?cfg.amount:50000;
+      if($('hscPeriod'))  $('hscPeriod').value=String(cfg.periodDays!=null?cfg.periodDays:90);
+      updateHscPreview();
+    }
+    function updateHscPreview(){
+      const el=$('hscPreview'); if(!el) return;
+      const enabled=$('hscEnabled')?.value==='true';
+      if(!enabled){el.textContent='Etiqueta desactivada.';return;}
+      const label=$('hscLabel')?.value||'Alto gasto';
+      const amount=Number($('hscAmount')?.value||0);
+      const period=Number($('hscPeriod')?.value??90);
+      const periodText=period===0?'en total histórico':`en los últimos ${period} días`;
+      el.textContent=`Clientes con más de ${money(amount)} ${periodText} recibirán la etiqueta "${label}".`;
+    }
+    function saveHighSpenderConfig(){
+      state.highSpenderConfig={
+        enabled:$('hscEnabled').value==='true',
+        label:($('hscLabel').value||'').trim()||'Alto gasto',
+        amount:Number($('hscAmount').value)||0,
+        periodDays:Number($('hscPeriod').value)
+      };
+      saveState();
+      renderAll();
+      showToast('Configuración guardada');
+    }
 
     function openCatalogDrawer(type, id){
       state.editingCatalogItem = {type, id};
