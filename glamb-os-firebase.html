@@ -4731,7 +4731,10 @@
           if(!_blobReady) return; // no escribir hasta leer el estado real de Firestore
           // Fase B: el blob compartido NO lleva phone/email de clientes
           // Fase 3: tampoco lleva las entidades sincronizadas (van por colección)
-          stateDoc.set(serializeForCloud(),{merge:false}).catch(e=>console.error('[GLAMB] guardado en nube falló:', e));
+          stateDoc.set(serializeForCloud(),{merge:false}).catch(e=>{
+            console.error('[GLAMB] guardado en nube falló:', e);
+            showToast('⚠️ Error al sincronizar con la nube. Cambios guardados localmente.');
+          });
           syncCollections();
           saveFinancePrivate();
         }, 800);
@@ -7790,11 +7793,15 @@
         updateCollaborator(state.collaborators[idx].id, data);
         state.editingCollaboratorId = null;
         saveState();
-        closeDrawers();showPage('team');showToast('Colaboradora actualizada');
+        closeDrawers();
+        try{ showPage('team'); }catch(e){ console.error('[GLAMB] renderAll tras editar colaboradora:',e); }
+        showToast('Colaboradora actualizada');
       } else {
         addCollaborator({id:'co'+Date.now(), ...data});
         saveState();
-        closeDrawers();showPage('team');showToast('Colaboradora creada y agenda actualizada');
+        closeDrawers();
+        try{ showPage('team'); }catch(e){ console.error('[GLAMB] renderAll tras nueva colaboradora:',e); }
+        showToast('Colaboradora creada y agenda actualizada');
       }
     };
 
@@ -10452,7 +10459,7 @@ ${context}`;
     }
     // ── FIN ATHENAS ───────────────────────────────────────────────────────────
 
-    function renderAll(){applyPermissions();renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();renderComms();renderAthenas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
+    function renderAll(){applyPermissions();renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();try{renderComms();}catch(e){console.error('[GLAMB] renderComms error:',e);}renderAthenas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
