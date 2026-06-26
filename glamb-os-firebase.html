@@ -4723,6 +4723,12 @@
     //       reconstruir desde el snapshot (Firestore ordena por doc-id).
     const _byDateDesc=(a,b)=>String(b.createdAt||'')>String(a.createdAt||'')?1:-1;
     const SYNCED_COLLECTIONS=[
+      // clients/collaborators viven en colección propia (un doc por registro):
+      // un solo blob con +1000 clientes superaba el límite de 1MB de Firestore
+      // y la escritura fallaba en silencio. 'strip' quita phone/email del doc
+      // compartido (van a clientsPrivate, solo-admin).
+      {key:'clients',        coll:'clients',        strip:['phone','email']},
+      {key:'collaborators',  coll:'collaborators'},
       {key:'appointments',   coll:'appointments'},
       {key:'payments',       coll:'payments',       sort:_byDateDesc},
       {key:'salesTickets',   coll:'salesTickets',   sort:_byDateDesc},
@@ -4894,7 +4900,7 @@
     // sombra) y borra los que se quitaron. Por-documento => no se pisan.
     function syncCollections(){
       if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
-      SYNCED_COLLECTIONS.forEach(({key,coll})=>{
+      SYNCED_COLLECTIONS.forEach(({key,coll,strip})=>{
         // No sincronizar hasta que el primer snapshot de Firestore haya establecido
         // el shadow correcto. Sin este guard, el localStorage (potencialmente viejo)
         // se empuja a Firestore antes de recibir la fuente de verdad, resucitando
@@ -4908,9 +4914,11 @@
         arr.forEach(rec=>{
           if(!rec || rec.id==null) return;
           const id=_docId(rec.id);
-          const json=JSON.stringify(rec);
+          // strip: quitar campos sensibles (phone/email) del doc compartido
+          const out = strip ? (()=>{ const o={...rec}; strip.forEach(f=>delete o[f]); return o; })() : rec;
+          const json=JSON.stringify(out);
           next.set(id,json);
-          if(prev.get(id)!==json) writes.push(['set',id,rec]);
+          if(prev.get(id)!==json) writes.push(['set',id,out]);
         });
         prev.forEach((_v,id)=>{ if(!next.has(id)) writes.push(['del',id,null]); });
         _syncShadow[key]=next;
@@ -4980,7 +4988,7 @@
       const migRef=db.collection('appState').doc('migrations');
       let mig={}; try{ const s=await migRef.get(); if(s.exists) mig=s.data()||{}; }catch(e){}
       let blob={}; try{ const s=await stateDoc.get(); if(s.exists) blob=s.data()||{}; }catch(e){}
-      for(const {key,coll} of SYNCED_COLLECTIONS){
+      for(const {key,coll,strip} of SYNCED_COLLECTIONS){
         const fkey=coll+'V1';
         if(mig[fkey]) continue;
         try{
@@ -4990,7 +4998,10 @@
             const seed=(Array.isArray(src)?src:[]).filter(r=>r&&r.id!=null);
             for(let i=0;i<seed.length;i+=450){
               const batch=db.batch();
-              seed.slice(i,i+450).forEach(r=>batch.set(db.collection(coll).doc(_docId(r.id)),r));
+              seed.slice(i,i+450).forEach(r=>{
+                const out = strip ? (()=>{ const o={...r}; strip.forEach(f=>delete o[f]); return o; })() : r;
+                batch.set(db.collection(coll).doc(_docId(r.id)),out);
+              });
               await batch.commit();
             }
             if(seed.length) console.log('[GLAMB] migración '+coll+':',seed.length,'registros');

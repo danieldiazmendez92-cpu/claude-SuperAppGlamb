@@ -40,6 +40,12 @@ service cloud.firestore {
     // Colecciones sincronizadas (Fase 3) — un documento por registro.
     // Dos usuarios editando registros distintos ya no se pisan.
     // Mismo nivel de acceso que el estado compartido: cualquier usuario habilitado.
+    // clients/collaborators: movidos del blob a colección propia porque un único
+    // documento con +1000 clientes superaba el límite de 1MB de Firestore y la
+    // escritura fallaba. El doc compartido NO lleva phone/email (van a
+    // clientsPrivate, solo-admin); mismo nivel de exposición que antes en el blob.
+    match /clients/{id}        { allow read, write: if hasAccess(); }
+    match /collaborators/{id}  { allow read, write: if hasAccess(); }
     match /appointments/{id}   { allow read, write: if hasAccess(); }
     match /payments/{id}       { allow read, write: if hasAccess(); }
     match /salesTickets/{id}   { allow read, write: if hasAccess(); }
