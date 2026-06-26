@@ -3429,6 +3429,7 @@
             <p class="subtitle">La memoria viva de GLAMB. Creá clientes, guardá WhatsApp, preferencias y notas clave.</p>
           </div>
           <div class="top-actions">
+            <button class="btn" id="exportClientsBtn" style="display:none">Exportar CSV</button>
             <button class="btn" id="importClientsBtn">Importar CSV</button>
             <button class="btn primary" data-open-client>Nuevo cliente</button>
           </div>
@@ -5469,6 +5470,9 @@
     }
 
     function renderClients(){
+      // Exportar CSV: solo admin (incluye teléfono/email, datos privados)
+      const expBtn=$('exportClientsBtn');
+      if(expBtn) expBtn.style.display = curRole()==='admin' ? '' : 'none';
       const q=state.clientSearch.toLowerCase();
       const list=state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c),...c.tags].join(' ').toLowerCase().includes(q));
       $('clientsList').innerHTML=list.map(c=>{
@@ -5527,6 +5531,32 @@
       fi.click();
     }
     if($('importClientsBtn')) $('importClientsBtn').onclick=()=>importClientsFromCSV();
+    // Exporta la base de clientes a CSV (respaldo / Excel). Solo admin: incluye
+    // teléfono y email (datos privados). Columnas compatibles con el importador.
+    function csvCell(v){
+      const s=String(v==null?'':v);
+      return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+    }
+    function exportClientsToCSV(){
+      if(curRole()!=='admin'){ showToast('Solo el administrador puede exportar la base de clientes.'); return; }
+      const rows=(state.clients||[]).filter(c=>c);
+      if(!rows.length){ showToast('No hay clientes para exportar.'); return; }
+      const headers=['Nombre','Apellido','WhatsApp','Email','Nota'];
+      const lines=[headers.join(',')];
+      rows.forEach(c=>{
+        lines.push([c.first||'',c.last||'',c.phone||'',c.email||'',(c.note&&c.note!=='Sin nota clave.')?c.note:''].map(csvCell).join(','));
+      });
+      const csv='﻿'+lines.join('\r\n'); // BOM para que Excel respete acentos
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      a.download='clientes-glamb-'+new Date().toISOString().slice(0,10)+'.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      showToast(`${rows.length} cliente(s) exportado(s).`);
+    }
+    if($('exportClientsBtn')) $('exportClientsBtn').onclick=()=>exportClientsToCSV();
     function renderTeam(){
       const pros=state.collaborators.filter(c=>c.can).length;
       const groupCount = state.catalog.groups.length;
