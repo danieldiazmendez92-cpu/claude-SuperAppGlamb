@@ -9622,6 +9622,45 @@
       if(state.comms.sentLog.length>100) state.comms.sentLog=state.comms.sentLog.slice(0,100);
       saveState();
     }
+    // ── Invitación de calendario (.ics) para adjuntar a los emails de turno ──
+    // El cliente recibe un evento estándar (iCalendar) que Gmail/Apple/Outlook
+    // detectan y ofrecen "Agregar al calendario" — igual que Fresha.
+    const GLAMB_FROM_EMAIL='glambbelgrano@gmail.com';
+    const _pad2=n=>String(n).padStart(2,'0');
+    function _icsUTC(d){ return d.getUTCFullYear()+_pad2(d.getUTCMonth()+1)+_pad2(d.getUTCDate())+'T'+_pad2(d.getUTCHours())+_pad2(d.getUTCMinutes())+_pad2(d.getUTCSeconds())+'Z'; }
+    function _icsLocalToUTC(dateStr,timeStr){ // hora local Argentina (UTC-3) → instante UTC
+      const d=new Date(`${dateStr}T${(timeStr||'00:00')}:00-03:00`);
+      return isNaN(d)?null:d;
+    }
+    function _addMinutesTime(timeStr,min){
+      const [h,m]=(timeStr||'0:0').split(':').map(Number);
+      const t=h*60+m+min; return _pad2(Math.floor((t%1440)/60))+':'+_pad2(((t%60)+60)%60);
+    }
+    const _icsEsc=s=>String(s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
+    function buildAppointmentICS(appt,c,bizName){
+      if(!appt||!appt.date||!appt.start) return null;
+      const start=_icsLocalToUTC(appt.date,appt.start);
+      const end=_icsLocalToUTC(appt.date, appt.end||_addMinutesTime(appt.start,60));
+      if(!start||!end) return null;
+      const vars=getTemplateVars(appt,c);
+      const toEmail=c?.email||(c?.id&&state.clientsPrivate?.[c.id]?.email)||'';
+      const lines=[
+        'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//GLAMB OS//ES','CALSCALE:GREGORIAN','METHOD:REQUEST',
+        'BEGIN:VEVENT',
+        'UID:'+(appt.id||uid('appt'))+'@glamb-os',
+        'DTSTAMP:'+_icsUTC(new Date()),
+        'DTSTART:'+_icsUTC(start),
+        'DTEND:'+_icsUTC(end),
+        'SUMMARY:'+_icsEsc((appt.service||'Turno')+' · '+bizName),
+        'DESCRIPTION:'+_icsEsc((appt.service||'')+(vars.profesional?(' con '+vars.profesional):'')),
+        'LOCATION:'+_icsEsc(bizName),
+        'ORGANIZER;CN='+_icsEsc(bizName)+':mailto:'+GLAMB_FROM_EMAIL,
+        (toEmail?('ATTENDEE;CN='+_icsEsc(vars.nombreCompleto||vars.nombre)+';RSVP=TRUE:mailto:'+toEmail):''),
+        'STATUS:CONFIRMED','SEQUENCE:0',
+        'END:VEVENT','END:VCALENDAR'
+      ].filter(Boolean);
+      return lines.join('\r\n');
+    }
     async function sendReminderEmail(type,appt,c){
       if(!fbReady||!db) return false;
       const toEmail=c?.email||(c?.id&&state.clientsPrivate?.[c.id]?.email);
@@ -9633,8 +9672,14 @@
       const body=fillTemplate(tpl.body||'',vars);
       // Convierte saltos de línea a <br> para la versión HTML
       const html=body.replace(/\n/g,'<br>');
+      const message={subject,html,text:body};
+      // Adjuntar invitación de calendario en confirmación y recordatorio de turno
+      if(type==='booking'||type==='preEmail'){
+        const ics=buildAppointmentICS(appt,c,vars.bizName);
+        if(ics) message.attachments=[{filename:'turno.ics',content:ics,contentType:'text/calendar; method=REQUEST; charset=UTF-8; name="turno.ics"'}];
+      }
       try{
-        await db.collection('mail').add({to:[toEmail],message:{subject,html,text:body},createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+        await db.collection('mail').add({to:[toEmail],message,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
         logReminder(type,appt?.id||'','email','sent');
         return true;
       }catch(e){
