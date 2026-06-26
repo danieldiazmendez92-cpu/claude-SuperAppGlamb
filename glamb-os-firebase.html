@@ -10614,7 +10614,18 @@ ${context}`;
       'Redactame un WhatsApp de recordatorio','¿Qué debería mejorar el negocio?'
     ];
 
+    // La config de Athenas (API keys) es una credencial propia del dispositivo:
+    // se persiste en localStorage para que quede guardada con certeza, sin
+    // depender del blob compartido en la nube.
+    const ATHENAS_CFG_KEY='glamb-athenas-cfg-v1';
+    function loadAthenasLocal(){
+      try{ const raw=localStorage.getItem(ATHENAS_CFG_KEY); if(raw){ const cfg=JSON.parse(raw); if(cfg&&typeof cfg==='object') state.athenas={...(state.athenas||{}),...cfg}; } }catch(e){}
+    }
+    function saveAthenasLocal(){
+      try{ localStorage.setItem(ATHENAS_CFG_KEY, JSON.stringify(state.athenas||{})); }catch(e){}
+    }
     function renderAthenas(){
+      loadAthenasLocal(); // el valor local siempre gana (re-aplica tras cualquier sync de la nube)
       const msgs=$('athenasMessages'); if(!msgs) return;
       // Show welcome screen if no messages
       if(!msgs.children.length){
@@ -10654,7 +10665,8 @@ ${context}`;
         state.athenas.apiKey=gKey;
         state.athenas.groqApiKey=grKey;
         state.athenas.model=$('athenasModel')?.value||'gemini-1.5-flash';
-        saveState();
+        saveAthenasLocal(); // persistencia local garantizada (credencial del dispositivo)
+        saveState();        // además intenta sincronizar al blob compartido
         showToast('Configuración guardada ✓');
         renderAthenas();
       };
