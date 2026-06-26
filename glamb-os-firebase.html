@@ -4770,21 +4770,40 @@
     // sí las carga (fromCloud falso) porque ahí no hay colección disponible.
     function applyPersisted(data, fromCloud){ if(!data) return; const skip=fromCloud?new Set([...SYNCED_COLLECTIONS.map(s=>s.key),...FINANCE_KEYS]):null; PERSIST_KEYS.forEach(k=>{ if(skip&&skip.has(k)) return; if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
 
+    let _pendingCloud=false; // hay cambios locales aún no confirmados en Firestore
+    function setSaveStatus(s){ // 'saving' | 'saved' | 'error'
+      const el=document.getElementById('saveStatus'); if(!el) return;
+      if(s==='saving'){ el.textContent='Guardando…'; el.style.background='#fff8e1'; el.style.color='#b8860b'; el.style.opacity='1'; }
+      else if(s==='saved'){ el.textContent='Guardado ✓'; el.style.background='#e8f5e9'; el.style.color='#2e7d32'; el.style.opacity='1'; setTimeout(()=>{ if(!_pendingCloud && el.textContent==='Guardado ✓') el.style.opacity='0'; },2000); }
+      else if(s==='error'){ el.textContent='⚠️ Sin guardar — reintentando'; el.style.background='#ffebee'; el.style.color='#c62828'; el.style.opacity='1'; }
+    }
+    // Escribe YA a Firestore (cancela el debounce). Devuelve la promesa de la
+    // escritura del blob para poder esperarla al cerrar la pestaña.
+    function flushCloudNow(){
+      clearTimeout(_cloudTimer); _cloudTimer=null;
+      if(!fbReady || !auth || !auth.currentUser || _applyingRemote || !_blobReady) return null;
+      if(!_pendingCloud) return null;
+      setSaveStatus('saving');
+      // Fase B: el blob compartido NO lleva phone/email de clientes
+      // Fase 3: tampoco lleva las entidades sincronizadas (van por colección)
+      const p=stateDoc.set(serializeForCloud(),{merge:false}).then(()=>{
+        _pendingCloud=false; setSaveStatus('saved');
+      }).catch(e=>{
+        console.error('[GLAMB] guardado en nube falló:', e);
+        setSaveStatus('error');
+        showToast('⚠️ Error al sincronizar con la nube. Cambios guardados localmente.');
+      });
+      syncCollections();
+      saveFinancePrivate();
+      return p;
+    }
     function saveState(){
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); }catch(e){}
       if(fbReady && auth && auth.currentUser && !_applyingRemote){
+        _pendingCloud=true;
+        if(_blobReady) setSaveStatus('saving');
         clearTimeout(_cloudTimer);
-        _cloudTimer = setTimeout(()=>{
-          if(!_blobReady) return; // no escribir hasta leer el estado real de Firestore
-          // Fase B: el blob compartido NO lleva phone/email de clientes
-          // Fase 3: tampoco lleva las entidades sincronizadas (van por colección)
-          stateDoc.set(serializeForCloud(),{merge:false}).catch(e=>{
-            console.error('[GLAMB] guardado en nube falló:', e);
-            showToast('⚠️ Error al sincronizar con la nube. Cambios guardados localmente.');
-          });
-          syncCollections();
-          saveFinancePrivate();
-        }, 800);
+        _cloudTimer = setTimeout(flushCloudNow, 800);
       }
     }
     function loadState(){ // cache local (sincrónico) para arranque sin red
@@ -10895,8 +10914,29 @@ ${context}`;
         }
       });
     }
-    setInterval(()=>{ if(fbReady && auth && auth.currentUser) saveState(); }, 5000);
-    window.addEventListener('beforeunload', ()=>{ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); }catch(e){} });
+    // Indicador de guardado: badge fijo que avisa "Guardando…/Guardado ✓".
+    // Así el usuario sabe cuándo es seguro cerrar la pestaña.
+    (function(){
+      const el=document.createElement('div');
+      el.id='saveStatus';
+      el.style.cssText='position:fixed;bottom:14px;left:14px;z-index:99999;font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.25);opacity:0;transition:opacity .3s;pointer-events:none;font-family:inherit;';
+      document.body.appendChild(el);
+    })();
+
+    // Guardado periódico: solo escribe a la nube si hay cambios pendientes.
+    setInterval(()=>{ flushCloudNow(); }, 5000);
+    // Al cerrar/ocultar la pestaña: forzar la escritura pendiente a Firestore
+    // (antes solo se guardaba en localStorage y se perdía lo cargado en móvil).
+    // visibilitychange→hidden es lo más confiable en móvil: dispara al cambiar
+    // de app, antes de que el sistema mate la pestaña.
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.visibilityState==='hidden'){
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); }catch(e){}
+        flushCloudNow();
+      }
+    });
+    window.addEventListener('pagehide', ()=>{ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); }catch(e){} flushCloudNow(); });
+    window.addEventListener('beforeunload', ()=>{ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); }catch(e){} flushCloudNow(); });
 
     // setState: centraliza mutaciones de state con validación básica
     window.setState = function(key, value) {
