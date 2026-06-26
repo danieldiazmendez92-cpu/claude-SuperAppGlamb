@@ -2,7 +2,7 @@
   "name": "functions",
   "description": "GLAMB OS - Cloud Functions (recordatorios automáticos)",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "private": true,

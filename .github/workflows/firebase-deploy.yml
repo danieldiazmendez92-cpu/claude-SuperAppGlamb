@@ -72,6 +72,8 @@ jobs:
         run: |
           echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/firebase-sa.json
           SA_EMAIL=$(python3 -c "import json; print(json.load(open('/tmp/firebase-sa.json'))['client_email'])" 2>/dev/null || echo "desconocido")
+          # El CLI necesita las dependencias instaladas para analizar las funciones
+          npm install --prefix functions
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json firebase deploy \
             --only functions \
             --project glamb-os \
