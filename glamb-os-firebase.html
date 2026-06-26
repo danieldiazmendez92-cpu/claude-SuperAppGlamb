@@ -9751,16 +9751,11 @@
     }
     function checkAndSendScheduledReminders(){
       if(!state.comms) return;
-      const now=new Date(),today=dateKey(now),nowMins=now.getHours()*60+now.getMinutes();
       const tpls=state.comms.templates||{};
-      const todayAppts=state.appointments.filter(a=>a.date===today&&!a.isAdditional&&!['cancelled','cancelado','voided','completed','no_show'].includes(a.status));
-      for(const appt of todayAppts){
-        const c=client(appt.clientId); if(!c?.id) continue;
-        const apptMins=mins(appt.start);
-        if(tpls.preEmail?.enabled&&nowMins>=apptMins-Number(tpls.preEmail.hoursBeforeEmail||4)*60&&nowMins<apptMins&&!alreadySentReminder('preEmail',appt.id)){
-          sendReminderEmail('preEmail',appt,c).then(ok=>{if(ok) showToast(`Recordatorio email enviado a ${c.first}`);});
-        }
-      }
+      // El recordatorio previo por EMAIL ahora lo envía la Cloud Function
+      // programada (sendAppointmentReminders), que corre en el servidor cada
+      // 15 min — así sale SIEMPRE, esté la app abierta o no. Se quitó de acá
+      // para no enviar duplicados.
       if(tpls.retention?.enabled){
         for(const c of getRetentionCandidates()){
           const cas=state.appointments.filter(a=>a.clientId===c.id&&!a.isAdditional&&a.date);

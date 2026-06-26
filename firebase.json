@@ -2,6 +2,10 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  },
   "hosting": {
     "public": ".",
     "ignore": [
@@ -11,6 +15,7 @@
       "**/node_modules/**",
       "*.md",
       "firestore.rules",
+      "functions/**",
       "glamb-os-working-v6.html",
       "glamb-os-stable.html",
       "caja-mockups.html"

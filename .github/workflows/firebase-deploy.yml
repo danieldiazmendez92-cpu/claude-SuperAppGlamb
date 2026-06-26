@@ -58,3 +58,33 @@ jobs:
             echo "Hosting fue desplegado exitosamente. Las reglas de Firestore NO se actualizaron."
             exit 1
           fi
+
+      - name: Deploy Functions
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLAMB_OS }}
+        # Funciones programadas (recordatorios automáticos). Requiere que estén
+        # habilitadas las APIs: Cloud Functions, Cloud Build, Artifact Registry,
+        # Cloud Run, Cloud Scheduler, Eventarc, Pub/Sub; y que la cuenta de
+        # servicio tenga roles para desplegar funciones (Firebase Admin +
+        # Cloud Functions Admin + Service Account User). Si falla, el log de
+        # abajo indica qué falta; hosting y rules ya quedaron desplegados.
+        continue-on-error: true
+        run: |
+          echo "$GOOGLE_APPLICATION_CREDENTIALS_JSON" > /tmp/firebase-sa.json
+          SA_EMAIL=$(python3 -c "import json; print(json.load(open('/tmp/firebase-sa.json'))['client_email'])" 2>/dev/null || echo "desconocido")
+          GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json firebase deploy \
+            --only functions \
+            --project glamb-os \
+            --non-interactive
+          STATUS=$?
+          rm -f /tmp/firebase-sa.json
+          if [ $STATUS -ne 0 ]; then
+            echo ""
+            echo "ACCION REQUERIDA: el deploy de funciones falló."
+            echo "Cuenta de servicio: ${SA_EMAIL}"
+            echo "Revisá que en Google Cloud Console estén habilitadas las APIs:"
+            echo "  Cloud Functions, Cloud Build, Artifact Registry, Cloud Run,"
+            echo "  Cloud Scheduler, Eventarc, Pub/Sub."
+            echo "Y que la cuenta de servicio tenga: Firebase Admin + Cloud Functions Admin + Service Account User."
+            exit 1
+          fi
