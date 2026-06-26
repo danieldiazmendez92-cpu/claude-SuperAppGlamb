@@ -9661,6 +9661,24 @@
       ].filter(Boolean);
       return lines.join('\r\n');
     }
+    // Link "Agregar a Google Calendar" — abre el calendario pre-cargado.
+    // Funciona en cualquier cliente de correo, a un toque. (El .ics adjunto
+    // cubre Apple Mail/Outlook que lo agregan de forma nativa.)
+    function buildGoogleCalendarUrl(appt,c,bizName){
+      if(!appt||!appt.date||!appt.start) return null;
+      const start=_icsLocalToUTC(appt.date,appt.start);
+      const end=_icsLocalToUTC(appt.date, appt.end||_addMinutesTime(appt.start,60));
+      if(!start||!end) return null;
+      const vars=getTemplateVars(appt,c);
+      const p=new URLSearchParams({
+        action:'TEMPLATE',
+        text:(appt.service||'Turno')+' · '+bizName,
+        dates:_icsUTC(start)+'/'+_icsUTC(end),
+        details:(appt.service||'')+(vars.profesional?(' con '+vars.profesional):''),
+        location:bizName
+      });
+      return 'https://calendar.google.com/calendar/render?'+p.toString();
+    }
     async function sendReminderEmail(type,appt,c){
       if(!fbReady||!db) return false;
       const toEmail=c?.email||(c?.id&&state.clientsPrivate?.[c.id]?.email);
@@ -9671,13 +9689,24 @@
       const subject=fillTemplate(tpl.subject||'',vars);
       const body=fillTemplate(tpl.body||'',vars);
       // Convierte saltos de línea a <br> para la versión HTML
-      const html=body.replace(/\n/g,'<br>');
-      const message={subject,html,text:body};
-      // Adjuntar invitación de calendario en confirmación y recordatorio de turno
+      let html=body.replace(/\n/g,'<br>');
+      let text=body;
+      const message={subject};
+      // Confirmación y recordatorio de turno: botón "Agregar al calendario"
+      // (link universal) + adjunto .ics (Apple Mail/Outlook nativo).
       if(type==='booking'||type==='preEmail'){
+        const gcal=buildGoogleCalendarUrl(appt,c,vars.bizName);
+        if(gcal){
+          html+=`<br><br><a href="${gcal}" style="display:inline-block;background:#B8963E;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600;font-family:Arial,sans-serif">📅 Agregar a mi calendario</a>`;
+          text+=`\n\n📅 Agregar a mi calendario: ${gcal}`;
+        }
         const ics=buildAppointmentICS(appt,c,vars.bizName);
-        if(ics) message.attachments=[{filename:'turno.ics',content:ics,contentType:'text/calendar; method=REQUEST; charset=UTF-8; name="turno.ics"'}];
+        if(ics){
+          let b64=''; try{ b64=btoa(unescape(encodeURIComponent(ics))); }catch(e){}
+          if(b64) message.attachments=[{filename:'turno.ics',content:b64,encoding:'base64',contentType:'text/calendar; method=REQUEST; charset=UTF-8; name="turno.ics"'}];
+        }
       }
+      message.html=html; message.text=text;
       try{
         await db.collection('mail').add({to:[toEmail],message,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
         logReminder(type,appt?.id||'','email','sent');
