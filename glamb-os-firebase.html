@@ -1234,8 +1234,10 @@
     .appointment-block.status-in_progress  { border-left-color: #3f7d4f; background: #E4F0E8; }
     .appointment-block.status-completed    { border-left-color: #94948E; background: #ECECE8; opacity: 0.8; }
     .appointment-block.status-cancelled    { border-left-color: #c46a6a; background: #F8E9E9; opacity: 0.62; }
-    .appointment-block.status-no_show     { border-left-color: #C2935A; background: #F8EEE0; opacity: 0.68; }
+    .appointment-block.status-no_show     { border-left-color: #C2546B; background: #F9DCE2; opacity: 0.85; }
     .appointment-block.vip                { border-left-color: #B8963E !important; background: #F7EFD9; }
+    /* Turno cobrado: verde claro (gana sobre confirmado por ir después en el CSS). */
+    .appointment-block.is-paid            { border-left-color: #2E8B57; background: #D9F2E1; }
     .appointment-block.pending            { border-left-style: dashed; }
     .appointment-block.additional         { opacity: 0.65; border-left-style: dashed; }
     .add-flag { font-size: 9px !important; }
@@ -1590,23 +1592,24 @@
       right: 3px;
       padding: 5px 9px;
       border-radius: 8px;
-      background: repeating-linear-gradient(135deg, #ECEAE6 0 7px, #E2DFDA 7px 14px);
-      color: var(--text-muted);
-      font-size: 10.5px;
-      font-weight: 500;
+      background: #837E76;
+      border-left: 3px solid #5E5A53;
+      color: #FBFAF8;
+      font-size: 11px;
+      font-weight: 600;
       overflow: hidden;
       cursor: pointer;
       display: flex;
       align-items: flex-start;
       gap: 4px;
     }
-    .blocker:hover { outline: 2px solid #b0a89a; }
+    .blocker:hover { outline: 2px solid #5E5A53; }
     .blocker-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .blocker-del {
       flex-shrink: 0;
       background: none;
       border: none;
-      color: #a09488;
+      color: #F0EEEA;
       font-size: 14px;
       line-height: 1;
       cursor: pointer;
@@ -1615,7 +1618,7 @@
       display: none;
     }
     .blocker:hover .blocker-del { display: block; }
-    .blocker-del:hover { background: rgba(0,0,0,0.1); color: #c0392b; }
+    .blocker-del:hover { background: rgba(255,255,255,0.2); color: #fff; }
 
     .empty-slot {
       position: absolute;
@@ -3277,7 +3280,8 @@
     .appt-status-pill.in_progress{background:#D4EBDA;color:#2d6b40}
     .appt-status-pill.completed{background:#E8E8E4;color:#7a7a76;opacity:0.9}
     .appt-status-pill.cancelled{background:#F5E0E0;color:#a04040}
-    .appt-status-pill.no_show{background:#F5EAD8;color:#8a5c20}
+    .appt-status-pill.no_show{background:#F7D6DE;color:#9a2c45}
+    .appt-status-pill.paid{background:#CDEBD7;color:#1f6b3f}
     .appt-status-pill.pay-pending{background:#FFF0D6;color:#9a6010;border:1px dashed #C2935A}
     .appt-footer-row{display:flex;align-items:center;justify-content:space-between;margin-top:auto;padding-top:2px}
     .appt-seña{font-size:9.5px;font-weight:600;color:#3f7d4f}
@@ -7542,11 +7546,16 @@
       });
       document.querySelectorAll('[data-member-col]').forEach(col=>{col.ondragover=e=>{e.preventDefault(); col.classList.add('drop-target')}; col.ondragleave=()=>col.classList.remove('drop-target'); col.ondrop=e=>dropAppointment(e,col)});
       document.querySelectorAll('[data-slot]').forEach(el=>el.onclick=ev=>{
-        // Calcular la hora exacta del click dentro del slot
+        // Calcular la hora del toque dentro del slot.
+        // offsetY no es confiable en celular (depende de en qué hijo cae el toque):
+        // usamos la posición real respecto al slot. Y redondeamos HACIA ABAJO para
+        // que dé la hora que tocaste (tocar 13:00 abre 13:00, no 13:30).
         const interval = parseInt($('slotInterval')?.value||30);
         const slotStartMins = mins(el.dataset.time);
-        const rawMins = slotStartMins + ev.offsetY / pxPerMin;
-        const rounded = Math.round(rawMins / interval) * interval;
+        const rect = el.getBoundingClientRect();
+        const y = (ev.clientY!=null ? ev.clientY - rect.top : ev.offsetY||0);
+        const rawMins = slotStartMins + y / pxPerMin;
+        const rounded = Math.floor(rawMins / interval) * interval;
         const clamped = Math.max(startHour*60, Math.min(endHour*60 - interval, rounded));
         const hh = String(Math.floor(clamped/60)).padStart(2,'0');
         const mm = String(clamped%60).padStart(2,'0');
@@ -7573,7 +7582,7 @@
       const today=dateKey(state.agenda.currentDate);
       return state.blockers
         .filter(b=>b.memberId===memberId && (!b.date || b.date===today))
-        .map(b=>`<div class="blocker" data-blocker="${b.id}" style="top:${topFor(b.start)}px;height:${heightFor(b.start,b.end)}px"><span class="blocker-text">${b.start}–${b.end} · ${b.label}${b.date?'':' ↻'}</span><button class="blocker-del" data-blocker-del="${b.id}" title="Eliminar bloqueo">×</button></div>`).join('');
+        .map(b=>`<div class="blocker" data-blocker="${b.id}" style="top:${topFor(b.start)}px;height:${heightFor(b.start,b.end)}px"><span class="blocker-text">${esc(b.label||'Bloqueo')}${b.date?'':' ↻'} · ${b.start}–${b.end}</span><button class="blocker-del" data-blocker-del="${b.id}" title="Eliminar bloqueo">×</button></div>`).join('');
     }
     function renderUnavailableCol(m){
       const dayMap={0:'Domingo',1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
@@ -7620,24 +7629,28 @@
       const blockH = heightFor(a.start, a.end);
       const statusKey = (a.status||'confirmed').replace(/\s+/g,'_');
       const statusClass = `status-${statusKey}`;
+      // Turno cobrado (hay ticket confirmado/parcial): se pinta verde claro.
+      // No aplica si está cancelado o marcado inasistencia (esos tienen su propio color).
+      const charged = !['cancelled','cancelado','voided','no_show'].includes(a.status) && reservationCharged(reservationKey(a));
+      const paidClass = charged ? 'is-paid' : '';
       const vipClass = c.tags.includes('VIP') ? 'vip' : '';
       const pendingClass = paid==='pending' ? 'pending' : '';
       const additionalClass = a.isAdditional ? 'additional' : '';
       const durationMins = mins(a.end) - mins(a.start);
       if(blockH < 28){
-        return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px"><div class="appt-meta-tiny">${a.start}${!a.isAdditional?' '+fullName(c):''}</div></div>`;
+        return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${paidClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px"><div class="appt-meta-tiny">${a.start}${!a.isAdditional?' '+fullName(c):''}</div></div>`;
       }
-      const STATUS_LABELS={confirmed:'Confirmado',in_progress:'En curso',completed:'Completado',cancelled:'Cancelado',no_show:'No vino'};
+      const STATUS_LABELS={confirmed:'Confirmado',in_progress:'En curso',completed:'Completado',cancelled:'Cancelado',no_show:'Inasistencia'};
       const isPendingPay = paid==='pending';
-      const pillLabel = isPendingPay ? 'Pago pendiente' : (STATUS_LABELS[statusKey]||statusKey);
-      const pillCls = isPendingPay ? 'pay-pending' : statusKey;
+      const pillLabel = charged ? 'Pagado' : (isPendingPay ? 'Pago pendiente' : (STATUS_LABELS[statusKey]||statusKey));
+      const pillCls = charged ? 'paid' : (isPendingPay ? 'pay-pending' : statusKey);
       const headerRow = `<div class="appt-header-row"><span class="appt-time-label">${a.start}${durationMins>=30?' · '+durationMins+' min':''}</span>${blockH>=44?`<span class="appt-status-pill ${pillCls}">${pillLabel}</span>`:''}</div>`;
       const clientRow = !a.isAdditional ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
       const serviceRow = blockH>=56 ? `<div class="appt-service">${a.service}</div>` : '';
       const bkId = 'BK-'+(a.id||'').slice(-4).toUpperCase();
       const hasFooter = blockH>=82;
       const footerRow = hasFooter ? `<div class="appt-footer-row">${depositAmount>0?`<span class="appt-seña">Seña ${money(depositAmount)}</span>`:'<span></span>'}<span class="appt-bkid">${bkId}</span></div>` : '';
-      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${headerRow}${clientRow}${serviceRow}${footerRow}</div>`;
+      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${paidClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${headerRow}${clientRow}${serviceRow}${footerRow}</div>`;
     }
     function renderWeekView(){
       const d = new Date(state.agenda.currentDate);
@@ -7755,6 +7768,49 @@
       notifyStaff('Turno cancelado',`${fullName(client(a.clientId))} · ${a.service} a las ${a.start}`,'appt-cancel-'+id);
       openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();
     }
+    // Inasistencia: el cliente no vino. El turno queda en rojo/rosa (status no_show)
+    // y la seña se retiene como ingreso del local (se registra un ticket cobrado).
+    function markNoShow(id){
+      const a=state.appointments.find(x=>x.id===id); if(!a) return;
+      const c=client(a.clientId);
+      const rKey=reservationKey(a);
+      const related = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId) : [a];
+      const sena = related.reduce((s,r)=>s+appointmentDepositAmount(r),0) || appointmentDepositAmount(a);
+      const alreadyCharged = reservationCharged(rKey);
+      const msg = (sena>0 && !alreadyCharged)
+        ? `¿Marcar inasistencia de ${fullName(c)}? La seña de ${money(sena)} se retiene como ingreso del local.`
+        : `¿Marcar inasistencia de ${fullName(c)}?`;
+      showConfirm(msg, ()=>{
+        related.forEach(r=>{ r.status='no_show'; });
+        if(sena>0 && !alreadyCharged){
+          // ¿la seña ya entró como pago (deposit_received) para esta reserva?
+          const receivedHere = rKey ? state.payments.filter(p=>p.type==='deposit_received'&&!p.voided&&p.bookingId===rKey).reduce((s,p)=>s+Number(p.amount||0),0) : 0;
+          const applied = receivedHere>0 ? Math.min(receivedHere, sena) : 0;
+          const ticket={
+            id:uid('ticket'), clientId:c.id||null, appointmentId:a.id, reservationId:rKey, origin:'no_show',
+            clientNameSnapshot:fullName(c), status:'confirmed',
+            lines:[{collaboratorId:a.memberId, group:a.group||'', service:'Seña por inasistencia', variantId:null, addons:[], finalPrice:sena, tipAmount:0, reference:''}],
+            servicesTotal:sena, tipsTotal:0, grossTotal:sena,
+            depositAppliedTotal:applied, amountToCollectToday:Math.max(0,sena-applied),
+            pendingBalance:0, totalDueToday:sena,
+            note:'Inasistencia — seña retenida como ingreso',
+            createdBy: state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),
+            createdAt:new Date().toISOString()
+          };
+          state.salesTickets.unshift(ticket);
+          if(applied>0){
+            // la seña ya estaba en caja: se aplica al ticket (no suma efectivo nuevo)
+            addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:c.id||null,amount:applied,method:'Anticipo',type:'deposit_applied',reference:'Seña por inasistencia',note:'Seña retenida (inasistencia)'});
+          } else {
+            // no había pago registrado: se reconoce el ingreso ahora
+            addPayment({id:uid('pay'),ticketId:ticket.id,clientId:c.id||null,amount:sena,method:a.depositMethod||'Efectivo',type:'service',reference:'Seña por inasistencia',note:'Seña retenida (inasistencia)'});
+          }
+        }
+        saveState(); closePopover(); renderAll();
+        showToast((sena>0 && !alreadyCharged) ? `Inasistencia marcada. Seña ${money(sena)} registrada como ingreso.` : 'Inasistencia marcada.');
+        notifyStaff('Inasistencia',`${fullName(c)} · ${a.service} a las ${a.start}`,'noshow-'+id);
+      });
+    }
     function deleteAppointment(id){
       showConfirm('¿Eliminar este turno permanentemente? No se puede deshacer.', ()=>{
         state.appointments = state.appointments.filter(a=>a.id!==id);
@@ -7795,6 +7851,7 @@
           <button class="small-btn" data-action="editApptAndClose" data-id="${a.id}">Editar turno</button>
           <button class="small-btn ${a.deposit==='paid'?'primary':''}" data-action="togglePaid" data-id="${a.id}">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
           <button class="small-btn" data-action="cancelAppointment" data-id="${a.id}">Cancelar</button>
+          <button class="small-btn" data-action="markNoShow" data-id="${a.id}" style="border-color:#C2546B;color:#9a2c45;">Inasistencia</button>
           <button class="small-btn danger" data-action="deleteAppointment" data-id="${a.id}">Eliminar</button>
         </div>`;
       const r=e.currentTarget.getBoundingClientRect?e.currentTarget.getBoundingClientRect():{right:300,top:120};
@@ -11360,6 +11417,7 @@ ${context}`;
       doSendSurveyWA:          el => doSendSurveyWA(el.dataset.client, el.dataset.appt),
       doSendSurveyEmail:       el => doSendSurveyEmail(el.dataset.client, el.dataset.appt),
       cancelAppointment:       el => cancelAppointment(el.dataset.id),
+      markNoShow:              el => markNoShow(el.dataset.id),
       deleteAppointment:       el => deleteAppointment(el.dataset.id),
       chargeFromAppointment:   el => chargeFromAppointment(el.dataset.id),
       confirmLiquidationPaid:  el => confirmLiquidationPaid(el.dataset.id),
