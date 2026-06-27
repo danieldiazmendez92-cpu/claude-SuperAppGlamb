@@ -10294,7 +10294,10 @@
     // ── FIN COMUNICACIONES ────────────────────────────────────────────────────
 
     // ── ATHENAS IA ────────────────────────────────────────────────────────────
-    function buildAthenaContext(){
+    function buildAthenaContext(userMessage, opts){
+      // maxChars acota el tamaño para no superar el límite de tokens/minuto de
+      // Groq (12k TPM en el plan gratis). Gemini recibe un presupuesto amplio.
+      const {maxChars=120000, clientCap=600, futureCap=250, histCap=250}=opts||{};
       const now=new Date(), today=dateKey(now);
       const dow=now.getDay(), weekStart=dateKey(new Date(now.getTime()-(dow===0?6:dow-1)*86400000));
       const d90=dateKey(new Date(now.getTime()-90*86400000));
@@ -10336,50 +10339,78 @@
       // Clients with last-visit date for "quién no vino" queries
       const lastVisit={};
       pastAppts.forEach(a=>{if(a.clientId&&(!lastVisit[a.clientId]||a.date>lastVisit[a.clientId])) lastVisit[a.clientId]=a.date;});
-      const clientList=state.clients.map(c=>`${fullName(c)} (${clientCode(c)})${lastVisit[c.id]?' — últ.visita '+lastVisit[c.id]:' — sin turnos'}`).join('\n  ');
       const todayStr=`${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} (${['domingo','lunes','martes','miércoles','jueves','viernes','sábado'][now.getDay()]})`;
-      return `
-=== DATOS EN TIEMPO REAL (${todayStr}) ===
+
+      // ── Sección de CLIENTES adaptativa ──────────────────────────────────────
+      // Con +1000 clientes, volcar la base entera revienta el límite de tokens.
+      // Mandamos solo lo que la pregunta necesita, recortado a clientCap.
+      const q=(userMessage||'').toLowerCase();
+      const clientLine=c=>`${fullName(c)} (${clientCode(c)})${lastVisit[c.id]?' — últ.visita '+lastVisit[c.id]:' — sin turnos registrados'}`;
+      const namedClients=state.clients.filter(c=>{const n=fullName(c).toLowerCase();return n.length>2 && q.includes(n);});
+      const wantsInactive=/inactiv|perd|recuper|reactiv|no\s+vin|sin\s+venir|d[ií]as?\s+sin|tiempo\s+sin|hace\s+(m[aá]s\s+de\s+)?\d|hace\s+(un|una|dos|tres|mucho)/.test(q);
+      const wantsClients=wantsInactive||namedClients.length>0||/client|vino|vinier|viene|visit|cumplea|tel[eé]fono|contacto|base\s+de\s+datos|listado|qui[eé]n(es)?\s+(no|son|tiene)/.test(q);
+      let clientBlock;
+      if(namedClients.length){
+        clientBlock=`CLIENTES MENCIONADOS EN LA CONSULTA (${namedClients.length}):\n  ${namedClients.slice(0,40).map(clientLine).join('\n  ')}`;
+      } else if(wantsInactive){
+        const inactive=state.clients.map(c=>({c,lv:lastVisit[c.id]||''}))
+          .filter(x=>x.lv<d30)               // sin visita o última visita > 30 días
+          .sort((a,b)=>a.lv.localeCompare(b.lv)); // más inactivos / sin turnos primero
+        const shown=inactive.slice(0,clientCap);
+        clientBlock=`CLIENTES SIN VENIR HACE +30 DÍAS (${inactive.length} en total, más inactivos primero):\n  ${shown.map(x=>clientLine(x.c)).join('\n  ')||'Ninguno'}${inactive.length>shown.length?`\n  …y ${inactive.length-shown.length} más`:''}`;
+      } else if(wantsClients){
+        const sorted=[...state.clients].sort((a,b)=>(lastVisit[b.id]||'').localeCompare(lastVisit[a.id]||''));
+        const shown=sorted.slice(0,clientCap);
+        clientBlock=`CLIENTES (${state.clients.length} total, más recientes primero):\n  ${shown.map(clientLine).join('\n  ')}${state.clients.length>shown.length?`\n  …y ${state.clients.length-shown.length} más (preguntá por un cliente puntual o por inactivos)`:''}`;
+      } else {
+        clientBlock=`CLIENTES: ${state.clients.length} registrados. (No los listo a todos para ahorrar espacio; preguntá por un cliente puntual, por inactivos o por quién no vino hace X días.)`;
+      }
+
+      // Turnos: futuros y el historial reciente también se acotan.
+      const futureShown=futureAppts.slice(0,futureCap);
+      const recentShown=[...recentPast].reverse().slice(0,histCap);
+
+      // ── Bloques en orden de prioridad. Si no entran en maxChars, se recortan
+      //    los del final (los menos críticos). ─────────────────────────────────
+      const blocks=[
+`=== DATOS EN TIEMPO REAL (${todayStr}) ===
 
 RESUMEN GENERAL:
 - Clientes registrados: ${state.clients.length}
 - Profesionales activas: ${state.collaborators.filter(c=>c.can).length}
 - Turnos hoy: ${todayAppts.length} | Esta semana (activos): ${weekAppts.length}
 - Turnos futuros agendados: ${futureAppts.length}
-- Turnos pasados (últ. 90 días): ${recentPast.length} | Más antiguos: ${olderPastCount} (ver resumen mensual)
+- Turnos pasados (últ. 90 días): ${recentPast.length} | Más antiguos: ${olderPastCount}
 - Cancelados/anulados histórico total: ${cancelledAll.length}
-- Facturación semana: $${weekRev.toLocaleString('es-AR')}
+- Facturación semana: $${weekRev.toLocaleString('es-AR')}`,
+`TURNOS DE HOY:
+${todayAppts.length?todayAppts.sort((a,b)=>a.start.localeCompare(b.start)).map(apptLine).join('\n'):'  Sin turnos hoy'}`,
+`SERVICIOS ESTA SEMANA (top):
+${topSvcs.length?topSvcs.map(([s,n])=>`  ${s}: ${n} turno${n!==1?'s':''}`).join('\n'):'  Sin datos'}`,
+`OCUPACIÓN SEMANA POR PROFESIONAL:
+${collabStats.map(c=>`  ${c.name}: ${c.semana} esta semana / ${c.hoy} hoy`).join('\n')||'  Sin datos'}`,
+`RESUMEN FINANCIERO POR MES (últimos 24 meses, tickets cobrados):
+${monthSummary||'  Sin datos de tickets'}`,
+`EQUIPO (colaboradoras):
+${state.collaborators.map(c=>`  ${fullName(c)} — ${(c.groups||[]).join(', ')||c.type} — ${c.can?'Recibe turnos':'No asignable'} — Días: ${c.days||'?'}`).join('\n')}`,
+clientBlock,
+`TURNOS FUTUROS (${futureAppts.length} agendados${futureAppts.length>futureShown.length?`, muestro próximos ${futureShown.length}`:''}):
+${futureShown.length?futureShown.map(apptLine).join('\n'):'  Sin turnos futuros'}`,
+`CATÁLOGO (servicios con precios):
+${(state.catalog?.groups||[]).map(g=>`  ${g.name}:\n${(g.services||[]).map(s=>`    - ${s.name}: ${(s.variants||[]).map(v=>`${v.name} $${Number(v.price||0).toLocaleString('es-AR')} (${v.duration}min)`).join(' / ')||'sin variantes'}`).join('\n')}`).join('\n')||'  Sin catálogo'}`,
+`HISTORIAL RECIENTE (${recentPast.length} turnos en 90 días${recentPast.length>recentShown.length?`, muestro los últimos ${recentShown.length}`:''}):
+${recentShown.length?recentShown.map(apptLine).join('\n'):'  Sin historial reciente'}`,
+`CANCELADOS/ANULADOS ÚLTIMOS 30 DÍAS (${cancelledRecent.length} de ${cancelledAll.length} totales):
+${cancelledRecent.length?cancelledRecent.reverse().map(a=>`  ${a.date} · ${fullName(client(a.clientId))||'(sin cliente)'} · ${a.service} · ${a.status}`).join('\n'):'  Ninguno reciente'}`
+      ];
 
-TURNOS DE HOY:
-${todayAppts.length?todayAppts.sort((a,b)=>a.start.localeCompare(b.start)).map(apptLine).join('\n'):'  Sin turnos hoy'}
-
-TURNOS FUTUROS — TODOS (${futureAppts.length} agendados):
-${futureAppts.length?futureAppts.map(apptLine).join('\n'):'  Sin turnos futuros'}
-
-HISTORIAL ÚLTIMOS 90 DÍAS (${recentPast.length} turnos, más reciente primero):
-${recentPast.length?[...recentPast].reverse().map(apptLine).join('\n'):'  Sin historial reciente'}
-${olderPastCount>0?`(Hay ${olderPastCount} turnos anteriores al ${d90} — consultar resumen mensual para datos históricos)`:''  }
-
-CANCELADOS/ANULADOS ÚLTIMOS 30 DÍAS (${cancelledRecent.length} de ${cancelledAll.length} totales):
-${cancelledRecent.length?cancelledRecent.reverse().map(a=>`  ${a.date} · ${fullName(client(a.clientId))||'(sin cliente)'} · ${a.service} · ${a.status}`).join('\n'):'  Ninguno reciente'}
-
-RESUMEN FINANCIERO POR MES (últimos 24 meses, tickets cobrados):
-${monthSummary||'  Sin datos de tickets'}
-
-SERVICIOS ESTA SEMANA (top):
-${topSvcs.length?topSvcs.map(([s,n])=>`  ${s}: ${n} turno${n!==1?'s':''}`).join('\n'):'  Sin datos'}
-
-OCUPACIÓN SEMANA POR PROFESIONAL:
-${collabStats.map(c=>`  ${c.name}: ${c.semana} esta semana / ${c.hoy} hoy`).join('\n')||'  Sin datos'}
-
-CATÁLOGO (servicios con precios):
-${(state.catalog?.groups||[]).map(g=>`  ${g.name}:\n${(g.services||[]).map(s=>`    - ${s.name}: ${(s.variants||[]).map(v=>`${v.name} $${Number(v.price||0).toLocaleString('es-AR')} (${v.duration}min)`).join(' / ')||'sin variantes'}`).join('\n')}`).join('\n')||'  Sin catálogo'}
-
-EQUIPO (colaboradoras):
-${state.collaborators.map(c=>`  ${fullName(c)} — ${(c.groups||[]).join(', ')||c.type} — ${c.can?'Recibe turnos':'No asignable'} — Días: ${c.days||'?'}`).join('\n')}
-
-CLIENTES (${state.clients.length} total, con última visita):
-  ${clientList}`;
+      let out='', dropped=0;
+      for(const b of blocks){
+        if(out.length+b.length+2<=maxChars) out+=(out?'\n\n':'')+b;
+        else dropped++;
+      }
+      if(dropped) out+=`\n\n(Se omitieron ${dropped} sección/es por tamaño; preguntá puntualmente para verlas.)`;
+      return out;
     }
 
     function renderMarkdown(text){
@@ -10435,7 +10466,8 @@ CLIENTES (${state.clients.length} total, con última visita):
         appendAthenasMsg('user',userMessage);
         appendAthenasMsg('ai','',true);
         athenasHistory.push({role:'user',content:userMessage});
-        const context=buildAthenaContext();
+        // Groq (plan gratis): 12k tokens/minuto. Acotamos fuerte el contexto.
+        const context=buildAthenaContext(userMessage,{maxChars:22000,clientCap:120,futureCap:50,histCap:50});
         const systemPrompt=`Sos **Athenas**, la asistente inteligente de GLAMB OS — el sistema de gestión del salón de belleza GLAMB.\n\n## Tu estilo\nProfesional, cálida y directa. Respondés en español rioplatense (usás "vos"). Respondés de forma concisa. Podés usar emojis con moderación. Usás markdown para organizar respuestas largas.\n\n## Lo que podés hacer\n- Responder preguntas sobre los datos del negocio (turnos, facturación, clientes, ocupación, servicios)\n- Guiar al equipo en el uso de la app\n- Dar insights, alertas y recomendaciones basadas en los datos\n- Redactar mensajes para clientes (WhatsApp, email) si te lo piden\n- Proponer acciones concretas para mejorar el negocio\n\n${context}`;
         const messages=[
           {role:'system',content:systemPrompt},
@@ -10499,7 +10531,8 @@ CLIENTES (${state.clients.length} total, con última visita):
       appendAthenasMsg('user',userMessage);
       appendAthenasMsg('ai','',true);
       athenasHistory.push({role:'user',content:userMessage});
-      const context=buildAthenaContext();
+      // Gemini tiene ventana enorme: presupuesto amplio.
+      const context=buildAthenaContext(userMessage,{maxChars:120000,clientCap:600,futureCap:250,histCap:250});
       const systemPrompt=`Sos **Athenas**, la asistente inteligente de GLAMB OS — el sistema de gestión del salón de belleza GLAMB.
 
 ## Tu estilo
