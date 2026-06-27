@@ -45,6 +45,9 @@
 
     html {
       scroll-behavior: smooth;
+      /* Evita el "tirar para recargar" accidental al hacer scroll hacia arriba
+         (en el iPhone se recargaba la app sin querer). */
+      overscroll-behavior-y: contain;
     }
 
     body {
@@ -54,6 +57,7 @@
       font-family: 'DM Sans', sans-serif;
       font-weight: 300;
       -webkit-font-smoothing: antialiased;
+      overscroll-behavior-y: contain;
     }
 
     button,
@@ -62,6 +66,15 @@
     textarea {
       font-family: 'DM Sans', sans-serif;
       font-weight: 300;
+    }
+
+    /* iPhone/iOS: Safari hace zoom automático al tocar un campo cuya letra mide
+       menos de 16px, y al volver con los dedos se desacomoda todo o se recarga.
+       Forzando 16px en celular, el zoom automático ya no se dispara. */
+    @media (max-width: 820px) {
+      input, select, textarea {
+        font-size: 16px !important;
+      }
     }
 
     button {
