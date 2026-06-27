@@ -44,20 +44,19 @@
     }
 
     html {
-      scroll-behavior: smooth;
-      /* Evita el "tirar para recargar" accidental al hacer scroll hacia arriba
-         (en el iPhone se recargaba la app sin querer). */
-      overscroll-behavior-y: contain;
+      height: 100%;
+      overflow: hidden; /* el body nunca scrollea → iOS no puede disparar pull-to-refresh */
     }
 
     body {
       margin: 0;
+      height: 100%;
+      overflow: hidden;
       background: var(--bg);
       color: var(--text);
       font-family: 'DM Sans', sans-serif;
       font-weight: 300;
       -webkit-font-smoothing: antialiased;
-      overscroll-behavior-y: contain;
     }
 
     button,
@@ -100,7 +99,7 @@
     .app {
       display: grid;
       grid-template-columns: 64px 1fr;
-      min-height: 100vh;
+      height: 100vh;
     }
 
     .sidebar {
@@ -198,6 +197,10 @@
     main {
       padding: 32px 36px;
       min-width: 0;
+      min-height: 0;          /* permite que grid lo comprima */
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      box-sizing: border-box;
     }
 
     .page {
@@ -3007,6 +3010,9 @@
     @media (max-width: 1100px) {
       .app {
         grid-template-columns: 1fr;
+        /* nav ocupa auto, main ocupa el resto del 100vh */
+        grid-template-rows: auto 1fr;
+        height: 100vh;
       }
 
       .sidebar {
@@ -3019,6 +3025,8 @@
 
       main {
         padding-top: 14px;
+        min-height: 0; /* clave: permite que el grid comprima main al 1fr disponible */
+        overflow-y: auto;
       }
 
       #page-agenda {
@@ -4600,10 +4608,9 @@
 (function() {
 'use strict';
 
-    // iOS Safari: overscroll-behavior-y no funciona → bloqueamos pull-to-refresh
-    // con JS. Bloquea arrastre de 1 dedo hacia abajo cuando no hay contenido
-    // scrolleable por encima. Con user-scalable=no el pinch-zoom ya no ocurre,
-    // pero mantenemos el guard multi-toque por robustez.
+    // El body tiene overflow:hidden → nunca scrollea → iOS no puede disparar
+    // pull-to-refresh. El listener de abajo es un guard adicional por si algún
+    // scroll de inercia llega al documento de todos modos.
     (function(){
       let startY = 0;
       let wasMultiTouch = false;
@@ -4613,33 +4620,28 @@
         startY = e.touches[0].clientY;
       }, { passive: true });
 
-      // Al soltar un dedo en un gesto multi-toque, reajustar startY para no
-      // confundir el dedo restante con un pull hacia abajo.
       document.addEventListener('touchend', function(e){
-        if(e.touches.length === 1){
-          startY = e.touches[0].clientY;
-          wasMultiTouch = false;
-        } else if(e.touches.length === 0){
-          wasMultiTouch = false;
-        }
+        if(e.touches.length === 1){ startY = e.touches[0].clientY; wasMultiTouch = false; }
+        else if(e.touches.length === 0){ wasMultiTouch = false; }
       }, { passive: true });
 
       document.addEventListener('touchmove', function(e){
         if(e.touches.length !== 1 || wasMultiTouch) return;
         const dy = e.touches[0].clientY - startY;
-        if(dy <= 0) return; // arrastrando hacia arriba: sin riesgo
-
+        if(dy <= 0) return;
+        // Si la página (body) está scrolleada dejar pasar (scroll legítimo hacia arriba)
+        if(window.scrollY > 0) return;
         // Buscar el ancestro scrolleable más cercano
         let el = e.target;
         while(el && el !== document.documentElement){
           const ov = getComputedStyle(el).overflowY;
           if(/(auto|scroll)/.test(ov) && el.scrollHeight > el.clientHeight + 1){
-            if(el.scrollTop > 0) return; // tiene contenido arriba → scroll normal
-            break; // scrolleable pero en el tope → cae a preventDefault
+            if(el.scrollTop > 0) return;
+            break;
           }
           el = el.parentElement;
         }
-        e.preventDefault(); // bloquear pull-to-refresh / elastic bounce
+        e.preventDefault();
       }, { passive: false });
     })();
 
