@@ -3042,6 +3042,15 @@
       .layout-2 {
         grid-template-columns: 1fr;
       }
+
+      /* Cobro en celular: panel de servicios y ticket apilados (no lado a lado,
+         que se cortaba a la derecha). El ticket queda debajo y fluye normal. */
+      .wiz-grid {
+        grid-template-columns: 1fr;
+      }
+      .paper-ticket {
+        position: static;
+      }
     }
 
     /* Botón flotante "Nuevo turno" (visible solo en celular) */
@@ -5268,6 +5277,10 @@
     const memberAvatarHtml=m=>m.photo?`<div class="member-avatar"><img src="${m.photo}" alt="${initials(m)}"></div>`:`<div class="member-avatar">${initials(m)}</div>`;
     const mins=t=>{const[h,m]=t.split(':').map(Number);return h*60+m}; const topFor=t=>(mins(t)-startHour*60)*pxPerMin; const heightFor=(s,e)=>Math.max(24,(mins(e)-mins(s))*pxPerMin-3);
     const client=id=>state.clients.find(c=>c.id===id)||{id:null,code:'—',first:'Cliente',last:'eliminado',phone:'—',email:'',tags:[],note:''}; const member=id=>state.collaborators.find(c=>c.id===id)||{id:null,first:'Sin',last:'profesional',phone:'—',email:'',services:[],groups:[],can:false};
+    // Turno "huérfano": su cliente fue borrado (clientId apunta a alguien que ya
+    // no existe). No se muestra como turno activo en agenda/caja/centro para que
+    // no aparezca el fantasma "Cliente eliminado". El dato sigue en la base.
+    const isOrphanAppt=a=>!!(a && a.clientId && !state.clients.some(c=>c.id===a.clientId));
     function showToast(m){toast.textContent=m;toast.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>toast.classList.remove('show'),3000)}
 
     // ── Notificaciones push al staff ────────────────────────────────────
@@ -5440,7 +5453,7 @@
     document.querySelectorAll('[data-open-appointment]').forEach(b=>b.onclick=()=>{fillAppointmentOptions();openDrawer('appointmentDrawer')});
     document.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeDrawers); $('overlay').onclick=closeDrawers;
 
-    function activeAppointments(){ return state.appointments.filter(a=>!['cancelled','cancelado','voided'].includes(a.status)); }
+    function activeAppointments(){ return state.appointments.filter(a=>!['cancelled','cancelado','voided'].includes(a.status) && !isOrphanAppt(a)); }
     function reservationKey(appt){ return appt?.bookingId || appt?.id || null; }
     // Un turno ya tiene cobro si existe un ticket (confirmado o parcial) para su reserva.
     function reservationCharged(key){
@@ -7414,7 +7427,7 @@
       return members;
     }
     function visibleAppointments(){
-      return state.appointments.filter(a => (!a.date || a.date===dateKey(state.agenda.currentDate)) && (state.agenda.group==='Todos' || a.group===state.agenda.group) && visibleMembers().some(m=>m.id===a.memberId));
+      return state.appointments.filter(a => !isOrphanAppt(a) && (!a.date || a.date===dateKey(state.agenda.currentDate)) && (state.agenda.group==='Todos' || a.group===state.agenda.group) && visibleMembers().some(m=>m.id===a.memberId));
     }
     function refreshAgendaFilters(){
       const current = state.agenda.member;
