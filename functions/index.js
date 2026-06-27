@@ -48,10 +48,16 @@ exports.sendAppointmentReminders = onSchedule(
     region: "southamerica-east1",
   },
   async () => {
-    // 1) Plantillas y nombre del local viven en el blob compartido appState/main
-    const blobSnap = await db.doc("appState/main").get();
+    // 1) Plantillas y nombre del local: ahora viven en appState/config
+    //    (se movieron del blob compartido para que un equipo con copia vieja no
+    //    las pisara). Respaldo a appState/main por compatibilidad con datos viejos.
+    const [cfgSnap, blobSnap] = await Promise.all([
+      db.doc("appState/config").get(),
+      db.doc("appState/main").get(),
+    ]);
+    const cfg = cfgSnap.exists ? cfgSnap.data() : {};
     const blob = blobSnap.exists ? blobSnap.data() : {};
-    const comms = (blob && blob.comms) || {};
+    const comms = (cfg && cfg.comms) || (blob && blob.comms) || {};
     const tpl = (comms.templates || {}).preEmail;
     if (!tpl || tpl.enabled === false) {
       console.log("preEmail deshabilitado; nada que enviar.");

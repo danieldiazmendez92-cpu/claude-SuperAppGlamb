@@ -4723,6 +4723,7 @@
     // sort: función de comparación para mantener el orden visual correcto al
     //       reconstruir desde el snapshot (Firestore ordena por doc-id).
     const _byDateDesc=(a,b)=>String(b.createdAt||'')>String(a.createdAt||'')?1:-1;
+    const _byClosedDesc=(a,b)=>String(b.closedAt||'')>String(a.closedAt||'')?1:-1;
     const SYNCED_COLLECTIONS=[
       // clients/collaborators viven en colección propia (un doc por registro):
       // un solo blob con +1000 clientes superaba el límite de 1MB de Firestore
@@ -4734,6 +4735,12 @@
       {key:'payments',       coll:'payments',       sort:_byDateDesc},
       {key:'salesTickets',   coll:'salesTickets',   sort:_byDateDesc},
       {key:'pendingCharges', coll:'pendingCharges', sort:_byDateDesc},
+      // blockers (bloqueos de agenda) y cashClosings (cierres de caja) vivían en
+      // el blob compartido: un equipo con copia vieja podía borrar bloqueos o
+      // cierres recientes al guardar. Ahora cada registro es su propio documento,
+      // así dos equipos que agregan distinto ya no se pisan.
+      {key:'blockers',       coll:'blockers'},
+      {key:'cashClosings',   coll:'cashClosings',   sort:_byClosedDesc},
     ];
     const _syncShadow={};   // key -> Map(docId -> JSON conocido en el server)
     const _syncUnsub={};    // key -> función de desuscripción del onSnapshot
@@ -4747,6 +4754,14 @@
     // la consola del navegador. No las usa ninguna página de rol bajo (solo
     // RRHH y Finanzas, ambas exclusivas de admin).
     const FINANCE_KEYS=['liquidations','payrollDeductions','expenses','taxRecords','budgets','expenseCategories'];
+
+    // ── Configuración compartida en documento propio (anti-pisado) ──────
+    // Estas claves (plantillas de comunicación, sesión de caja abierta, reseñas,
+    // ajustes de encuestas, etc.) viajaban en el blob compartido appState/main:
+    // un equipo con copia vieja podía sobrescribirlas al guardar. Ahora viven en
+    // appState/config y SOLO las escribe el dispositivo que realmente las cambió
+    // (comparamos contra _configShadow, la última versión del server).
+    const CONFIG_KEYS=['comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig','withdrawalReasons','ownerName','cashSession'];
 
     // ── Firebase ──────────────────────────────────────────────────────
     const firebaseConfig = {
@@ -4762,6 +4777,7 @@
     // una copia vieja no pueda pisar la base entera. _catalogShadow = última versión
     // conocida del server; solo escribimos si el catálogo cambió en ESTE equipo.
     let _catalogShadow=null, _catalogUnsub=null;
+    let _configShadow=null, _configUnsub=null;
     state.authUser = null;
     try {
       firebase.initializeApp(firebaseConfig);
@@ -4774,12 +4790,12 @@
     function serializeState(){ const out={}; PERSIST_KEYS.forEach(k=>{ if(state[k]!==undefined) out[k]=state[k]; }); return out; }
     // Versión sin datos sensibles para el blob compartido en Firestore.
     // phone/email van a la colección clientsPrivate (solo lectura para admin).
-    function serializeForCloud(){ const out=serializeState(); if(out.clients) out.clients=out.clients.map(({phone:_p,email:_e,...rest})=>rest); SYNCED_COLLECTIONS.forEach(({key})=>{ delete out[key]; }); FINANCE_KEYS.forEach(k=>{ delete out[k]; }); delete out.catalog; /* el catálogo vive en appState/catalog */ return out; }
+    function serializeForCloud(){ const out=serializeState(); if(out.clients) out.clients=out.clients.map(({phone:_p,email:_e,...rest})=>rest); SYNCED_COLLECTIONS.forEach(({key})=>{ delete out[key]; }); FINANCE_KEYS.forEach(k=>{ delete out[k]; }); CONFIG_KEYS.forEach(k=>{ delete out[k]; }); delete out.catalog; /* catálogo→appState/catalog, config→appState/config */ return out; }
     // fromCloud=true: el blob compartido NO es fuente de verdad para las
     // entidades sincronizadas (viven en su colección); se omiten para que un
     // blob viejo no pise lo que llega por onSnapshot. El cache local (offline)
     // sí las carga (fromCloud falso) porque ahí no hay colección disponible.
-    function applyPersisted(data, fromCloud){ if(!data) return; const skip=fromCloud?new Set([...SYNCED_COLLECTIONS.map(s=>s.key),...FINANCE_KEYS,'catalog']):null; PERSIST_KEYS.forEach(k=>{ if(skip&&skip.has(k)) return; if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
+    function applyPersisted(data, fromCloud){ if(!data) return; const skip=fromCloud?new Set([...SYNCED_COLLECTIONS.map(s=>s.key),...FINANCE_KEYS,...CONFIG_KEYS,'catalog']):null; PERSIST_KEYS.forEach(k=>{ if(skip&&skip.has(k)) return; if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
 
     let _pendingCloud=false; // hay cambios locales aún no confirmados en Firestore
     function setSaveStatus(s){ // 'saving' | 'saved' | 'error'
@@ -4807,6 +4823,7 @@
       syncCollections();
       saveFinancePrivate();
       saveCatalog();
+      saveConfig();
       return p;
     }
     function saveState(){
@@ -5167,6 +5184,58 @@
       }catch(e){
         console.error('[GLAMB] migración/carga catálogo falló:',e);
         _catalogShadow=_catalogJSON(); // permitir guardar igual desde este equipo
+      }
+    }
+
+    // ── Configuración compartida en documento propio (anti-pisado) ───────
+    // Mismo blindaje que el catálogo, pero para varias claves a la vez. SOLO el
+    // dispositivo que cambió la config la escribe (diff contra _configShadow);
+    // uno que no la tocó nunca la pisa.
+    function _configObj(){ const out={}; CONFIG_KEYS.forEach(k=>{ if(state[k]!==undefined) out[k]=state[k]; }); return out; }
+    function _configJSON(){ try{ return JSON.stringify(_configObj()); }catch(e){ return null; } }
+    function saveConfig(){
+      if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
+      if(_configShadow===null) return;              // todavía no cargamos el doc real
+      const json=_configJSON();
+      if(json===null || json===_configShadow) return; // sin cambios: no pisamos nada
+      db.collection('appState').doc('config').set(_configObj(),{merge:false})
+        .then(()=>{ _configShadow=json; })
+        .catch(e=>console.error('[GLAMB] guardado config falló:',e));
+    }
+    function subscribeConfigSync(){
+      if(!fbReady || !db || _configUnsub) return;
+      _configUnsub=db.collection('appState').doc('config').onSnapshot(snap=>{
+        if(!snap.exists || snap.metadata.hasPendingWrites) return; // ignorar eco propio
+        _applyingRemote=true;
+        const d=snap.data()||{};
+        CONFIG_KEYS.forEach(k=>{ if(d[k]!==undefined) state[k]=d[k]; });
+        _configShadow=_configJSON();
+        try{ renderAll(); }catch(e){ console.error(e); }
+        _applyingRemote=false;
+      }, e=>console.error('[GLAMB] config sync falló:',e));
+    }
+    // Siembra única: si appState/config no existe, lo crea con lo que haya en el
+    // blob viejo (o en memoria). Deja _configShadow listo para guardar.
+    async function migrateConfigIfNeeded(){
+      if(!fbReady || !db) return;
+      const ref=db.collection('appState').doc('config');
+      try{
+        const snap=await ref.get();
+        if(snap.exists){
+          const d=snap.data()||{};
+          CONFIG_KEYS.forEach(k=>{ if(d[k]!==undefined) state[k]=d[k]; });
+          _configShadow=_configJSON();
+          return;
+        }
+        let blob={}; try{ const s=await stateDoc.get(); if(s.exists) blob=s.data()||{}; }catch(e){}
+        const out={};
+        CONFIG_KEYS.forEach(k=>{ const v=(blob[k]!==undefined)?blob[k]:state[k]; if(v!==undefined){ out[k]=v; state[k]=v; } });
+        await ref.set(out,{merge:false});
+        _configShadow=_configJSON();
+        console.log('[GLAMB] migración config completada');
+      }catch(e){
+        console.error('[GLAMB] migración/carga config falló:',e);
+        _configShadow=_configJSON(); // permitir guardar igual desde este equipo
       }
     }
     async function ensureUserRole(user){
@@ -11093,9 +11162,11 @@ ${context}`;
             await clearDemoDataIfNeeded();        // elimina registros demo de Firestore (una sola vez)
             await migrateCollectionsIfNeeded();   // siembra la colección antes de suscribir
             await migrateCatalogIfNeeded();       // catálogo en doc propio (anti-pisado) antes de suscribir
+            await migrateConfigIfNeeded();        // config compartida en doc propio (anti-pisado) antes de suscribir
             subscribeStateSync();
             subscribeCollectionsSync();           // turnos en vivo para todos los roles
             subscribeCatalogSync();               // catálogo en vivo para todos los roles
+            subscribeConfigSync();                // config en vivo para todos los roles
             if(curRole()==='admin'){
               subscribeUsersSync();
               subscribeClientsPrivateSync();
@@ -11124,6 +11195,8 @@ ${context}`;
           if(_fpUnsub){ _fpUnsub(); _fpUnsub=null; }
           if(_catalogUnsub){ _catalogUnsub(); _catalogUnsub=null; }
           _catalogShadow=null;
+          if(_configUnsub){ _configUnsub(); _configUnsub=null; }
+          _configShadow=null;
           if(_surveyResponsesUnsub){ _surveyResponsesUnsub(); _surveyResponsesUnsub=null; }
           unsubscribeCollections();
           // limpiar datos financieros en memoria (que un login de rol bajo
