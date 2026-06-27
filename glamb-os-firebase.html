@@ -4758,6 +4758,10 @@
       appId: "1:733109093638:web:720da3c212b9da24a9ca87"
     };
     let auth=null, db=null, stateDoc=null, fbReady=false, _cloudUnsub=null, _applyingRemote=false, _cloudTimer=null, _blobReady=false, _usersUnsub=null, _cpUnsub=null, _fpUnsub=null, _surveyResponsesUnsub=null;
+    // Catálogo en documento propio (appState/catalog) para que un dispositivo con
+    // una copia vieja no pueda pisar la base entera. _catalogShadow = última versión
+    // conocida del server; solo escribimos si el catálogo cambió en ESTE equipo.
+    let _catalogShadow=null, _catalogUnsub=null;
     state.authUser = null;
     try {
       firebase.initializeApp(firebaseConfig);
@@ -4770,12 +4774,12 @@
     function serializeState(){ const out={}; PERSIST_KEYS.forEach(k=>{ if(state[k]!==undefined) out[k]=state[k]; }); return out; }
     // Versión sin datos sensibles para el blob compartido en Firestore.
     // phone/email van a la colección clientsPrivate (solo lectura para admin).
-    function serializeForCloud(){ const out=serializeState(); if(out.clients) out.clients=out.clients.map(({phone:_p,email:_e,...rest})=>rest); SYNCED_COLLECTIONS.forEach(({key})=>{ delete out[key]; }); FINANCE_KEYS.forEach(k=>{ delete out[k]; }); return out; }
+    function serializeForCloud(){ const out=serializeState(); if(out.clients) out.clients=out.clients.map(({phone:_p,email:_e,...rest})=>rest); SYNCED_COLLECTIONS.forEach(({key})=>{ delete out[key]; }); FINANCE_KEYS.forEach(k=>{ delete out[k]; }); delete out.catalog; /* el catálogo vive en appState/catalog */ return out; }
     // fromCloud=true: el blob compartido NO es fuente de verdad para las
     // entidades sincronizadas (viven en su colección); se omiten para que un
     // blob viejo no pise lo que llega por onSnapshot. El cache local (offline)
     // sí las carga (fromCloud falso) porque ahí no hay colección disponible.
-    function applyPersisted(data, fromCloud){ if(!data) return; const skip=fromCloud?new Set([...SYNCED_COLLECTIONS.map(s=>s.key),...FINANCE_KEYS]):null; PERSIST_KEYS.forEach(k=>{ if(skip&&skip.has(k)) return; if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
+    function applyPersisted(data, fromCloud){ if(!data) return; const skip=fromCloud?new Set([...SYNCED_COLLECTIONS.map(s=>s.key),...FINANCE_KEYS,'catalog']):null; PERSIST_KEYS.forEach(k=>{ if(skip&&skip.has(k)) return; if(data[k]!==undefined) state[k]=data[k]; }); mergeClientsPrivate(); }
 
     let _pendingCloud=false; // hay cambios locales aún no confirmados en Firestore
     function setSaveStatus(s){ // 'saving' | 'saved' | 'error'
@@ -4802,6 +4806,7 @@
       });
       syncCollections();
       saveFinancePrivate();
+      saveCatalog();
       return p;
     }
     function saveState(){
@@ -5104,6 +5109,65 @@
         await ref.set(out,{merge:false});
         console.log('[GLAMB] migración financePrivate completada');
       }catch(e){ console.error('[GLAMB] migración financePrivate falló:',e); }
+    }
+
+    // ── Catálogo en documento propio (anti-pisado entre dispositivos) ────
+    // El catálogo solía viajar dentro del blob compartido appState/main: un
+    // equipo con una copia vieja podía sobrescribir todo el catálogo al guardar.
+    // Ahora vive en appState/catalog y SOLO lo escribe el dispositivo que lo
+    // editó realmente (comparamos contra _catalogShadow, la última versión del
+    // server). Un equipo que no tocó el catálogo nunca lo escribe → no lo pisa.
+    function _catalogJSON(){ try{ return JSON.stringify(state.catalog!==undefined?state.catalog:{}); }catch(e){ return null; } }
+    function _catalogSize(c){ let n=0; ((c&&c.groups)||[]).forEach(g=>n+=((g&&g.services)||[]).length); return n; }
+    function saveCatalog(){
+      if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
+      if(_catalogShadow===null) return;             // todavía no cargamos el doc real
+      const json=_catalogJSON();
+      if(json===null || json===_catalogShadow) return; // sin cambios: no pisamos nada
+      db.collection('appState').doc('catalog').set({catalog:state.catalog},{merge:false})
+        .then(()=>{ _catalogShadow=json; })
+        .catch(e=>console.error('[GLAMB] guardado catálogo falló:',e));
+    }
+    function subscribeCatalogSync(){
+      if(!fbReady || !db || _catalogUnsub) return;
+      _catalogUnsub=db.collection('appState').doc('catalog').onSnapshot(snap=>{
+        if(!snap.exists || snap.metadata.hasPendingWrites) return; // ignorar eco propio
+        const d=snap.data()||{};
+        if(d.catalog===undefined) return;
+        _applyingRemote=true;
+        state.catalog=d.catalog;
+        _catalogShadow=JSON.stringify(d.catalog);
+        try{ renderAll(); }catch(e){ console.error(e); }
+        _applyingRemote=false;
+      }, e=>console.error('[GLAMB] catálogo sync falló:',e));
+    }
+    // Siembra única: si appState/catalog no existe, lo crea con la copia MÁS
+    // COMPLETA disponible (la local del dispositivo vs. la del blob viejo), para
+    // no perder datos en la transición. Deja _catalogShadow listo para guardar.
+    async function migrateCatalogIfNeeded(){
+      if(!fbReady || !db) return;
+      const ref=db.collection('appState').doc('catalog');
+      try{
+        const snap=await ref.get();
+        if(snap.exists){
+          const d=snap.data()||{};
+          if(d.catalog!==undefined){ state.catalog=d.catalog; }
+          _catalogShadow=JSON.stringify(state.catalog!==undefined?state.catalog:{});
+          return;
+        }
+        // No existe aún: sembrar. Comparamos el catálogo en memoria (refleja el
+        // cache local de este equipo) con el del blob viejo y elegimos el más completo.
+        let blobCat; try{ const s=await stateDoc.get(); if(s.exists) blobCat=(s.data()||{}).catalog; }catch(e){}
+        const local=state.catalog;
+        const seed=(_catalogSize(local) >= _catalogSize(blobCat)) ? local : blobCat;
+        state.catalog=seed;
+        await ref.set({catalog:seed!==undefined?seed:{}},{merge:false});
+        _catalogShadow=JSON.stringify(state.catalog!==undefined?state.catalog:{});
+        console.log('[GLAMB] migración catálogo completada ('+_catalogSize(state.catalog)+' servicios)');
+      }catch(e){
+        console.error('[GLAMB] migración/carga catálogo falló:',e);
+        _catalogShadow=_catalogJSON(); // permitir guardar igual desde este equipo
+      }
     }
     async function ensureUserRole(user){
       const uref = db.collection('users').doc(user.uid);
@@ -11028,8 +11092,10 @@ ${context}`;
             await loadStateFromCloud();
             await clearDemoDataIfNeeded();        // elimina registros demo de Firestore (una sola vez)
             await migrateCollectionsIfNeeded();   // siembra la colección antes de suscribir
+            await migrateCatalogIfNeeded();       // catálogo en doc propio (anti-pisado) antes de suscribir
             subscribeStateSync();
             subscribeCollectionsSync();           // turnos en vivo para todos los roles
+            subscribeCatalogSync();               // catálogo en vivo para todos los roles
             if(curRole()==='admin'){
               subscribeUsersSync();
               subscribeClientsPrivateSync();
@@ -11056,6 +11122,8 @@ ${context}`;
           if(_usersUnsub){ _usersUnsub(); _usersUnsub=null; }
           if(_cpUnsub){ _cpUnsub(); _cpUnsub=null; }
           if(_fpUnsub){ _fpUnsub(); _fpUnsub=null; }
+          if(_catalogUnsub){ _catalogUnsub(); _catalogUnsub=null; }
+          _catalogShadow=null;
           if(_surveyResponsesUnsub){ _surveyResponsesUnsub(); _surveyResponsesUnsub=null; }
           unsubscribeCollections();
           // limpiar datos financieros en memoria (que un login de rol bajo
