@@ -50,6 +50,8 @@ service cloud.firestore {
     match /payments/{id}       { allow read, write: if hasAccess(); }
     match /salesTickets/{id}   { allow read, write: if hasAccess(); }
     match /pendingCharges/{id} { allow read, write: if hasAccess(); }
+    match /blockers/{id}       { allow read, write: if hasAccess(); }
+    match /cashClosings/{id}   { allow read, write: if hasAccess(); }
 
     // Datos financieros sensibles (Fase B.2): nómina, comisiones, gastos,
     // impuestos, presupuestos. SOLO admin puede leer y escribir; recepción y
