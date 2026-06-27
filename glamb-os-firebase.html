@@ -6747,6 +6747,8 @@
       if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
       const clientId = state._depositClientId || null;
       if(!clientId) return showToast('Seleccioná un cliente de la lista antes de guardar.');
+      if(($('depositMethod2')?.value||'Transferencia')==='Efectivo' && !state.cashSession.isOpen)
+        return showToast('La caja no está abierta. Abrila antes de registrar señas en efectivo.');
       const c = clientId ? state.clients.find(x=>x.id===clientId) : null;
       addPayment({
         id:uid('dep'), ticketId:null, appointmentId:null, clientId:clientId||null,
@@ -7069,6 +7071,8 @@
       const t = saleTotals();
       if(!t.lines.length) return showToast('Agregá al menos un servicio.');
       if(t.payments > t.due + 1) return showToast('El monto ingresado supera el saldo a cobrar.');
+      if(!state.cashSession.isOpen && collectSalePayments().some(p=>p.method==='Efectivo'))
+        return showToast('La caja no está abierta. Abrila antes de registrar cobros en efectivo.');
       const clientIdForTicket = state.saleClient.clientId || null;
       const sourceAppointment = state.saleSource==='appointment' ? state.appointments.find(a=>a.id===state.saleAppointmentId) : null;
       const rKey = reservationKey(sourceAppointment);
@@ -8563,6 +8567,8 @@
       if(!lines.length) return showToast('Agregá al menos un servicio.');
       const depositAmount = Number($('apDepositAmount')?.value || 0);
       const depositMethod = $('apDepositMethod')?.value || 'Transferencia';
+      if(depositAmount > 0 && depositMethod === 'Efectivo' && !state.cashSession.isOpen)
+        return showToast('La caja no está abierta. Abrila antes de registrar señas en efectivo.');
       const note = $('apNote').value || '';
       const appointmentDate = $('apDate')?.value || dateKey(state.agenda.currentDate);
 
