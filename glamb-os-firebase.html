@@ -6808,7 +6808,11 @@
         // si no hay pago específico, usar el saldo total disponible del cliente.
         const thisKey = reservationKey(appt);
         const committedHere = thisKey ? state.payments.filter(p=>p.type==='deposit_received'&&p.clientId===c.id&&!p.voided&&p.bookingId===thisKey).reduce((s,p)=>s+Number(p.amount||0),0) : 0;
-        const deposit = committedHere > 0 ? committedHere : clientAvailableDeposit(c.id);
+        // Seña guardada en el turno mismo (bookingDepositAmount): pasa cuando se
+        // agendó marcando la seña como ya existente y no se creó un pago. Es la
+        // misma seña que muestra la agenda; si no hay pago registrado, usarla.
+        const apptDeposit = reservationDeposit(related);
+        const deposit = committedHere > 0 ? committedHere : (clientAvailableDeposit(c.id) || apptDeposit);
         if($('reservationDeposit')) $('reservationDeposit').value = deposit;
         related.forEach(line=>{
           addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
@@ -6835,7 +6839,14 @@
     }
     function servicesShort(text){ return text.length>42 ? text.slice(0,39)+'...' : text; }
     function collaboratorOptions(selected=''){
-      return state.collaborators.filter(c=>c.can).map(c=>`<option value="${c.id}" ${c.id===selected?'selected':''}>${fullName(c)}</option>`).join('');
+      let list = state.collaborators.filter(c=>c.can);
+      if(!list.length) list = state.collaborators.slice(); // sin activas: mostrar todas, no dejar el campo vacío
+      // Garantizar que la profesional del turno aparezca aunque no esté marcada como activa
+      if(selected && !list.some(c=>c.id===selected)){
+        const extra = state.collaborators.find(c=>c.id===selected);
+        if(extra) list = [extra, ...list];
+      }
+      return list.map(c=>`<option value="${c.id}" ${c.id===selected?'selected':''}>${fullName(c)}</option>`).join('');
     }
     function serviceOptionsFlat(selected=''){
       return state.catalog.groups.flatMap(g=>g.services.flatMap(s=>s.variants.map(v=>`<option value="${v.id}" data-group="${g.id}" data-service="${s.id}" ${v.id===selected?'selected':''}>${v.name} (${g.name})</option>`))).join('');
@@ -6875,7 +6886,7 @@
       const service = prefill.service || defaultVariantId;
       const group = prefill.group || defaultVariantInfo?.group.name || findServiceGroup(service);
       const price = prefill.finalPrice !== undefined ? prefill.finalPrice : (defaultVariantInfo?.variant.price || 0);
-      const collaboratorId = prefill.collaboratorId || (state.collaborators.find(c=>c.can)||{}).id || '';
+      const collaboratorId = prefill.collaboratorId || (state.collaborators.find(c=>c.can)||state.collaborators[0]||{}).id || '';
       const html = `<div class="sale-line" data-sale-line="${id}">
         <div class="sale-line-grid">
           <select class="sale-collaborator" aria-label="Colaboradora">${collaboratorOptions(collaboratorId)}</select>
