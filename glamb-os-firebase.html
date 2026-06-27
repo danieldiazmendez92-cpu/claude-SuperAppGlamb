@@ -4600,6 +4600,32 @@
 (function() {
 'use strict';
 
+    // iOS Safari: overscroll-behavior-y no funciona → bloqueamos pull-to-refresh
+    // con JS. Solo bloqueamos arrastre de 1 dedo hacia abajo cuando no hay
+    // contenido scrolleable por encima del punto de toque.
+    (function(){
+      let startY = 0;
+      document.addEventListener('touchstart', function(e){
+        startY = e.touches[0].clientY;
+      }, { passive: true });
+      document.addEventListener('touchmove', function(e){
+        if(e.touches.length !== 1) return; // dejar pasar pinch-zoom (2 dedos)
+        const dy = e.touches[0].clientY - startY;
+        if(dy <= 0) return; // arrastre hacia arriba: sin riesgo de reload
+        // Buscar el ancestro scrolleable más cercano
+        let el = e.target;
+        while(el && el !== document.documentElement){
+          const ov = getComputedStyle(el).overflowY;
+          if(/(auto|scroll)/.test(ov) && el.scrollHeight > el.clientHeight){
+            if(el.scrollTop > 0) return; // tiene contenido arriba → scroll normal
+            break; // scrolleable pero en el tope → cae a preventDefault
+          }
+          el = el.parentElement;
+        }
+        e.preventDefault(); // bloquear pull-to-refresh
+      }, { passive: false });
+    })();
+
     const serviceGroups = {
       'Manicuria':['Semipermanente','Kapping','Soft gel','Esculpidas','Belleza de manos','Nail art'],
       'Eyebrow & Lash':['Perfilado de cejas','Laminado de cejas','Lifting de pestañas','Tinte de pestañas'],
