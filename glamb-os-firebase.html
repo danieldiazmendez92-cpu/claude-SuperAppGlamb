@@ -6522,6 +6522,14 @@
       fillSaleSourceOptions();
       renderCashModeControls();
       if(!$('saleLines').children.length) resetSaleForm();
+      else {
+        // Refresh collaborator dropdowns in case data arrived after the form was built
+        document.querySelectorAll('.sale-collaborator').forEach(sel => {
+          const prev = sel.value;
+          sel.innerHTML = collaboratorOptions(prev);
+          if(prev) sel.value = prev;
+        });
+      }
       renderCashKpis();
       renderCashStatus();
       renderPendingCharges();
