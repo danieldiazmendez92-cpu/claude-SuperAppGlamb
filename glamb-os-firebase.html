@@ -6980,13 +6980,12 @@
     function bindSaleLine(line){
       line.querySelector('[data-remove-line]').onclick = () => { line.remove(); updateSaleSummary(); };
       line.querySelector('.extras-toggle').onclick = () => line.querySelector('.sale-extras').classList.toggle('open');
-      line.querySelector('.sale-service').onchange = e => {
+      // addEventListener en lugar de .onchange para que el loop genérico no lo sobreescriba
+      line.querySelector('.sale-service').addEventListener('change', e => {
         const info = getVariantFromId(e.target.value);
-        if(info){
-          line.querySelector('.sale-final').value = info.variant.price;
-        }
+        if(info) line.querySelector('.sale-final').value = info.variant.price;
         updateSaleSummary();
-      };
+      });
       line.querySelectorAll('input,select').forEach(el=>{el.oninput=()=>updateSaleSummary(); el.onchange=()=>updateSaleSummary();});
       line.querySelectorAll('.sale-addon').forEach(chip=>chip.onclick=()=>{chip.classList.toggle('selected'); updateSaleSummary();});
     }
