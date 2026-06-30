@@ -6545,19 +6545,22 @@
       updateSaleSummary();
     }
     function renderCashKpis(){
-      const confirmed = state.salesTickets.filter(t=>t.status==='confirmed');
+      const today = dateKey(new Date());
+      const todayP = p => (p.createdAt||'').startsWith(today);
+      const confirmed = state.salesTickets.filter(t=>t.status==='confirmed' && todayP(t));
       // INGRESO = servicios cobrados + señas aplicadas. La seña, al recibirse, es dinero
       // pero un PASIVO (no ingreso); recién al concretarse la venta (deposit_applied) se
       // reconoce como ingreso. La seña recibida (deposit_received) NO suma a ingresos.
-      const serviceIncome = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
-      const depositsApplied = state.payments.filter(p=>p.type==='deposit_applied'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      const serviceIncome = state.payments.filter(p=>p.type==='service'&&!p.voided&&todayP(p)).reduce((s,p)=>s+Number(p.amount||0),0);
+      const depositsApplied = state.payments.filter(p=>p.type==='deposit_applied'&&!p.voided&&todayP(p)).reduce((s,p)=>s+Number(p.amount||0),0);
       const ingresos = serviceIncome + depositsApplied;
       // Por transferencia = dinero acreditado por transferencia: cobros de servicio +
       // señas recibidas por ese medio (no el aplicado, que no es dinero nuevo).
-      const transferTotal = state.payments.filter(p=>(p.type==='service'||p.type==='deposit_received')&&!p.voided&&/transf/i.test(p.method||'')).reduce((s,p)=>s+Number(p.amount||0),0);
-      // Señas en haber (pasivo): dinero de señas recibido que todavía no se aplicó a una venta.
+      const transferTotal = state.payments.filter(p=>(p.type==='service'||p.type==='deposit_received')&&!p.voided&&/transf/i.test(p.method||'')&&todayP(p)).reduce((s,p)=>s+Number(p.amount||0),0);
+      // Señas en haber (pasivo): balance global — cuánto debe el local en señas no aplicadas (no filtrado por día).
       const depositsReceived = state.payments.filter(p=>p.type==='deposit_received'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
-      const depositLiability = Math.max(0, depositsReceived - depositsApplied);
+      const depositsAppliedAll = state.payments.filter(p=>p.type==='deposit_applied'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+      const depositLiability = Math.max(0, depositsReceived - depositsAppliedAll);
       const expenses = (state.cashSession.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
       const cashExpected = cashExpectedAmount();
       const pending = state.pendingCharges.filter(p=>p.status==='pending').length;
@@ -7174,15 +7177,17 @@
     function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; saveState(); renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
     function renderCashDaily(){
       if(!$('cashMovements')) return;
+      const today = dateKey(new Date());
+      const todayP = p => (p.createdAt||'').startsWith(today);
       // Panel resumen financiero
       if($('cashDailySummary')){
         const session = state.cashSession;
-        const cashInFilter = p=>(p.type==='service'||p.type==='deposit_received')&&!p.voided;
+        const cashInFilter = p=>(p.type==='service'||p.type==='deposit_received')&&!p.voided&&todayP(p);
         const cashIn = state.payments.filter(p=>p.method==='Efectivo'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
         const transferIn = state.payments.filter(p=>p.method==='Transf'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
         const debitIn = state.payments.filter(p=>p.method==='Débito'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
         const creditIn = state.payments.filter(p=>p.method==='Crédito'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
-        const totalIn = state.payments.filter(p=>p.type==='service'&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const totalIn = state.payments.filter(p=>p.type==='service'&&!p.voided&&todayP(p)).reduce((s,p)=>s+Number(p.amount||0),0);
         const withdrawalsTotal = (session.withdrawals||[]).reduce((s,w)=>s+Number(w.amount||0),0);
         const expensesTotal = (session.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
         const cashExpected = cashExpectedAmount();
@@ -7201,9 +7206,9 @@
             <div style="font-size:12px;"><span style="color:#cbb8a6;">Crédito</span><br><strong style="color:#f5ede4;">${money(creditIn)}</strong></div>
           </div>`;
       }
-      // Movimientos
+      // Movimientos — solo de hoy
       {
-        const visible = state.payments.filter(p=>!p.voided);
+        const visible = state.payments.filter(p=>!p.voided&&todayP(p));
         $('cashMovements').innerHTML = visible.length ? visible.map(p=>{
           const typeLabel = p.type==='deposit_applied'?'Anticipo aplicado':p.type==='service'?'Cobro de servicio':p.type==='deposit_received'?'Seña recibida':'Movimiento';
           const clientObj = p.clientId ? state.clients.find(c=>c.id===p.clientId) : null;
@@ -7215,9 +7220,9 @@
           return `<div class="mini-row"><strong>${money(p.amount)} · ${p.method}${clientExtra}</strong><span>${ref} · ${typeLabel}</span>${canVoid?`<div style="margin-top:6px"><button class="small-btn danger" data-action="voidDeposit" data-id="${p.id}">Anular seña</button></div>`:''}</div>`;
         }).join('') : '<div class="mini-row"><strong>Sin movimientos</strong><span>Los cobros del día aparecerán acá.</span></div>';
       }
-      // Por medio
+      // Por medio — solo de hoy
       $('cashByMethod').innerHTML = paymentMethods.map(m=>{
-        const total = state.payments.filter(p=>p.method===m&&(p.type==='service'||p.type==='deposit_received')&&!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+        const total = state.payments.filter(p=>p.method===m&&(p.type==='service'||p.type==='deposit_received')&&!p.voided&&todayP(p)).reduce((s,p)=>s+Number(p.amount||0),0);
         return total > 0 ? `<div class="mini-row"><strong>${m}</strong><span>${money(total)}</span></div>` : '';
       }).join('') || '<div class="mini-row"><strong>Sin cobros</strong><span>—</span></div>';
       // Retiros
@@ -7227,7 +7232,9 @@
     }
     function renderTickets(){
       if(!$('ticketsList')) return;
-      const visibleTickets = state.cashMode==='collaborator' ? state.salesTickets.filter(t=>t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) : state.salesTickets;
+      const today = dateKey(new Date());
+      const todayTickets = state.salesTickets.filter(t=>(t.createdAt||'').startsWith(today));
+      const visibleTickets = state.cashMode==='collaborator' ? todayTickets.filter(t=>t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) : todayTickets;
       $('ticketsList').innerHTML = visibleTickets.length ? visibleTickets.map(t=>{
         const statusLabel = t.status==='partial'?'Pago parcial':t.status==='confirmed'?'Confirmado':'Anulado';
         const statusColor = t.status==='partial'?'warn':t.status==='confirmed'?'ok':'';
