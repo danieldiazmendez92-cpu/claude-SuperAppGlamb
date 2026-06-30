@@ -2301,6 +2301,7 @@
     }
 
     .sale-extras,
+    .sale-discount,
     .mixed-payment-row {
       display: none;
       margin-top: 10px;
@@ -2309,8 +2310,13 @@
     }
 
     .sale-extras.open,
+    .sale-discount.open,
     .mixed-payment-row.open {
       display: block;
+    }
+
+    .sale-discount-fields {
+      gap: 8px;
     }
 
     .sale-extras-grid {
@@ -7053,8 +7059,37 @@
           <select class="sale-service" aria-label="Servicio">${serviceOptionsFlat(service)}</select>
           <input class="sale-final" aria-label="Precio" type="number" value="${price}" placeholder="$ precio">
         </div>
-        <div class="sale-line-links"><button type="button" class="link-btn extras-toggle">+ extras</button><button type="button" class="link-btn" data-remove-line="${id}">quitar</button></div>
+        <div class="sale-line-links"><button type="button" class="link-btn extras-toggle">+ extras</button><button type="button" class="link-btn discount-toggle">% descuento</button><button type="button" class="link-btn" data-remove-line="${id}">quitar</button></div>
         <div class="sale-line-status warn">Falta validar</div>
+        <div class="sale-discount">
+          <div class="sale-extras-field">
+            <label class="sale-extras-label">Tipo de descuento</label>
+            <select class="sale-discount-type">
+              <option value="none">Sin descuento (precio normal)</option>
+              <option value="canje">Canje (servicio sin cobro, comisión sobre precio catálogo)</option>
+              <option value="employee">Descuento empleada (se descuenta del sueldo)</option>
+              <option value="client">Bonificación a cliente (% por situación particular)</option>
+            </select>
+          </div>
+          <div class="sale-extras-grid sale-discount-fields" style="display:none">
+            <div class="sale-extras-field sale-discount-base-field">
+              <label class="sale-extras-label">Precio catálogo</label>
+              <input class="sale-discount-base" type="number" min="0" value="${price}" placeholder="$ precio catálogo">
+            </div>
+            <div class="sale-extras-field sale-discount-pct-field" style="display:none">
+              <label class="sale-extras-label">% descuento</label>
+              <input class="sale-discount-pct" type="number" min="0" max="100" value="0" placeholder="0">
+            </div>
+          </div>
+          <div class="sale-extras-field sale-discount-employee-field" style="display:none">
+            <label class="sale-extras-label">Empleada que recibe el descuento</label>
+            <select class="sale-discount-employee"><option value="">Seleccionar…</option>${collaboratorOptions('')}</select>
+          </div>
+          <div class="sale-extras-field sale-discount-reason-field" style="display:none">
+            <label class="sale-extras-label">Motivo de la bonificación</label>
+            <input class="sale-discount-reason" type="text" placeholder="Ej: compensación por demora">
+          </div>
+        </div>
         <div class="sale-extras">
           <div class="sale-extras-grid">
             <div class="sale-extras-field">
@@ -7073,15 +7108,50 @@
       bindSaleLine($('saleLines').lastElementChild);
       updateSaleSummary();
     }
+    function applyLineDiscount(line){
+      const type = line.querySelector('.sale-discount-type')?.value || 'none';
+      const finalInput = line.querySelector('.sale-final');
+      const baseInput = line.querySelector('.sale-discount-base');
+      const pctInput = line.querySelector('.sale-discount-pct');
+      const pctField = line.querySelector('.sale-discount-pct-field');
+      const employeeField = line.querySelector('.sale-discount-employee-field');
+      const reasonField = line.querySelector('.sale-discount-reason-field');
+      const fieldsRow = line.querySelector('.sale-discount-fields');
+      fieldsRow.style.display = type==='none' ? 'none' : 'flex';
+      pctField.style.display = (type==='employee'||type==='client') ? '' : 'none';
+      employeeField.style.display = type==='employee' ? '' : 'none';
+      reasonField.style.display = type==='client' ? '' : 'none';
+      if(type==='none'){
+        finalInput.readOnly = false;
+        return;
+      }
+      const base = Number(baseInput.value||0);
+      if(type==='canje'){
+        finalInput.value = 0;
+        finalInput.readOnly = true;
+      } else {
+        const pct = Math.max(0, Math.min(100, Number(pctInput.value||0)));
+        finalInput.value = Math.round(base * (1 - pct/100));
+        finalInput.readOnly = true;
+      }
+    }
     function bindSaleLine(line){
       line.querySelector('[data-remove-line]').onclick = () => { line.remove(); updateSaleSummary(); };
       line.querySelector('.extras-toggle').onclick = () => line.querySelector('.sale-extras').classList.toggle('open');
+      line.querySelector('.discount-toggle').onclick = () => line.querySelector('.sale-discount').classList.toggle('open');
       // addEventListener en lugar de .onchange para que el loop genérico no lo sobreescriba
       line.querySelector('.sale-service').addEventListener('change', e => {
         const info = getVariantFromId(e.target.value);
-        if(info) line.querySelector('.sale-final').value = info.variant.price;
+        if(info){
+          line.querySelector('.sale-discount-base').value = info.variant.price;
+          if(line.querySelector('.sale-discount-type').value==='none') line.querySelector('.sale-final').value = info.variant.price;
+        }
+        applyLineDiscount(line);
         updateSaleSummary();
       });
+      line.querySelector('.sale-discount-type').addEventListener('change', () => { applyLineDiscount(line); updateSaleSummary(); });
+      line.querySelector('.sale-discount-base').addEventListener('input', () => { applyLineDiscount(line); updateSaleSummary(); });
+      line.querySelector('.sale-discount-pct').addEventListener('input', () => { applyLineDiscount(line); updateSaleSummary(); });
       line.querySelectorAll('input,select').forEach(el=>{el.oninput=()=>updateSaleSummary(); el.onchange=()=>updateSaleSummary();});
       line.querySelectorAll('.sale-addon').forEach(chip=>chip.onclick=()=>{chip.classList.toggle('selected'); updateSaleSummary();});
     }
@@ -7099,8 +7169,21 @@
         const serviceName = info ? info.variant.name : variantId;
         const groupName = info ? info.group.name : '';
         const addons = Array.from(line.querySelectorAll('.sale-addon.selected')).map(a=>({id:a.dataset.addonId,name:a.textContent.split(' · ')[0],price:Number(a.dataset.price||0)}));
+        const discountType = line.querySelector('.sale-discount-type')?.value || 'none';
+        const basePrice = Number(line.querySelector('.sale-discount-base')?.value||0);
+        const discountPct = Number(line.querySelector('.sale-discount-pct')?.value||0);
+        const discountReason = line.querySelector('.sale-discount-reason')?.value||'';
+        const employeeId = line.querySelector('.sale-discount-employee')?.value||'';
         const baseFinal = Number(line.querySelector('.sale-final').value||0) + addons.reduce((s,a)=>s+a.price,0);
-        return {collaboratorId:line.querySelector('.sale-collaborator').value,group:groupName,service:serviceName,variantId,addons,finalPrice:baseFinal,tipAmount:Number(line.querySelector('.sale-tip')?.value||0),reference:line.querySelector('.sale-reference')?.value||''};
+        return {
+          collaboratorId:line.querySelector('.sale-collaborator').value,group:groupName,service:serviceName,variantId,addons,
+          finalPrice:baseFinal,tipAmount:Number(line.querySelector('.sale-tip')?.value||0),reference:line.querySelector('.sale-reference')?.value||'',
+          discountType,
+          basePrice: discountType==='none' ? baseFinal : basePrice,
+          discountPct: (discountType==='employee'||discountType==='client') ? discountPct : 0,
+          discountReason: discountType==='client' ? discountReason : '',
+          employeeId: discountType==='employee' ? employeeId : ''
+        };
       }).filter(l=>l.collaboratorId && l.service);
     }
     function collectSalePayments(){
@@ -7121,9 +7204,11 @@
       const tips = lines.reduce((s,l)=>s+l.tipAmount,0);
       const grossTotal = services + tips;
       const depositApplied = Math.min(Number($('reservationDeposit')?.value||0), grossTotal);
-      const due = Math.max(0, grossTotal - depositApplied);
+      // Las líneas "descuento empleada" no se cobran en caja: se descuentan del sueldo.
+      const employeeDiscountTotal = lines.filter(l=>l.discountType==='employee').reduce((s,l)=>s+l.finalPrice,0);
+      const due = Math.max(0, grossTotal - depositApplied - employeeDiscountTotal);
       const payments = collectSalePayments().reduce((s,p)=>s+p.amount,0);
-      return {lines,services,tips,grossTotal,depositApplied,due,payments};
+      return {lines,services,tips,grossTotal,depositApplied,employeeDiscountTotal,due,payments};
     }
     function linePaymentTotal(line){ return 0; }
     function updateLineStatus(line){
@@ -7165,6 +7250,7 @@
       if(!clientName) return showToast('El cliente es obligatorio.');
       const t = saleTotals();
       if(!t.lines.length) return showToast('Agregá al menos un servicio.');
+      if(t.lines.some(l=>l.discountType==='employee' && !l.employeeId)) return showToast('Falta elegir la empleada que recibe el descuento.');
       if(t.payments > t.due + 1) return showToast('El monto ingresado supera el saldo a cobrar.');
       if(!state.cashSession.isOpen && collectSalePayments().some(p=>p.method==='Efectivo'))
         return showToast('La caja no está abierta. Abrila antes de registrar cobros en efectivo.');
@@ -7187,6 +7273,21 @@
       if(isPartial){
         state.pendingCharges.unshift({id:'pending'+Date.now(),clientId:clientIdForTicket,clientNameSnapshot:clientName,status:'pending',service:'Saldo de visita',group:'',finalPrice:pendingBalance,depositAmount:0,ticketId:ticket.id,reservationId:ticket.reservationId,createdBy:ticket.createdBy,serviceOf:'—',createdAt:new Date().toISOString()});
       }
+      // Líneas con descuento empleada: generar automáticamente el descuento en RRHH (se cobra en la liquidación, no en caja)
+      t.lines.filter(l=>l.discountType==='employee' && l.employeeId).forEach(l=>{
+        addDeduction({
+          id:'ded'+Date.now()+Math.random(),
+          collaboratorId:l.employeeId,
+          type:'servicio_empleada',
+          amount:l.finalPrice,
+          description:`${l.service} · desc. ${l.discountPct}% · ticket ${ticket.id}`,
+          date:new Date().toISOString().slice(0,10),
+          serviceRef:{serviceName:l.service},
+          appliedToLiquidationId:null,
+          ticketId:ticket.id,
+          createdAt:new Date().toISOString()
+        });
+      });
       resetSaleForm(); renderAll(); showToast(isPartial?`Venta registrada. Saldo pendiente: ${money(pendingBalance)}`:'Venta registrada');
       if(!isPartial && ticket.clientId) setTimeout(()=>showReviewAfterCheckout(ticket), 400);
     }
@@ -7325,7 +7426,10 @@
         const statusLabel = t.status==='partial'?'Pago parcial':t.status==='confirmed'?'Confirmado':'Anulado';
         const statusColor = t.status==='partial'?'warn':t.status==='confirmed'?'ok':'';
         const breakdown = `Total: ${money(t.grossTotal)}${t.depositAppliedTotal>0?' · Seña: −'+money(t.depositAppliedTotal):''}${t.pendingBalance>0?' · <strong style="color:#8a5a14;">Saldo pendiente: '+money(t.pendingBalance)+'</strong>':''}`;
-        return `<div class="mini-row"><strong>${esc(t.clientNameSnapshot)} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${esc(t.createdBy||'—')} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button></div></div>`;
+        const discountBadges = [...new Set((t.lines||[]).filter(l=>l.discountType&&l.discountType!=='none').map(l=>
+          l.discountType==='canje'?'Canje':l.discountType==='employee'?`Desc. empleada −${l.discountPct}%`:`Bonificación −${l.discountPct}%`
+        ))].map(b=>` <span class="tag" style="font-size:10px">${esc(b)}</span>`).join('');
+        return `<div class="mini-row"><strong>${esc(t.clientNameSnapshot)} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong>${discountBadges}<span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${esc(t.createdBy||'—')} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button></div></div>`;
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
     function voidTicket(id){
@@ -9170,7 +9274,13 @@
         const addons = Array.from(line.querySelectorAll('.sale-addon.selected'));
         const addonsAmt = addons.reduce((s,a)=>s+Number(a.dataset.price||0),0);
         if(!svcTxt||svcTxt==='—') return '';
-        return `<div class="t-line"><span style="font-size:12px;">${svcTxt}<span style="display:block;font-size:10px;color:var(--text-soft);">${colName}${addons.length?` · ${addons.length} adicional(es)`:''}</span></span><span style="font-weight:500;">${money(price+addonsAmt)}</span></div>`;
+        const discType = line.querySelector('.sale-discount-type')?.value || 'none';
+        const discPct = line.querySelector('.sale-discount-pct')?.value || 0;
+        const discLabel = discType==='canje' ? ' · <strong>Canje</strong>'
+          : discType==='employee' ? ` · Desc. empleada −${discPct}%`
+          : discType==='client' ? ` · Bonificación −${discPct}%`
+          : '';
+        return `<div class="t-line"><span style="font-size:12px;">${svcTxt}<span style="display:block;font-size:10px;color:var(--text-soft);">${colName}${addons.length?` · ${addons.length} adicional(es)`:''}${discLabel}</span></span><span style="font-weight:500;">${money(price+addonsAmt)}</span></div>`;
       }).filter(Boolean).join('');
       if($('wizTicketLines')) $('wizTicketLines').innerHTML = linesHtml || '<div style="font-size:12px;color:var(--text-soft);text-align:center;padding:10px 0;">Sin servicios aún</div>';
       const t = saleTotals();
@@ -9488,8 +9598,10 @@
         (t.lines||[]).forEach(l=>{
           if(l.collaboratorId!==memberId) return;
           const pct=getCollaboratorCommission(m,l.group,l.variantId);
-          const commAmt=Math.round((l.finalPrice||0)*pct/100);
-          commissionLines.push({ticketId:t.id,ticketDate:t.createdAt.slice(0,10),clientName:t.clientNameSnapshot||'—',service:l.service||l.group||'Servicio',group:l.group||'',variantId:l.variantId||'',saleAmount:l.finalPrice||0,pct,commissionAmt:commAmt});
+          // Canje: la clienta no paga, pero la comisión se calcula sobre el precio de catálogo (basePrice).
+          const commissionBase = l.discountType==='canje' ? (l.basePrice||0) : (l.finalPrice||0);
+          const commAmt=Math.round(commissionBase*pct/100);
+          commissionLines.push({ticketId:t.id,ticketDate:t.createdAt.slice(0,10),clientName:t.clientNameSnapshot||'—',service:l.service||l.group||'Servicio',group:l.group||'',variantId:l.variantId||'',saleAmount:commissionBase,pct,commissionAmt:commAmt,discountType:l.discountType||'none'});
         });
       });
       const totalCommissions=commissionLines.reduce((s,l)=>s+l.commissionAmt,0);
@@ -9520,7 +9632,7 @@
       if($('liqViewTitle')) $('liqViewTitle').textContent='Liquidación · '+liq.collaboratorName;
       if($('liqViewSubtitle')) $('liqViewSubtitle').textContent=liq.period.label+' · '+liq.period.from+' → '+liq.period.to;
       const commHtml=liq.commissionLines.length
-        ?liq.commissionLines.map(l=>`<div class="liq-comm-row"><div class="liq-comm-service"><strong>${l.service}</strong><br><span style="font-size:11px;color:var(--text-muted)">${l.clientName} · ${l.ticketDate}</span></div><div class="liq-comm-pct">${l.pct}%</div><div class="liq-comm-amount">${money(l.commissionAmt)}</div></div>`).join('')
+        ?liq.commissionLines.map(l=>`<div class="liq-comm-row"><div class="liq-comm-service"><strong>${l.service}</strong>${l.discountType==='canje'?' <span class="tag" style="font-size:10px">Canje</span>':''}<br><span style="font-size:11px;color:var(--text-muted)">${l.clientName} · ${l.ticketDate}</span></div><div class="liq-comm-pct">${l.pct}%</div><div class="liq-comm-amount">${money(l.commissionAmt)}</div></div>`).join('')
         :'<div style="font-size:13px;color:var(--text-muted);padding:8px 0">Sin ventas en el período.</div>';
       const deductHtml=liq.deductions.length
         ?liq.deductions.map(d=>`<div class="liq-fixed-row"><span>${{anticipo:'Anticipo',servicio_empleada:'Servicio empleada',otro:'Otro'}[d.type]||d.type} · ${d.description||''}</span><strong style="color:#c46a6a">−${money(d.amount)}</strong></div>`).join('')
