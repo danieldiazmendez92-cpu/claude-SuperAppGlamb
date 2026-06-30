@@ -6521,6 +6521,12 @@
       if(!$('cashKpis')) return;
       fillSaleSourceOptions();
       renderCashModeControls();
+      // Sync panel visibility with saleSource state (in case user navigated away mid-flow)
+      const src = state.saleSource || 'appointment';
+      if($('saleAppointmentPanel')) $('saleAppointmentPanel').style.display = src === 'appointment' ? 'block' : 'none';
+      if($('saleExistingPanel')) $('saleExistingPanel').style.display = src === 'existing' ? 'block' : 'none';
+      if($('saleNewPanel')) $('saleNewPanel').style.display = src === 'new' ? 'block' : 'none';
+      document.querySelectorAll('[data-sale-source]').forEach(b=>b.classList.toggle('active', b.dataset.saleSource===src));
       if(!$('saleLines').children.length) resetSaleForm();
       else {
         // Refresh collaborator dropdowns in case data arrived after the form was built
@@ -6828,9 +6834,10 @@
     function fillSaleSourceOptions(){
       if(!$('saleAppointmentSelect')) return;
       const current = $('saleAppointmentSelect').value || state.saleAppointmentId;
+      const today = dateKey(new Date());
       const reservations = [];
       const seen = new Set();
-      activeAppointments().filter(a=>!a.isAdditional).forEach(a=>{
+      activeAppointments().filter(a=>!a.isAdditional && (!a.date || a.date===today)).forEach(a=>{
         const key = reservationKey(a);
         if(seen.has(key)) return;
         seen.add(key);
@@ -6840,7 +6847,9 @@
         const total = related.reduce((sum,r)=>sum+Number(currentApptPrice(r)||estimateAmount(r)||0),0);
         reservations.push({id:a.id,start:related[0]?.start||a.start,clientName:fullName(client(a.clientId)),services,total,count:related.length});
       });
-      $('saleAppointmentSelect').innerHTML = reservations.map(r=>`<option value="${r.id}">${r.start} · ${r.clientName} · ${r.count>1?`[${r.count} servicios] `:''}${servicesShort(r.services)} · ${money(r.total)}</option>`).join('');
+      $('saleAppointmentSelect').innerHTML = reservations.length
+        ? reservations.map(r=>`<option value="${r.id}">${r.start} · ${r.clientName} · ${r.count>1?`[${r.count} servicios] `:''}${servicesShort(r.services)} · ${money(r.total)}</option>`).join('')
+        : '<option value="">— Sin turnos pendientes para hoy —</option>';
       if(reservations.some(r=>r.id===current)) {
         state.saleAppointmentId = current;
         $('saleAppointmentSelect').value = current;
