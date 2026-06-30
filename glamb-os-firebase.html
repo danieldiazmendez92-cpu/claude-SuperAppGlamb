@@ -3577,6 +3577,7 @@
         </div>
         <div class="grid kpis" id="cashKpis"></div>
         <section class="card" id="cashStatus" style="margin-bottom:16px;"></section>
+        <div id="cashPendingBanner" style="display:none;margin-bottom:16px;padding:12px 16px;background:#FFF8E1;border:1px solid #E0C97F;border-radius:12px;font-size:13px;color:#7A5E1E;cursor:pointer;"></div>
         <section class="card" id="cashModeCard" style="margin-bottom:16px;">
           <div class="form-grid">
             <div class="field"><label>Modo de caja</label><select id="cashUserMode"><option value="admin">Admin caja</option><option value="collaborator">Colaboradora</option></select></div>
@@ -3761,9 +3762,14 @@
           <section class="card"><h2 class="section-title">Pendientes de cobro</h2><div id="pendingChargesList"></div></section>
         </section>
         <section class="cash-section" id="cash-daily">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <span style="font-weight:600;font-size:14px">Caja del día</span>
+            <input type="date" id="cashDailyDate" style="font-size:13px;padding:5px 9px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-family:inherit">
+            <span id="cashDailyDateLabel" style="font-size:11px;color:var(--text-muted)"></span>
+          </div>
           <div class="dark-panel" id="cashDailySummary" style="margin-bottom:16px;"></div>
           <div class="layout-2">
-            <section class="card"><h2 class="section-title">Movimientos del día</h2><div id="cashMovements"></div></section>
+            <section class="card"><h2 class="section-title">Movimientos</h2><div id="cashMovements"></div></section>
             <aside>
               <section class="card" style="margin-bottom:16px;"><h2 class="section-title">Por medio de pago</h2><div id="cashByMethod"></div></section>
               <section class="card" style="margin-bottom:16px;"><h2 class="section-title">Retiros</h2><div id="cashWithdrawals"></div></section>
@@ -3772,7 +3778,12 @@
           </div>
         </section>
         <section class="cash-section" id="cash-tickets">
-          <section class="card"><h2 class="section-title">Tickets del día</h2><div id="ticketsList"></div></section>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <span style="font-weight:600;font-size:14px">Tickets</span>
+            <input type="date" id="cashTicketsDate" style="font-size:13px;padding:5px 9px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-family:inherit">
+            <span id="cashTicketsDateLabel" style="font-size:11px;color:var(--text-muted)"></span>
+          </div>
+          <section class="card"><div id="ticketsList"></div></section>
         </section>
         <section class="cash-section" id="cash-ledger">
           <div id="ledgerPanel"></div>
@@ -4358,6 +4369,7 @@
         <div class="form-grid">
           <div class="field"><label>Monto</label><input id="withdrawalAmount" type="number" value="0" min="0"></div>
           <div class="field"><label>Motivo</label><select id="withdrawalReason"></select></div>
+          <div class="field" id="tipCollaboratorField" style="display:none"><label>Colaboradora (propina)</label><select id="tipCollaboratorSelect"></select></div>
           <div class="field full"><label>Nota</label><textarea id="withdrawalNote" placeholder="Detalle opcional"></textarea></div>
         </div>
       </section>
@@ -4660,7 +4672,7 @@
     ],blockers:[
     ],agenda:{group:'Todos',member:'Todos',role:'reception',view:'day',showBlockers:true,dragging:null,currentDate:new Date(),colWidth:140},
     payments:[],salesTickets:[],pendingCharges:[],
-    cashTab:'register',saleLineSeq:0,paymentLineSeq:0,ledgerDate:'',ledgerSubTab:'efectivo',
+    cashTab:'register',saleLineSeq:0,paymentLineSeq:0,ledgerDate:'',ledgerSubTab:'efectivo',cashDailyDate:'',cashTicketsDate:'',
     catalog:{
       groups:[
         {id:'cat1',name:'Manicuria',type:'service',services:[
@@ -5467,6 +5479,8 @@
       // KPIs y estado de caja = totales del salón → ocultos para rol bajo
       if($('cashKpis')) $('cashKpis').style.display = salesOnly ? 'none' : '';
       if($('cashStatus')) $('cashStatus').style.display = salesOnly ? 'none' : '';
+      if($('cashDailyDate')) $('cashDailyDate').style.display = salesOnly ? 'none' : '';
+      if($('cashTicketsDate')) $('cashTicketsDate').style.display = salesOnly ? 'none' : '';
       // Atajos que saltean módulos restringidos: crear colaboradora solo si tiene Equipo
       document.querySelectorAll('[data-open-collaborator]').forEach(b=>{ b.style.display = cfg.pages.includes('team') ? '' : 'none'; });
     }
@@ -6538,6 +6552,7 @@
       }
       renderCashKpis();
       renderCashStatus();
+      renderCashPendingBanner();
       renderPendingCharges();
       renderCashDaily();
       renderTickets();
@@ -6609,7 +6624,33 @@
         return;
       }
       const expected = cashExpectedAmount();
-      $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja abierta</strong><span>Apertura: ${money(session.openingAmount)} · Efectivo esperado ahora: ${money(expected)} · Abrió: ${session.openedBy||'Admin caja'}</span></div>`;
+      const canCorrect = isCashAdmin();
+      $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja abierta</strong><span>Apertura: ${money(session.openingAmount)} · Efectivo esperado ahora: ${money(expected)} · Abrió: ${session.openedBy||'Admin caja'}</span>${canCorrect?'<div style="margin-top:8px"><button class="small-btn" data-action="correctCashOpening">Corregir apertura</button></div>':''}</div>`;
+    }
+    function correctCashOpening(){
+      if(!isCashAdmin()) return showToast('Solo admin/recepción puede corregir la apertura.');
+      if(!state.cashSession.isOpen) return showToast('La caja no está abierta.');
+      showPromptDialog('Corregir monto de apertura','Ingresá el monto correcto…',val=>{
+        const amount = Number(val);
+        if(isNaN(amount) || amount < 0) return showToast('Monto inválido.');
+        const prev = state.cashSession.openingAmount;
+        state.cashSession.openingAmount = amount;
+        state.cashSession.openingCorrectedAt = new Date().toISOString();
+        state.cashSession.openingCorrectedFrom = prev;
+        saveState(); renderAll();
+        showToast(`Apertura corregida: ${money(prev)} → ${money(amount)}`);
+      });
+    }
+    function renderCashPendingBanner(){
+      const banner = $('cashPendingBanner');
+      if(!banner) return;
+      const pending = state.pendingCharges.filter(p=>p.status==='pending');
+      if(!pending.length){ banner.style.display='none'; return; }
+      const names = [...new Set(pending.map(p=>p.clientNameSnapshot))].join(', ');
+      const total = pending.reduce((s,p)=>s+Number(p.finalPrice||0),0);
+      banner.style.display='block';
+      banner.innerHTML = `<strong>Hay ${pending.length} servicio${pending.length>1?'s':''} pendiente${pending.length>1?'s':''} de cobro</strong> · ${names} · ${money(total)}<br><span style="font-size:11px;color:#9a7a30;">Tocá acá para ver pendientes</span>`;
+      banner.onclick = () => setCashTab('pending');
     }
     function openCashSession(){
       if(!isCashAdmin()) return showToast('Solo admin caja puede abrir caja.');
@@ -6658,17 +6699,32 @@
       if($('withdrawalAmount')) $('withdrawalAmount').value = 0;
       if($('withdrawalNote')) $('withdrawalNote').value = '';
       renderWithdrawalReasonsConfig();
-      const sel=$('withdrawalReason'); if(sel) sel.value='Retiro para depósito';
+      const sel=$('withdrawalReason'); if(sel){ sel.value='Retiro para depósito'; }
+      if($('tipCollaboratorSelect')) $('tipCollaboratorSelect').innerHTML = collaboratorOptions('');
+      if($('tipCollaboratorField')) $('tipCollaboratorField').style.display = 'none';
+      if($('withdrawalReason')) $('withdrawalReason').onchange = () => {
+        const isTip = $('withdrawalReason').value === 'Propina';
+        if($('tipCollaboratorField')) $('tipCollaboratorField').style.display = isTip ? '' : 'none';
+      };
       openDrawer('cashWithdrawalDrawer');
     }
     function confirmWithdrawal(){
       const amount = Number($('withdrawalAmount')?.value || 0);
       if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
       const reason = $('withdrawalReason')?.value || 'Retiro';
-      addWithdrawal({id:'with'+Date.now(), amount, reason, note:$('withdrawalNote')?.value || '', createdAt:new Date().toISOString(), createdBy: state.cashMode === 'admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId))});
+      const createdBy = state.cashMode === 'admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId));
+      if(reason === 'Propina'){
+        const collabId = $('tipCollaboratorSelect')?.value;
+        if(!collabId) return showToast('Seleccioná la colaboradora que recibe la propina.');
+        const collabName = fullName(member(collabId));
+        addPayment({id:uid('tipin'), amount, method:'Transf', type:'tip_in', reference:`Propina transf. para ${collabName}`, note: $('withdrawalNote')?.value || '', collaboratorId:collabId, createdAt:new Date().toISOString()});
+        addWithdrawal({id:'with'+Date.now(), amount, reason:'Propina', note:`Para ${collabName}. ${$('withdrawalNote')?.value||''}`.trim(), collaboratorId:collabId, createdAt:new Date().toISOString(), createdBy, isTipWithdrawal:true});
+      } else {
+        addWithdrawal({id:'with'+Date.now(), amount, reason, note:$('withdrawalNote')?.value || '', createdAt:new Date().toISOString(), createdBy});
+      }
       closeDrawers();
       renderAll();
-      showToast('Retiro registrado');
+      showToast(reason==='Propina' ? 'Propina registrada (entrada banco + retiro efectivo)' : 'Retiro registrado');
     }
 
     function clientAvailableDeposit(clientId){
@@ -6884,22 +6940,27 @@
       state.saleAppointmentId = appt.id;
       const c = client(appt.clientId);
       state.saleClient = {clientId:c.id, clientName:fullName(c)};
+      // Check if there are pending charges for this appointment/client
+      const rKey = reservationKey(appt);
+      const clientPending = state.pendingCharges.filter(p=>p.status==='pending' && (p.appointmentId===appt.id || p.reservationId===rKey || p.clientId===c.id));
       if($('saleLines')) {
         $('saleLines').innerHTML='';
         const related = reservationAppointments(appt);
         const additionals = activeAppointments().filter(a=>reservationKey(a)===reservationKey(appt) && a.isAdditional);
-        // Preferir el monto que se comprometió específicamente para este turno;
-        // si no hay pago específico, usar el saldo total disponible del cliente.
-        const thisKey = reservationKey(appt);
+        const thisKey = rKey;
         const committedHere = thisKey ? state.payments.filter(p=>p.type==='deposit_received'&&p.clientId===c.id&&!p.voided&&p.bookingId===thisKey).reduce((s,p)=>s+Number(p.amount||0),0) : 0;
-        // Seña guardada en el turno mismo (bookingDepositAmount): pasa cuando se
-        // agendó marcando la seña como ya existente y no se creó un pago. Es la
-        // misma seña que muestra la agenda; si no hay pago registrado, usarla.
         const apptDeposit = reservationDeposit(related);
         const deposit = committedHere > 0 ? committedHere : (clientAvailableDeposit(c.id) || apptDeposit);
         if($('reservationDeposit')) $('reservationDeposit').value = deposit;
+        // Merge pending charges into the sale lines
+        const pendingMemberIds = new Set(clientPending.map(p=>p.collaboratorId));
         related.forEach(line=>{
-          addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
+          const hasPending = clientPending.find(p=>p.collaboratorId===line.memberId);
+          if(hasPending){
+            addSaleLine({collaboratorId:hasPending.collaboratorId, group:hasPending.group, service:hasPending.variantId||hasPending.service, finalPrice:hasPending.finalPrice});
+          } else {
+            addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
+          }
           const lineAdds = additionals.filter(a=>a.memberId===line.memberId);
           if(lineAdds.length){
             const saleLineEl = $('saleLines').lastElementChild;
@@ -6909,6 +6970,13 @@
             });
           }
         });
+        // Add remaining pending lines not matched to an appointment line
+        clientPending.filter(p=>!related.some(r=>r.memberId===p.collaboratorId)).forEach(p=>{
+          addSaleLine({collaboratorId:p.collaboratorId, group:p.group, service:p.variantId||p.service, finalPrice:p.finalPrice});
+        });
+        // Mark pending charges as converted
+        clientPending.forEach(p=>{ p.status='converted'; p.convertedAt=new Date().toISOString(); });
+        if(clientPending.length) saveState();
       }
       const related = reservationAppointments(appt);
       if($('reservationBanner')){
@@ -7175,10 +7243,16 @@
       $('pendingChargesList').innerHTML = list.length ? list.map(p=>`<div class="mini-row"><strong>${p.clientNameSnapshot}</strong><span>${p.service} · ${p.serviceOf||fullName(member(p.collaboratorId))} · ${money(p.finalPrice)}<br>Creado por: ${p.createdBy||'—'} · ${new Date(p.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span><div style="margin-top:8px"><button class="small-btn primary" data-action="injectPending" data-id="${p.id}">Cobrar</button><button class="small-btn" data-action="voidPending" data-id="${p.id}">Anular</button></div></div>`).join('') : '<div class="mini-row"><strong>Sin pendientes</strong><span>No hay servicios pendientes de cobro.</span></div>';
     }
     function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; saveState(); renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
+    function setCashDailyDate(v){ state.cashDailyDate=v; renderCashDaily(); }
+    function setCashTicketsDate(v){ state.cashTicketsDate=v; renderTickets(); }
     function renderCashDaily(){
       if(!$('cashMovements')) return;
       const today = dateKey(new Date());
-      const todayP = p => (p.createdAt||'').startsWith(today);
+      const selDate = state.cashDailyDate || today;
+      const isToday = selDate === today;
+      if($('cashDailyDate')){ $('cashDailyDate').value=selDate; $('cashDailyDate').max=today; $('cashDailyDate').onchange=e=>setCashDailyDate(e.target.value); }
+      if($('cashDailyDateLabel')) $('cashDailyDateLabel').textContent = isToday ? 'Hoy' : '';
+      const todayP = p => (p.createdAt||'').startsWith(selDate);
       // Panel resumen financiero
       if($('cashDailySummary')){
         const session = state.cashSession;
@@ -7210,7 +7284,7 @@
       {
         const visible = state.payments.filter(p=>!p.voided&&todayP(p));
         $('cashMovements').innerHTML = visible.length ? visible.map(p=>{
-          const typeLabel = p.type==='deposit_applied'?'Anticipo aplicado':p.type==='service'?'Cobro de servicio':p.type==='deposit_received'?'Seña recibida':'Movimiento';
+          const typeLabel = p.type==='deposit_applied'?'Anticipo aplicado':p.type==='service'?'Cobro de servicio':p.type==='deposit_received'?'Seña recibida':p.type==='tip_in'?'Propina transf. (entrada)':'Movimiento';
           const clientObj = p.clientId ? state.clients.find(c=>c.id===p.clientId) : null;
           const isOrphan = p.type==='deposit_received' && p.clientId && !clientObj;
           const clientExtra = clientObj ? ` · ${esc(clientObj.first||'')} ${esc(clientObj.last||'')}`.trim()
@@ -7233,7 +7307,11 @@
     function renderTickets(){
       if(!$('ticketsList')) return;
       const today = dateKey(new Date());
-      const todayTickets = state.salesTickets.filter(t=>(t.createdAt||'').startsWith(today));
+      const selDate = state.cashTicketsDate || today;
+      const isToday = selDate === today;
+      if($('cashTicketsDate')){ $('cashTicketsDate').value=selDate; $('cashTicketsDate').max=today; $('cashTicketsDate').onchange=e=>setCashTicketsDate(e.target.value); }
+      if($('cashTicketsDateLabel')) $('cashTicketsDateLabel').textContent = isToday ? 'Hoy' : '';
+      const todayTickets = state.salesTickets.filter(t=>(t.createdAt||'').startsWith(selDate));
       const visibleTickets = state.cashMode==='collaborator' ? todayTickets.filter(t=>t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) : todayTickets;
       $('ticketsList').innerHTML = visibleTickets.length ? visibleTickets.map(t=>{
         const statusLabel = t.status==='partial'?'Pago parcial':t.status==='confirmed'?'Confirmado':'Anulado';
@@ -7242,7 +7320,22 @@
         return `<div class="mini-row"><strong>${esc(t.clientNameSnapshot)} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong><span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${esc(t.createdBy||'—')} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button></div></div>`;
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
-    function voidTicket(id){const t=state.salesTickets.find(x=>x.id===id); if(!t)return; if(state.cashMode==='collaborator' && !t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.'); showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{ if(!reason)return; t.status='voided'; t.voidReason=reason; t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); t.voidedAt=new Date().toISOString(); state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true); saveState(); renderAll(); showToast('Ticket anulado'); }); }
+    function voidTicket(id){
+      const t=state.salesTickets.find(x=>x.id===id); if(!t)return;
+      const today = dateKey(new Date());
+      if(state.cashMode==='collaborator'){
+        if(!t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.');
+        if(!(t.createdAt||'').startsWith(today)) return showToast('Solo podés anular tickets del día de hoy.');
+      }
+      showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{
+        if(!reason)return;
+        t.status='voided'; t.voidReason=reason;
+        t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId));
+        t.voidedAt=new Date().toISOString();
+        state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true);
+        saveState(); renderAll(); showToast('Ticket anulado');
+      });
+    }
 
     function setLedgerDate(v){state.ledgerDate=v;renderLedger();}
     function setLedgerSubTab(v){state.ledgerSubTab=v;renderLedger();}
@@ -7295,7 +7388,7 @@
         const amt=Number(p.amount||0);
         const isCash=/efectivo/i.test(p.method||'');
         const isOut=p.type==='withdrawal';
-        const typeLabel=p.type==='deposit_received'?'Seña recibida':p.type==='deposit_applied'?'Anticipo aplicado':p.type==='service'?'Cobro de servicio':'Movimiento';
+        const typeLabel=p.type==='deposit_received'?'Seña recibida':p.type==='deposit_applied'?'Anticipo aplicado':p.type==='service'?'Cobro de servicio':p.type==='tip_in'?'Propina transf. (entrada)':'Movimiento';
         const clientObj=p.clientId?state.clients.find(c=>c.id===p.clientId):null;
         const ticket=p.ticketId?state.salesTickets.find(t=>t.id===p.ticketId):null;
         const detalleStr=ticket?`${esc(ticket.clientNameSnapshot||'')} — ${(ticket.lines||[]).map(l=>l.service||l.group).join(', ')}`:(clientObj?esc(fullName(clientObj)):p.reference||typeLabel);
@@ -11426,7 +11519,7 @@ ${context}`;
       editAppointment, editCatalogItem, editCollaborator,
       fillAppointmentOptions, injectPending,
       onGroupFilterChange,
-      openCashSession, openCatalogDrawer, openClientProfile,
+      correctCashOpening, openCashSession, openCatalogDrawer, openClientProfile,
       openDeductionDrawer, openLiquidationView, openNewLiquidation,
       openPayrollConfigDrawer, openPopover,
       removePayrollOverride,
@@ -11434,6 +11527,7 @@ ${context}`;
       showPage, showRrhhTab, showToast,
       toggleAgendaFilters, toggleApptAdditionals, togglePaid,
       setFinanzasCFOMonth,
+      setCashDailyDate, setCashTicketsDate,
       setLedgerDate, setLedgerSubTab, renderLedger,
       updateApptStatus, voidDeposit, voidPending, voidTicket,
       wizGoTo, wizSetPayMode
@@ -11446,6 +11540,7 @@ ${context}`;
       openDeductionDrawer:     () => openDeductionDrawer(),
       openNewLiquidation:      () => openNewLiquidation(),
       openCatalogDrawer:       () => openCatalogDrawer(),
+      correctCashOpening:      () => correctCashOpening(),
       toggleAgendaFilters:     () => toggleAgendaFilters(),
       toggleDatePicker:        () => toggleDatePicker(),
       dpPrevMonth:             () => dpPrevMonth(),
