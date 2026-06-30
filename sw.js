@@ -1,4 +1,4 @@
-const CACHE = 'glamb-os-v20';
+const CACHE = 'glamb-os-v21';
 const SHELL = ['/'];
 
 self.addEventListener('install', e => {
