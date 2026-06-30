@@ -7789,9 +7789,19 @@
     function togglePaid(id){const a=state.appointments.find(x=>x.id===id); if(!a)return; a.deposit = a.deposit==='paid'?'pending':'paid'; saveState(); renderAgenda(); showToast(a.deposit==='paid'?'Pago/seña marcado OK.':'Pago/seña pendiente.');}
     function cancelAppointment(id,status='cancelado'){
       const a=state.appointments.find(x=>x.id===id); if(!a)return;
-      a.status=status; saveState();
+      const related = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId) : [a];
+      related.forEach(r=>{ r.status=status; });
+      saveState();
       showToast(`Turno marcado como ${status}.`);
       notifyStaff('Turno cancelado',`${fullName(client(a.clientId))} · ${a.service} a las ${a.start}`,'appt-cancel-'+id);
+      openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();
+    }
+    function reactivateAppointment(id){
+      const a=state.appointments.find(x=>x.id===id); if(!a)return;
+      const related = a.bookingId ? state.appointments.filter(x=>x.bookingId===a.bookingId) : [a];
+      related.forEach(r=>{ r.status='confirmed'; });
+      saveState();
+      showToast('Turno reactivado.');
       openPopover({currentTarget:document.querySelector(`[data-appt="${id}"]`)||document.body},id); renderAgenda();
     }
     // Inasistencia: el cliente no vino. El turno queda en rojo/rosa (status no_show)
@@ -7871,13 +7881,15 @@
           ${a.note||c.note?`<div class="detail-section" style="margin-top:8px;"><strong>Nota</strong><span>${esc(a.note||c.note)}</span></div>`:''}
         </div>
         <div class="popover-footer">
-          ${reservationCharged(reservationKey(a))
-            ? `<button class="small-btn" disabled style="opacity:.6;cursor:default;">✓ Ya cobrado</button>`
-            : `<button class="small-btn primary" data-action="chargeFromAppointment" data-id="${a.id}">Cobrar visita</button>`}
+          ${['cancelled','cancelado','no_show'].includes(a.status)
+            ? `<button class="small-btn primary" data-action="reactivateAppointment" data-id="${a.id}">Reactivar turno</button>`
+            : reservationCharged(reservationKey(a))
+              ? `<button class="small-btn" disabled style="opacity:.6;cursor:default;">✓ Ya cobrado</button>`
+              : `<button class="small-btn primary" data-action="chargeFromAppointment" data-id="${a.id}">Cobrar visita</button>`}
           <button class="small-btn" data-action="editApptAndClose" data-id="${a.id}">Editar turno</button>
-          <button class="small-btn ${a.deposit==='paid'?'primary':''}" data-action="togglePaid" data-id="${a.id}">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
+          ${!['cancelled','cancelado','no_show'].includes(a.status) ? `<button class="small-btn ${a.deposit==='paid'?'primary':''}" data-action="togglePaid" data-id="${a.id}">${a.deposit==='paid'?'✓ Pagado':'Marcar pagado'}</button>
           <button class="small-btn" data-action="cancelAppointment" data-id="${a.id}">Cancelar</button>
-          <button class="small-btn" data-action="markNoShow" data-id="${a.id}" style="border-color:#C2546B;color:#9a2c45;">Inasistencia</button>
+          <button class="small-btn" data-action="markNoShow" data-id="${a.id}" style="border-color:#C2546B;color:#9a2c45;">Inasistencia</button>` : ''}
           <button class="small-btn danger" data-action="deleteAppointment" data-id="${a.id}">Eliminar</button>
         </div>`;
       const r=e.currentTarget.getBoundingClientRect?e.currentTarget.getBoundingClientRect():{right:300,top:120};
@@ -11443,6 +11455,7 @@ ${context}`;
       doSendSurveyWA:          el => doSendSurveyWA(el.dataset.client, el.dataset.appt),
       doSendSurveyEmail:       el => doSendSurveyEmail(el.dataset.client, el.dataset.appt),
       cancelAppointment:       el => cancelAppointment(el.dataset.id),
+      reactivateAppointment:   el => reactivateAppointment(el.dataset.id),
       markNoShow:              el => markNoShow(el.dataset.id),
       deleteAppointment:       el => deleteAppointment(el.dataset.id),
       chargeFromAppointment:   el => chargeFromAppointment(el.dataset.id),
