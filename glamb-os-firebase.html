@@ -6896,11 +6896,16 @@
       const today = dateKey(new Date());
       const reservations = [];
       const seen = new Set();
-      activeAppointments().filter(a=>!a.isAdditional && (!a.date || a.date===today)).forEach(a=>{
+      const allActive = activeAppointments();
+      const todayActive = allActive.filter(a=>!a.isAdditional && (!a.date || a.date===today));
+      console.log('[CAJA] today=', today, 'activeAppts=', allActive.length, 'todayFiltered=', todayActive.length,
+        'allDates=', [...new Set(allActive.map(a=>a.date||'sin-date'))],
+        'excluded=', allActive.filter(a=>!a.isAdditional && a.date && a.date!==today).map(a=>({id:a.id,date:a.date,client:a.clientId,service:a.service})));
+      todayActive.forEach(a=>{
         const key = reservationKey(a);
         if(seen.has(key)) return;
         seen.add(key);
-        if(reservationCharged(key)) return; // ya cobrado: no ofrecerlo de nuevo
+        if(reservationCharged(key)){ console.log('[CAJA] skip charged:', a.id, key); return; }
         const related = reservationAppointments(a);
         const services = related.map(r=>r.service).join(' + ');
         const total = related.reduce((sum,r)=>sum+Number(currentApptPrice(r)||estimateAmount(r)||0),0);
