@@ -3470,6 +3470,7 @@
           </div>
           <div class="top-actions">
             <button class="btn" id="exportClientsBtn" style="display:none">Exportar CSV</button>
+            <button class="btn" id="backupAllBtn" style="display:none">Copia de seguridad</button>
             <button class="btn" id="detectDuplicatesBtn" style="display:none">Detectar duplicados</button>
             <button class="btn" id="importClientsBtn">Importar CSV</button>
             <button class="btn primary" data-open-client>Nuevo cliente</button>
@@ -4835,6 +4836,12 @@
     const _syncShadow={};   // key -> Map(docId -> JSON conocido en el server)
     const _syncUnsub={};    // key -> función de desuscripción del onSnapshot
     const _syncInit={};     // key -> ya llegó el primer snapshot
+    const _syncLive={};     // key -> ya hubo un snapshot confirmado por el SERVER.
+                            // Con el caché offline, al reabrir llega primero el
+                            // snapshot local y después el del server con todo lo
+                            // creado mientras la app estuvo cerrada: sin este
+                            // flag, ese "catch-up" dispararía una ráfaga de
+                            // notificaciones "Turno nuevo" viejas.
     const _docId=v=>String(v).replace(/[\/.]/g,'_'); // id seguro para Firestore
 
     // ── Fase B.2: datos financieros solo-admin (protección server-side) ──
@@ -4868,11 +4875,21 @@
     // conocida del server; solo escribimos si el catálogo cambió en ESTE equipo.
     let _catalogShadow=null, _catalogUnsub=null;
     let _configShadow=null, _configUnsub=null;
+    // Sombras del blob compartido y de finanzas: última versión escrita/leída.
+    // Si el contenido no cambió, el flush NO re-escribe el documento (antes se
+    // reescribían en CADA acción, aunque el cambio fuera de un turno que viaja
+    // por su propia colección) => menos escrituras facturadas.
+    let _blobShadow=null, _financeShadow=null;
     state.authUser = null;
     try {
       firebase.initializeApp(firebaseConfig);
       auth = firebase.auth();
       db = firebase.firestore();
+      // Caché offline (IndexedDB): al reabrir la app, Firestore parte de la
+      // copia local y el server solo manda lo que cambió => arranque más rápido
+      // y muchas menos lecturas facturadas (antes cada apertura re-descargaba
+      // TODA la base). synchronizeTabs coordina varias pestañas abiertas.
+      db.enablePersistence({synchronizeTabs:true}).catch(e=>console.warn('[GLAMB] caché offline no disponible:', e && e.code));
       stateDoc = db.collection('appState').doc('main');
       fbReady = true;
     } catch(e){ console.error('[GLAMB] Firebase init falló:', e); }
@@ -4903,13 +4920,20 @@
       setSaveStatus('saving');
       // Fase B: el blob compartido NO lleva phone/email de clientes
       // Fase 3: tampoco lleva las entidades sincronizadas (van por colección)
-      const p=stateDoc.set(serializeForCloud(),{merge:false}).then(()=>{
-        _pendingCloud=false; setSaveStatus('saved');
-      }).catch(e=>{
-        console.error('[GLAMB] guardado en nube falló:', e);
-        setSaveStatus('error');
-        showToast('⚠️ Error al sincronizar con la nube. Cambios guardados localmente.');
-      });
+      const payload=serializeForCloud();
+      let blobJson=null; try{ blobJson=JSON.stringify(payload); }catch(e){}
+      let p=null;
+      if(blobJson!==null && blobJson===_blobShadow){
+        _pendingCloud=false; setSaveStatus('saved'); // blob sin cambios: el cambio fue en una colección/doc propio
+      } else {
+        p=stateDoc.set(payload,{merge:false}).then(()=>{
+          _blobShadow=blobJson; _pendingCloud=false; setSaveStatus('saved');
+        }).catch(e=>{
+          console.error('[GLAMB] guardado en nube falló:', e);
+          setSaveStatus('error');
+          showToast('⚠️ Error al sincronizar con la nube. Cambios guardados localmente.');
+        });
+      }
       syncCollections();
       saveFinancePrivate();
       saveCatalog();
@@ -4934,6 +4958,7 @@
         const snap=await stateDoc.get();
         if(snap.exists){ applyPersisted(snap.data(), true); }
         else { await stateDoc.set(serializeForCloud(),{merge:false}); } // primer arranque: sembrar demo
+        try{ _blobShadow=JSON.stringify(serializeForCloud()); }catch(e){ _blobShadow=null; } // sombra = lo que hay en la nube
       }catch(e){ console.error('[GLAMB] carga desde nube falló:', e); }
       finally{ _blobReady=true; } // liberar escrituras DESPUÉS de leer estado real
     }
@@ -4943,6 +4968,7 @@
         if(!snap.exists || snap.metadata.hasPendingWrites) return; // ignorar el eco de mi propia escritura
         _applyingRemote=true;
         applyPersisted(snap.data(), true);
+        try{ _blobShadow=JSON.stringify(serializeForCloud()); }catch(e){} // sombra al día con el server
         try{ renderAll(); }catch(e){ console.error(e); }
         _applyingRemote=false;
       }, e=>console.error('[GLAMB] sync en vivo falló:', e));
@@ -5055,6 +5081,7 @@
         if(_syncUnsub[key]) return;
         _syncUnsub[key]=db.collection(coll).onSnapshot(snap=>{
           _applyingRemote=true;
+          const live=!!_syncLive[key]; // ¿ya estábamos al día con el server antes de este snapshot?
           if(!_syncInit[key]){
             const arr=[]; const shadow=new Map();
             snap.docs.forEach(d=>{ const rec=d.data(); if(rec&&rec.id==null) rec.id=d.id; arr.push(rec); shadow.set(d.id,JSON.stringify(rec)); });
@@ -5069,7 +5096,7 @@
               else {
                 const rec=ch.doc.data(); if(rec&&rec.id==null) rec.id=id;
                 // Turno nuevo desde otro dispositivo: no estaba en state local => avisar al staff
-                if(key==='appointments' && ch.type==='added' && !idx.has(id) && !rec.isAdditional){
+                if(key==='appointments' && ch.type==='added' && live && !idx.has(id) && !rec.isAdditional){
                   const c=client(rec.clientId);
                   notifyStaff('Turno nuevo',`${fullName(c)} · ${rec.service||''} a las ${rec.start||''}`, 'sync-appt-'+id);
                 }
@@ -5079,6 +5106,7 @@
             const filtered=arr.filter(r=>r);
             state[key]=sort?filtered.sort(sort):filtered; _syncShadow[key]=shadow;
           }
+          if(!snap.metadata.fromCache) _syncLive[key]=true; // al día con el server: los próximos 'added' sí son turnos nuevos reales
           mergeClientsPrivate();
           try{ renderAll(); }catch(e){ console.error(e); }
           _applyingRemote=false;
@@ -5090,6 +5118,7 @@
       Object.keys(_syncUnsub).forEach(k=>{ try{ _syncUnsub[k](); }catch(e){} delete _syncUnsub[k]; });
       Object.keys(_syncShadow).forEach(k=>{ delete _syncShadow[k]; });
       Object.keys(_syncInit).forEach(k=>{ delete _syncInit[k]; });
+      Object.keys(_syncLive).forEach(k=>{ delete _syncLive[k]; });
     }
 
     // Siembra única y GLOBAL: copia los registros del blob viejo (o de la demo)
@@ -5188,7 +5217,10 @@
       if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
       if(curRole()!=='admin') return;
       const out={}; FINANCE_KEYS.forEach(k=>{ if(state[k]!==undefined) out[k]=state[k]; });
+      let json=null; try{ json=JSON.stringify(out); }catch(e){}
+      if(json!==null && json===_financeShadow) return; // sin cambios: no re-escribir
       db.collection('financePrivate').doc('main').set(out,{merge:false})
+        .then(()=>{ _financeShadow=json; })
         .catch(e=>console.error('[GLAMB] guardado finanzas falló:',e));
     }
     function subscribeFinancePrivateSync(){
@@ -5198,6 +5230,7 @@
         _applyingRemote=true;
         const d=snap.data()||{};
         FINANCE_KEYS.forEach(k=>{ if(d[k]!==undefined) state[k]=d[k]; });
+        try{ const o={}; FINANCE_KEYS.forEach(k=>{ if(state[k]!==undefined) o[k]=state[k]; }); _financeShadow=JSON.stringify(o); }catch(e){}
         try{ renderAll(); }catch(e){ console.error(e); }
         _applyingRemote=false;
       }, e=>console.error('[GLAMB] finanzas sync falló:',e));
@@ -5214,6 +5247,7 @@
         const out={};
         FINANCE_KEYS.forEach(k=>{ const v=(blob[k]!==undefined)?blob[k]:state[k]; if(v!==undefined) out[k]=v; });
         await ref.set(out,{merge:false});
+        try{ _financeShadow=JSON.stringify(out); }catch(e){}
         console.log('[GLAMB] migración financePrivate completada');
       }catch(e){ console.error('[GLAMB] migración financePrivate falló:',e); }
     }
@@ -5708,6 +5742,8 @@
       // Exportar CSV y detectar duplicados: solo admin
       const expBtn=$('exportClientsBtn');
       if(expBtn) expBtn.style.display = curRole()==='admin' ? '' : 'none';
+      const bkBtn=$('backupAllBtn');
+      if(bkBtn) bkBtn.style.display = curRole()==='admin' ? '' : 'none';
       const dupBtn=$('detectDuplicatesBtn');
       if(dupBtn) dupBtn.style.display = curRole()==='admin' ? '' : 'none';
       const q=state.clientSearch.toLowerCase();
@@ -5794,6 +5830,30 @@
       showToast(`${rows.length} cliente(s) exportado(s).`);
     }
     if($('exportClientsBtn')) $('exportClientsBtn').onclick=()=>exportClientsToCSV();
+    // Backup completo (solo admin): descarga TODO el estado de la app en un
+    // archivo JSON — clientes (con teléfono/email), turnos, tickets, pagos,
+    // caja, finanzas, catálogo y configuración. Es la red de seguridad ante un
+    // borrado accidental: guardá el archivo fuera del navegador (Drive, PC).
+    // La restauración es asistida (no hay botón de importar a propósito, para
+    // que un JSON viejo no pueda pisar la base por error).
+    function downloadFullBackup(){
+      if(curRole()!=='admin'){ showToast('Solo el administrador puede descargar el backup.'); return; }
+      const d=new Date(), p2=n=>String(n).padStart(2,'0');
+      const data={_meta:{app:'GLAMB OS',exportedAt:d.toISOString(),
+        clientes:(state.clients||[]).length, turnos:(state.appointments||[]).length,
+        tickets:(state.salesTickets||[]).length, pagos:(state.payments||[]).length},
+        ...serializeState()};
+      let jsonTxt; try{ jsonTxt=JSON.stringify(data); }catch(e){ showToast('No se pudo generar el backup.'); return; }
+      const blob=new Blob([jsonTxt],{type:'application/json'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url;
+      a.download=`glamb-backup-${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}.json`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      showToast(`Backup descargado: ${data._meta.clientes} clientes, ${data._meta.turnos} turnos, ${data._meta.tickets} tickets.`);
+    }
+    if($('backupAllBtn')) $('backupAllBtn').onclick=()=>downloadFullBackup();
     function renderTeam(){
       const pros=state.collaborators.filter(c=>c.can).length;
       const groupCount = state.catalog.groups.length;
@@ -11949,6 +12009,7 @@ ${context}`;
           _catalogShadow=null;
           if(_configUnsub){ _configUnsub(); _configUnsub=null; }
           _configShadow=null;
+          _blobShadow=null; _financeShadow=null;
           if(_surveyResponsesUnsub){ _surveyResponsesUnsub(); _surveyResponsesUnsub=null; }
           unsubscribeCollections();
           // limpiar datos financieros en memoria (que un login de rol bajo
