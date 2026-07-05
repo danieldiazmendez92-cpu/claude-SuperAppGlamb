@@ -10777,16 +10777,33 @@
       if($('profileReviews')&&_reviewDraft.clientId) renderProfileReviews(_reviewDraft.clientId);
     }
 
+    // Contexto de una reseña/respuesta para las vistas de administración (NO se muestra al cliente).
+    // Deriva el turno vinculado (appointmentId) para saber qué servicio se hizo, quién atendió y la fecha.
+    function reviewApptInfo(r){
+      const appt = r.appointmentId ? state.appointments.find(a=>reservationKey(a)===r.appointmentId||a.id===r.appointmentId) : null;
+      let service = r.service || '';
+      if(!service && appt) service = (appt.lines||[]).map(l=>l.name||l.serviceId||'').filter(Boolean).join(', ') || appt.service || '';
+      const colId = r.collaboratorId || (appt && appt.lines?.[0]?.collaboratorId) || null;
+      const col = colId ? member(colId) : null;
+      let date = r.date || (appt && appt.date) || '';
+      if(!date && r.submittedAt){ try{ date=r.submittedAt?.toDate?.()?.toLocaleDateString('es-AR')??''; }catch(_){ } }
+      return { service: service||'—', colName: col?fullName(col):'', date, appt };
+    }
     function renderProfileReviews(clientId){
       const el=$('profileReviews'); if(!el) return;
-      const revs=(state.reviews||[]).filter(r=>r.clientId===clientId);
+      const manual=(state.reviews||[]).filter(r=>r.clientId===clientId).map(r=>({...r,_src:'manual'}));
+      const survey=(state.surveyResponses||[]).filter(r=>r.clientId===clientId).map(r=>({...r,_src:'survey'}));
+      const revs=[...manual,...survey];
       if(!revs.length){ el.innerHTML='<div class="muted" style="font-size:13px;margin-top:4px">Sin reseñas todavía.</div>'; return; }
       el.innerHTML=revs.map(r=>{
-        const col=r.collaboratorId?member(r.collaboratorId):{first:''};
+        const info=reviewApptInfo(r);
+        const tags=r.tags?Object.entries(r.tags).filter(([,v])=>v).map(([k])=>SURVEY_TAG_LABELS[k]||k):[];
+        const srcBadge=r._src==='survey'?' · <span style="font-size:10px;color:var(--text-muted);background:var(--surface-2,#f3f4f6);border-radius:8px;padding:1px 6px">encuesta anónima</span>':'';
         return `<div class="review-card-mini">
           <div class="review-stars-mini">${starsHtml(r.stars)}</div>
-          <div class="review-meta-mini">${esc(r.service||'—')}${col.first?' · con '+esc(col.first):''} · ${esc(r.date||'')}</div>
-          ${r.comment?`<div class="review-comment-mini">${esc(r.comment)}</div>`:''}
+          <div class="review-meta-mini">${esc(info.service)}${info.colName?' · atendió '+esc(info.colName):''}${info.date?' · '+esc(info.date):''}${srcBadge}</div>
+          ${tags.length?`<div class="survey-tag-chips" style="margin-top:4px">${tags.map(t=>`<span class="survey-tag-chip">${esc(t)}</span>`).join('')}</div>`:''}
+          ${r.comment?`<div class="review-comment-mini">"${esc(r.comment)}"</div>`:''}
         </div>`;
       }).join('');
     }
@@ -10984,21 +11001,19 @@
           ?'<div class="mini-row"><strong>Sin respuestas todavía</strong><span>Las encuestas que completen las clientas van a aparecer acá.</span></div>'
           :allRevs.slice(0,50).map(r=>{
             const c=state.clients.find(x=>x.id===r.clientId);
-            const m=r.collaboratorId?state.collaborators.find(x=>x.id===r.collaboratorId):null;
-            let dateStr=r.date||'';
-            if(!dateStr&&r.submittedAt){
-              try{ dateStr=r.submittedAt?.toDate?.()?.toLocaleDateString('es-AR')??''; }catch(_){}
-            }
+            const info=reviewApptInfo(r);
+            let dateStr=info.date||'';
             if(!dateStr&&r.createdAt) dateStr=(r.createdAt||'').slice(0,10);
             const tags=r.tags?Object.entries(r.tags).filter(([,v])=>v).map(([k])=>SURVEY_TAG_LABELS[k]||k):[];
             return `<div class="review-card">
               <div class="review-card-top">
                 <span class="review-stars-line">${starsHtml(r.stars)}</span>
-                <span class="review-info">${esc(c?fullName(c):'Anónima')}${m?' · con '+esc(m.first):''}</span>
+                <span class="review-info">${esc(c?fullName(c):'Anónima')}${info.colName?' · atendió '+esc(info.colName):''}</span>
                 <span class="review-date">${esc(dateStr)}</span>
                 ${!r._manual?`<span style="font-size:10px;color:var(--text-muted);background:var(--surface-2,#f3f4f6);border-radius:10px;padding:1px 7px">encuesta</span>`:''}
                 ${r._manual&&curRole()==='admin'?`<button class="small-btn danger" data-action="deleteReview" data-id="${r.id}" style="padding:2px 8px;font-size:11px">✕</button>`:''}
               </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Servicio: ${esc(info.service)}${info.appt?'':' · <em>sin turno vinculado</em>'}</div>
               ${tags.length?`<div class="survey-tag-chips">${tags.map(t=>`<span class="survey-tag-chip">${esc(t)}</span>`).join('')}</div>`:''}
               ${r.comment?`<div class="review-comment">"${esc(r.comment)}"</div>`:''}
             </div>`;
