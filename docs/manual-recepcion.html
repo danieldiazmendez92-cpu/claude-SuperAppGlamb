@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLAMB OS — Manual de Recepción</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Inter:wght@300;400;500;600&display=swap');
+
+  :root {
+    --glamb-dark: #1a1a1a;
+    --glamb-gold: #b8960c;
+    --glamb-gold-light: #f5ede4;
+    --glamb-line: #e8e0d8;
+    --glamb-muted: #888;
+    --glamb-surface: #faf9f7;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--glamb-dark);
+    background: #fff;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 48px 40px;
+  }
+
+  .cover {
+    text-align: center;
+    padding: 60px 0 48px;
+    border-bottom: 1px solid var(--glamb-line);
+    margin-bottom: 48px;
+  }
+  .cover-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 42px;
+    font-weight: 300;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+  }
+  .cover-subtitle {
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--glamb-muted);
+    margin-top: 6px;
+  }
+  .cover-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 28px;
+    font-weight: 300;
+    margin-top: 36px;
+  }
+  .cover-role {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 4px 18px;
+    border: 1px solid var(--glamb-dark);
+    border-radius: 20px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .cover-note {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--glamb-muted);
+  }
+
+  .toc {
+    background: var(--glamb-surface);
+    border: 1px solid var(--glamb-line);
+    border-radius: 10px;
+    padding: 28px 32px;
+    margin-bottom: 48px;
+  }
+  .toc h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 400;
+    margin-bottom: 16px;
+  }
+  .toc-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 32px;
+  }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 6px; }
+  .toc a { color: var(--glamb-dark); text-decoration: none; font-size: 13px; }
+  .toc a:hover { color: var(--glamb-gold); }
+  .toc .toc-sub { padding-left: 16px; margin-top: 4px; list-style: disc; }
+  .toc .toc-sub li { margin-bottom: 2px; }
+  .toc .toc-sub a { color: var(--glamb-muted); font-size: 12px; }
+
+  .section { margin-bottom: 48px; }
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 300;
+    border-bottom: 1px solid var(--glamb-line);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    scroll-margin-top: 20px;
+  }
+  h1 .section-num { color: var(--glamb-gold); margin-right: 8px; }
+  h2 { font-size: 14px; font-weight: 600; margin: 24px 0 10px; scroll-margin-top: 20px; }
+  h3 { font-size: 13px; font-weight: 500; margin: 18px 0 8px; color: var(--glamb-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  p { margin-bottom: 12px; }
+
+  .steps { counter-reset: step; list-style: none; padding: 0; margin: 12px 0 20px; }
+  .steps li { counter-increment: step; display: flex; gap: 14px; margin-bottom: 10px; align-items: flex-start; }
+  .steps li::before {
+    content: counter(step);
+    flex-shrink: 0; width: 24px; height: 24px;
+    background: var(--glamb-dark); color: #fff;
+    border-radius: 50%; font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 2px;
+  }
+
+  .tip    { background: #e8f5e9; border-left: 3px solid #2d7a4a; border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 13px; }
+  .warning{ background: #fff3e0; border-left: 3px solid #e65100; border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 13px; }
+  .info   { background: var(--glamb-gold-light); border-left: 3px solid var(--glamb-gold); border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 13px; }
+  .tip strong, .warning strong, .info strong { display: block; margin-bottom: 4px; }
+
+  .btn-visual {
+    display: inline-block; background: var(--glamb-dark); color: #fff;
+    font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 5px; vertical-align: middle;
+  }
+  .btn-visual.light { background: var(--glamb-surface); color: var(--glamb-dark); border: 1px solid var(--glamb-line); }
+  .btn-visual.gold  { background: var(--glamb-gold); }
+  .btn-visual.red   { background: #c0392b; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 14px 0; }
+  th { background: var(--glamb-dark); color: #fff; padding: 8px 12px; text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.5px; }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--glamb-line); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--glamb-surface); }
+
+  .module-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--glamb-dark);
+    color: #fff;
+    vertical-align: middle;
+    margin-right: 6px;
+  }
+
+  @media print {
+    body { padding: 20px 30px; font-size: 12px; }
+    .cover { padding: 30px 0; }
+    h1 { page-break-before: always; }
+    .cover, .toc { page-break-after: always; }
+    .tip, .warning, .info { page-break-inside: avoid; }
+    .toc-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ PORTADA ══ -->
+<div class="cover">
+  <div class="cover-logo">GLAMB</div>
+  <div class="cover-subtitle">Sistema de gestión</div>
+  <div class="cover-title">Manual de uso</div>
+  <div class="cover-role">Recepción &amp; Administración</div>
+  <div class="cover-note">Versión 1.0 · Julio 2026</div>
+</div>
+
+<!-- ══ ÍNDICE ══ -->
+<div class="toc">
+  <h2>Índice</h2>
+  <div class="toc-grid">
+    <ol>
+      <li><a href="#s1">Acceso y roles</a></li>
+      <li>
+        <a href="#s2">Panel de inicio</a>
+        <ul class="toc-sub"><li><a href="#s2-1">Indicadores del día</a></li></ul>
+      </li>
+      <li>
+        <a href="#s3">Clientes</a>
+        <ul class="toc-sub">
+          <li><a href="#s3-1">Buscar y ver perfil</a></li>
+          <li><a href="#s3-2">Crear cliente</a></li>
+          <li><a href="#s3-3">Editar datos</a></li>
+          <li><a href="#s3-4">Historial de visitas</a></li>
+          <li><a href="#s3-5">Etiquetas y notas</a></li>
+          <li><a href="#s3-6">Importar / Exportar CSV</a></li>
+          <li><a href="#s3-7">Detectar duplicados</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#s4">Agenda</a>
+        <ul class="toc-sub">
+          <li><a href="#s4-1">Crear turno</a></li>
+          <li><a href="#s4-2">Editar y cancelar turno</a></li>
+          <li><a href="#s4-3">No show</a></li>
+          <li><a href="#s4-4">Bloqueos</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#s5">Caja</a>
+        <ul class="toc-sub">
+          <li><a href="#s5-1">Abrir caja</a></li>
+          <li><a href="#s5-2">Cobrar un servicio</a></li>
+          <li><a href="#s5-3">Descuentos</a></li>
+          <li><a href="#s5-4">Señas y anticipos</a></li>
+          <li><a href="#s5-5">Gastos y retiros</a></li>
+          <li><a href="#s5-6">Ledger (movimientos)</a></li>
+          <li><a href="#s5-7">Anular ticket o seña</a></li>
+          <li><a href="#s5-8">Cerrar caja</a></li>
+        </ul>
+      </li>
+    </ol>
+    <ol start="6">
+      <li>
+        <a href="#s6">Catálogo de servicios</a>
+        <ul class="toc-sub">
+          <li><a href="#s6-1">Agregar / editar servicio</a></li>
+          <li><a href="#s6-2">Adicionales</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#s7">Equipo</a>
+        <ul class="toc-sub">
+          <li><a href="#s7-1">Crear colaboradora</a></li>
+          <li><a href="#s7-2">Comisiones</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#s8">RRHH</a>
+        <ul class="toc-sub">
+          <li><a href="#s8-1">Deducciones</a></li>
+          <li><a href="#s8-2">Liquidaciones</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#s9">Finanzas</a>
+        <ul class="toc-sub">
+          <li><a href="#s9-1">Gastos</a></li>
+          <li><a href="#s9-2">Contador mensual</a></li>
+        </ul>
+      </li>
+      <li>
+        <a href="#s10">Comunicaciones</a>
+        <ul class="toc-sub">
+          <li><a href="#s10-1">Emails de turno</a></li>
+          <li><a href="#s10-2">Recordatorios automáticos</a></li>
+        </ul>
+      </li>
+      <li><a href="#s11">Athenas (IA)</a></li>
+      <li><a href="#s12">Preguntas frecuentes</a></li>
+    </ol>
+  </div>
+</div>
+
+<!-- ══ S1 ══ -->
+<div class="section" id="s1">
+  <h1><span class="section-num">1.</span>Acceso y roles</h1>
+
+  <p>GLAMB OS se abre en el navegador desde <strong>glamb-os.web.app</strong>. Ingresá con tu correo y contraseña.</p>
+
+  <p>El sistema tiene tres niveles de acceso:</p>
+  <table>
+    <thead><tr><th>Rol</th><th>Acceso</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Administración</strong></td>
+        <td>Acceso completo: clientes con datos de contacto, agenda, caja completa, catálogo, equipo, RRHH, finanzas, comunicaciones, Athenas.</td>
+      </tr>
+      <tr>
+        <td><strong>Recepción</strong></td>
+        <td>Clientes (sin datos de contacto), agenda, caja completa. Sin acceso a finanzas ni RRHH.</td>
+      </tr>
+      <tr>
+        <td><strong>Colaboradora</strong></td>
+        <td>Solo agenda (día actual) y sus propias ventas en caja. Sin acceso a datos de clientes, finanzas ni equipo.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="info">
+    <strong>Este manual aplica al rol Recepción y Administración</strong>
+    Algunas funciones (RRHH, Finanzas, Catálogo, Equipo, Comunicaciones) pueden no estar disponibles si tu usuario es de nivel recepción sin permisos completos.
+  </div>
+
+  <h2>Gestión de usuarios</h2>
+  <p>Para crear o editar usuarios del sistema andá a <strong>Equipo → Usuarios</strong>. Desde ahí podés asignar roles y vincular colaboradoras con sus cuentas de acceso.</p>
+
+  <div class="warning">
+    <strong>No compartir credenciales</strong>
+    Cada persona debe tener su propio usuario. Los registros de cobros, cambios de estado y acciones quedan asociados al usuario que los realizó.
+  </div>
+</div>
+
+<!-- ══ S2 ══ -->
+<div class="section" id="s2">
+  <h1><span class="section-num">2.</span>Panel de inicio</h1>
+
+  <p>El Panel (♦) es la pantalla de bienvenida. Muestra un resumen en tiempo real del día.</p>
+
+  <h2 id="s2-1">2.1 Indicadores del día</h2>
+  <table>
+    <thead><tr><th>Indicador</th><th>Qué muestra</th></tr></thead>
+    <tbody>
+      <tr><td>Turnos de hoy</td><td>Total de turnos activos del día.</td></tr>
+      <tr><td>Confirmados / En curso / Completados</td><td>Estado de los turnos del día.</td></tr>
+      <tr><td>Ventas del día</td><td>Total cobrado en tickets confirmados.</td></tr>
+      <tr><td>Pendientes de cobro</td><td>Servicios guardados que todavía no se cobraron.</td></tr>
+      <tr><td>Saldo en caja</td><td>Efectivo esperado según apertura + cobros − retiros − gastos.</td></tr>
+    </tbody>
+  </table>
+
+  <p>También muestra los <strong>próximos turnos</strong> y accesos rápidos a las funciones más usadas.</p>
+</div>
+
+<!-- ══ S3 ══ -->
+<div class="section" id="s3">
+  <h1><span class="section-num">3.</span>Clientes <span class="module-badge">♡</span></h1>
+
+  <p>El módulo de clientes (ícono ♡) es la base de datos del salón: perfil, historial de visitas, etiquetas, notas y estadísticas.</p>
+
+  <h2 id="s3-1">3.1 Buscar y ver perfil</h2>
+  <ol class="steps">
+    <li>Ingresá el nombre, apellido o teléfono en la barra de búsqueda.</li>
+    <li>Tocá <span class="btn-visual light">Ver perfil</span> en la tarjeta del cliente.</li>
+    <li>El perfil muestra: datos de contacto, visitas, ticket promedio, etiquetas, notas, historial completo y reseñas.</li>
+  </ol>
+
+  <h2 id="s3-2">3.2 Crear cliente</h2>
+  <ol class="steps">
+    <li>Tocá <span class="btn-visual">+ Nuevo cliente</span>.</li>
+    <li>Completá nombre, apellido, teléfono y email (los últimos dos son opcionales pero recomendados para recordatorios).</li>
+    <li>Tocá <span class="btn-visual gold">Guardar</span>.</li>
+  </ol>
+
+  <div class="tip">
+    <strong>También podés crear clientes desde la Agenda</strong>
+    Al crear un turno, si el cliente no existe, hay un botón para crearlo sin salir de la agenda.
+  </div>
+
+  <h2 id="s3-3">3.3 Editar datos</h2>
+  <p>Desde el perfil del cliente, tocá <span class="btn-visual light">Editar datos</span>. Podés modificar nombre, apellido, teléfono, email y nota clave.</p>
+
+  <div class="warning">
+    <strong>Solo admins pueden editar</strong>
+    La edición y eliminación de clientes es exclusiva del rol administración.
+  </div>
+
+  <h2 id="s3-4">3.4 Historial de visitas</h2>
+  <p>El historial muestra <strong>lo que se realizó realmente</strong>, no solo lo que estaba agendado:</p>
+  <table>
+    <thead><tr><th>Caso</th><th>Lo que muestra</th></tr></thead>
+    <tbody>
+      <tr><td>Turno cobrado sin cambios</td><td>Servicio, adicionales, colaboradora, precio real, fecha.</td></tr>
+      <tr><td>Se cambió el servicio al cobrar</td><td>El servicio realizado + nota "Agendado: [servicio original]".</td></tr>
+      <tr><td>Se agregaron servicios extra</td><td>Servicio principal + lista de adicionales y extras.</td></tr>
+      <tr><td>Venta sin turno (walk-in)</td><td>Aparece con label "Sin turno".</td></tr>
+      <tr><td>Turno cancelado o no cobrado</td><td>Muestra datos del turno original.</td></tr>
+    </tbody>
+  </table>
+
+  <p>Usá el filtro arriba del historial para ver solo ciertos estados (activos, cancelados, todos).</p>
+
+  <h2 id="s3-5">3.5 Etiquetas y notas</h2>
+  <p>Las etiquetas (tags) se usan para clasificar clientes: VIP, Acepta upgrades, Clienta frecuente, etc. Se asignan desde el perfil.</p>
+  <p>La <strong>nota clave</strong> es un campo de texto libre para anotar preferencias, alergias, observaciones importantes. Aparece visible al abrir el perfil.</p>
+
+  <h2 id="s3-6">3.6 Importar / Exportar CSV</h2>
+  <p>Para importar clientes desde un archivo externo o exportar la base de datos:</p>
+  <ol class="steps">
+    <li>En Clientes, tocá <span class="btn-visual light">Exportar CSV</span> (descarga todos los clientes con teléfono y email).</li>
+    <li>Para importar, tocá <span class="btn-visual light">Importar CSV</span> y seleccioná el archivo. El sistema detecta duplicados por teléfono.</li>
+  </ol>
+  <div class="warning">
+    <strong>Función exclusiva de administración</strong>
+    Importar y exportar datos de clientes (incluyendo teléfono y email) solo está disponible para el rol admin.
+  </div>
+
+  <h2 id="s3-7">3.7 Detectar y fusionar duplicados</h2>
+  <p>Si hay clientes repetidos en la base de datos, el sistema puede detectarlos automáticamente.</p>
+  <ol class="steps">
+    <li>Tocá <span class="btn-visual light">Detectar duplicados</span> (visible solo para admins).</li>
+    <li>El sistema muestra pares de clientes que comparten teléfono, email y nombre/apellido similares.</li>
+    <li>Para cada par, elegís cuál <strong>mantener</strong>. El que se elimina transfiere todo su historial (turnos, pagos, etiquetas, notas) al que queda.</li>
+  </ol>
+  <div class="warning">
+    <strong>Esta acción es irreversible.</strong>
+    Revisá bien antes de confirmar. El historial se une correctamente, pero el registro eliminado no se puede recuperar.
+  </div>
+</div>
+
+<!-- ══ S4 ══ -->
+<div class="section" id="s4">
+  <h1><span class="section-num">4.</span>Agenda <span class="module-badge">🕐</span></h1>
+
+  <p>La agenda visual muestra todos los turnos del día organizados por columna de colaboradora. Podés navegar a cualquier fecha con las flechas o el selector de fecha.</p>
+
+  <h2 id="s4-1">4.1 Crear turno</h2>
+  <ol class="steps">
+    <li>Tocá un espacio vacío en la agenda (en la columna de la colaboradora y el horario deseado).</li>
+    <li>Se abre el formulario de turno. Completá: cliente, servicio, hora de inicio y duración.</li>
+    <li>Opcionalmente: agregá una nota interna o servicios adicionales al turno.</li>
+    <li>Tocá <span class="btn-visual gold">Guardar turno</span>.</li>
+  </ol>
+  <p>Si el cliente no existe, tocá <span class="btn-visual light">+ Crear cliente</span> desde el mismo formulario.</p>
+
+  <h2 id="s4-2">4.2 Editar y cancelar turno</h2>
+  <ol class="steps">
+    <li>Tocá el turno en la agenda.</li>
+    <li>En la ficha, tocá <span class="btn-visual light">Editar</span> para modificar datos, o <span class="btn-visual red">Cancelar turno</span> para cancelarlo.</li>
+  </ol>
+  <div class="info">
+    <strong>Cobrar desde la agenda</strong>
+    Desde la ficha del turno podés tocar <span class="btn-visual gold">Cobrar turno</span> para ir directo a caja con el cliente y servicio precargados. Es la forma más rápida y evita errores.
+  </div>
+
+  <h2 id="s4-3">4.3 No show</h2>
+  <p>Si el cliente no se presentó, marcá el turno como <strong>No show</strong> desde la ficha del turno. El turno queda registrado como no concretado sin eliminarlo del historial.</p>
+
+  <h2 id="s4-4">4.4 Bloqueos</h2>
+  <p>Para bloquear un horario (almuerzo, capacitación, limpieza, etc.) sin crear un turno, usá la opción <strong>Bloquear horario</strong> en la ficha que se abre al tocar un espacio vacío.</p>
+</div>
+
+<!-- ══ S5 ══ -->
+<div class="section" id="s5">
+  <h1><span class="section-num">5.</span>Caja <span class="module-badge">◇</span></h1>
+
+  <p>La caja registra todos los movimientos de dinero del salón: cobros, señas, gastos, retiros y el arqueo diario.</p>
+
+  <h2 id="s5-1">5.1 Abrir caja</h2>
+  <ol class="steps">
+    <li>Tocá <span class="btn-visual">Abrir caja</span>.</li>
+    <li>Ingresá el monto de apertura (el efectivo con el que empieza la caja del día).</li>
+    <li>Seleccioná quién abre y confirmá.</li>
+  </ol>
+  <div class="warning">
+    <strong>La caja debe estar abierta para registrar cobros en efectivo.</strong>
+    Transferencias y otros métodos se pueden registrar aunque la caja esté cerrada.
+  </div>
+
+  <h2 id="s5-2">5.2 Cobrar un servicio</h2>
+  <p>La forma más rápida es desde la Agenda (tocás el turno → Cobrar turno). Desde Caja también podés hacerlo manualmente:</p>
+  <ol class="steps">
+    <li>En la pestaña <strong>Registrar</strong>, seleccioná el cliente (buscalo o crealo).</li>
+    <li>Tocá <span class="btn-visual">+ Agregar servicio</span>.</li>
+    <li>Seleccioná la colaboradora y el servicio. El precio se carga automáticamente.</li>
+    <li>Agregá adicionales, propina o descuento si corresponde.</li>
+    <li>Tocá <span class="btn-visual gold">Continuar a cobro →</span>.</li>
+    <li>Seleccioná el método de pago e ingresá el monto.</li>
+    <li>Tocá <span class="btn-visual gold">Confirmar venta</span>.</li>
+  </ol>
+
+  <div class="tip">
+    <strong>Pago combinado</strong>
+    Si el cliente paga con dos métodos (ej: $5.000 efectivo + resto por transferencia), activá "Método adicional" en la pantalla de cobro para dividir el pago.
+  </div>
+
+  <h2 id="s5-3">5.3 Descuentos</h2>
+  <p>En cada línea de servicio, tocá <span class="btn-visual light">% descuento</span> para aplicar uno de los tres tipos disponibles:</p>
+  <table>
+    <thead><tr><th>Tipo</th><th>Cuándo</th><th>Comisión</th><th>Cobro</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Canje</strong></td>
+        <td>Servicio gratuito (gift, canje)</td>
+        <td>Sobre precio catálogo completo</td>
+        <td>$0 al cliente</td>
+      </tr>
+      <tr>
+        <td><strong>Desc. empleada</strong></td>
+        <td>Colaboradora se atiende</td>
+        <td>Sobre precio con descuento</td>
+        <td>Se descuenta del sueldo (no paga en caja)</td>
+      </tr>
+      <tr>
+        <td><strong>Bonificación cliente</strong></td>
+        <td>Descuento especial a cliente</td>
+        <td>Sobre precio final cobrado</td>
+        <td>Precio menos el % al cliente</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="info">
+    <strong>El descuento aplica sobre el total de la línea</strong>
+    Incluye el precio del servicio más todos los adicionales seleccionados.
+  </div>
+
+  <h2 id="s5-4">5.4 Señas y anticipos</h2>
+  <p><strong>Registrar una seña:</strong></p>
+  <ol class="steps">
+    <li>Tocá <span class="btn-visual">Registrar seña</span> en Caja.</li>
+    <li>Seleccioná el cliente, el turno asociado y el monto.</li>
+    <li>Confirmá el método de pago.</li>
+  </ol>
+  <p>Al cobrar el turno más adelante, el sistema detecta la seña disponible y la descuenta automáticamente del saldo a cobrar.</p>
+
+  <h2 id="s5-5">5.5 Gastos y retiros</h2>
+  <table>
+    <thead><tr><th>Acción</th><th>Cuándo usarla</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Registrar gasto (caja)</strong></td>
+        <td>Compra chica pagada con efectivo de la caja (café, insumos menores). Botón <span class="btn-visual light">Gasto</span>.</td>
+      </tr>
+      <tr>
+        <td><strong>Registrar retiro</strong></td>
+        <td>Retiro del día para depósito bancario, pago de propinas, u otro. Botón <span class="btn-visual light">Retiro</span>.</td>
+      </tr>
+      <tr>
+        <td><strong>Gastos en Finanzas</strong></td>
+        <td>Gastos mayores (alquiler, sueldos, insumos del mes). Se registran en el módulo Finanzas → Gastos.</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="tip">
+    <strong>Todos estos movimientos aparecen en el Ledger de efectivo</strong>
+    Los gastos de Finanzas pagados en efectivo también aparecen en el ledger del día correspondiente.
+  </div>
+
+  <h2 id="s5-6">5.6 Ledger — Ver todos los movimientos</h2>
+  <p>El Ledger es el registro cronológico de todos los movimientos de dinero. Se accede desde la pestaña <strong>Ledger</strong> en Caja.</p>
+  <table>
+    <thead><tr><th>Sub-pestaña</th><th>Qué muestra</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Efectivo</strong></td><td>Todos los movimientos en efectivo: apertura, cobros, retiros, gastos. Con saldo corriente hora por hora.</td></tr>
+      <tr><td><strong>Tickets</strong></td><td>Resumen de cada ticket del día: cliente, servicios, medio de pago, total.</td></tr>
+      <tr><td><strong>Por método</strong></td><td>Totales agrupados por método de pago (efectivo, transferencia, débito, etc.).</td></tr>
+    </tbody>
+  </table>
+  <p>Podés cambiar la fecha con el selector para ver días anteriores.</p>
+
+  <h2 id="s5-7">5.7 Anular ticket o seña</h2>
+  <p><strong>Anular un ticket:</strong> en la pestaña Tickets, los tickets del día tienen el botón <span class="btn-visual red">Anular ticket</span>. Se pide un motivo. El ticket anulado queda con fondo rojo y el motivo visible.</p>
+  <p><strong>Anular una seña:</strong> en el ledger o en el perfil del cliente, buscá el pago de seña y anulalo. Requiere rol admin.</p>
+
+  <h2 id="s5-8">5.8 Cerrar caja</h2>
+  <ol class="steps">
+    <li>Tocá <span class="btn-visual">Cerrar caja</span>.</li>
+    <li>El sistema muestra el <strong>efectivo esperado</strong> según los movimientos registrados.</li>
+    <li>Contá el dinero físico e ingresá el monto contado.</li>
+    <li>El sistema calcula la diferencia (sobrante o faltante) y la registra.</li>
+    <li>Opcionalmente agregá una nota de cierre.</li>
+    <li>Confirmá el cierre.</li>
+  </ol>
+  <div class="info">
+    <strong>El cierre guarda el historial completo</strong>
+    Al cerrar la sesión, todos los retiros y gastos del día quedan guardados en el historial de cierres, accesible en el Ledger para fechas anteriores.
+  </div>
+</div>
+
+<!-- ══ S6 ══ -->
+<div class="section" id="s6">
+  <h1><span class="section-num">6.</span>Catálogo de servicios</h1>
+
+  <p>El catálogo define los servicios disponibles, sus precios y grupos. Desde aquí se configura lo que aparece en Caja al cobrar.</p>
+
+  <h2 id="s6-1">6.1 Agregar o editar un servicio</h2>
+  <ol class="steps">
+    <li>Andá a <strong>Catálogo</strong> en el menú.</li>
+    <li>Para agregar: tocá <span class="btn-visual">+ Nuevo servicio</span>. Para editar: tocá el servicio existente.</li>
+    <li>Completá nombre, grupo (Manicuria, Eyebrow &amp; Lash, etc.), precio y duración estimada.</li>
+    <li>Guardá.</li>
+  </ol>
+
+  <div class="warning">
+    <strong>Cambios de precio afectan ventas nuevas</strong>
+    Los tickets ya registrados conservan el precio al momento del cobro. Cambiar el precio en catálogo solo afecta ventas futuras.
+  </div>
+
+  <h2 id="s6-2">6.2 Adicionales</h2>
+  <p>Los adicionales son servicios extras que se suman a la línea principal en caja (ej: Ojo de gato, Retiro de semi). Se configuran en el catálogo y aparecen como chips seleccionables al registrar una venta.</p>
+
+  <p>También podés configurar el <strong>umbral de "Alto gasto"</strong> en Catálogo: un monto y período que, si lo supera una cliente, le agrega automáticamente la etiqueta "Alto gasto" en su perfil.</p>
+</div>
+
+<!-- ══ S7 ══ -->
+<div class="section" id="s7">
+  <h1><span class="section-num">7.</span>Equipo</h1>
+
+  <p>Gestión de colaboradoras del salón: datos, roles, comisiones y usuarios de acceso.</p>
+
+  <h2 id="s7-1">7.1 Crear colaboradora</h2>
+  <ol class="steps">
+    <li>Andá a <strong>Equipo</strong> y tocá <span class="btn-visual">+ Nueva colaboradora</span>.</li>
+    <li>Ingresá nombre, apellido, especialidad y datos de contacto.</li>
+    <li>Guardá. Luego podés vincularla a un usuario de acceso desde la sección Usuarios.</li>
+  </ol>
+
+  <h2 id="s7-2">7.2 Configurar comisiones</h2>
+  <p>En el perfil de cada colaboradora podés definir el porcentaje de comisión por grupo de servicio (ej: Manicuria 30%, Eyebrow 25%). Esto se usa en el cálculo de liquidaciones.</p>
+</div>
+
+<!-- ══ S8 ══ -->
+<div class="section" id="s8">
+  <h1><span class="section-num">8.</span>RRHH</h1>
+
+  <p>Liquidaciones de sueldo y deducciones de colaboradoras.</p>
+
+  <h2 id="s8-1">8.1 Deducciones</h2>
+  <p>Las deducciones reducen el sueldo de la colaboradora. Pueden ser manuales o automáticas:</p>
+  <table>
+    <thead><tr><th>Tipo</th><th>Origen</th></tr></thead>
+    <tbody>
+      <tr><td>Manual</td><td>Se carga a mano desde RRHH (adelantos, préstamos, etc.).</td></tr>
+      <tr><td>Servicio empleada</td><td>Se genera automáticamente cuando se registra una venta con descuento tipo "Empleada" en caja.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="s8-2">8.2 Liquidaciones</h2>
+  <ol class="steps">
+    <li>En RRHH, seleccioná la colaboradora y el período.</li>
+    <li>El sistema calcula la comisión sobre todos los servicios realizados en el período, usando el porcentaje configurado en Equipo.</li>
+    <li>Se descuentan las deducciones del período.</li>
+    <li>Revisá el detalle y confirmá la liquidación.</li>
+  </ol>
+  <div class="info">
+    <strong>Comisión en servicios con Canje</strong>
+    Para los canjes, la comisión se calcula sobre el precio de catálogo (no sobre $0), dado que la colaboradora realizó el servicio completo.
+  </div>
+</div>
+
+<!-- ══ S9 ══ -->
+<div class="section" id="s9">
+  <h1><span class="section-num">9.</span>Finanzas</h1>
+
+  <h2 id="s9-1">9.1 Registrar gastos</h2>
+  <ol class="steps">
+    <li>Andá a <strong>Finanzas → Gastos</strong>.</li>
+    <li>Tocá <span class="btn-visual">+ Nuevo gasto</span>.</li>
+    <li>Completá: fecha, categoría (Insumos, Alquiler, Servicios, etc.), descripción, monto y método de pago.</li>
+    <li>Guardá.</li>
+  </ol>
+  <div class="tip">
+    <strong>Los gastos en efectivo aparecen en el Ledger</strong>
+    Si registrás un gasto con método "Efectivo" en Finanzas, va a aparecer en el Ledger de efectivo de ese día.
+  </div>
+
+  <h2 id="s9-2">9.2 Contador mensual</h2>
+  <p>El contador de Finanzas agrupa los gastos por categoría y mes, y los compara contra el presupuesto mensual configurado. Podés filtrar por período y exportar el detalle.</p>
+</div>
+
+<!-- ══ S10 ══ -->
+<div class="section" id="s10">
+  <h1><span class="section-num">10.</span>Comunicaciones</h1>
+
+  <p>GLAMB OS envía emails automáticos a los clientes en los momentos clave del turno.</p>
+
+  <h2 id="s10-1">10.1 Emails de turno</h2>
+  <table>
+    <thead><tr><th>Email</th><th>Cuándo se envía</th><th>Qué incluye</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Confirmación de turno</td>
+        <td>Al crear el turno en agenda.</td>
+        <td>Fecha, hora, servicio y botón para agregar al calendario.</td>
+      </tr>
+      <tr>
+        <td>Recordatorio automático</td>
+        <td>4 horas antes del turno (Cloud Function automática).</td>
+        <td>Fecha, hora y servicio. Sin nombre de colaboradora.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="info">
+    <strong>Para que funcionen los emails, el cliente debe tener email cargado.</strong>
+    Sin email no se envía nada. Siempre pedí el email al crear o actualizar un cliente.
+  </div>
+
+  <h2 id="s10-2">10.2 Historial de recordatorios enviados</h2>
+  <p>En Comunicaciones podés ver el log de todos los recordatorios enviados, con estado de entrega (enviado / error).</p>
+</div>
+
+<!-- ══ S11 ══ -->
+<div class="section" id="s11">
+  <h1><span class="section-num">11.</span>Athenas — Asistente IA</h1>
+
+  <p>Athenas es la inteligencia artificial integrada en GLAMB OS. Podés hacerle preguntas en lenguaje natural sobre el negocio.</p>
+
+  <h2>Ejemplos de consultas</h2>
+  <ul style="margin:0 0 16px 20px">
+    <li>"¿Cuántas visitas tuvo María García este mes?"</li>
+    <li>"¿Qué servicio es el más vendido en Manicuria?"</li>
+    <li>"¿Cuáles son los clientes que no vienen hace más de 60 días?"</li>
+    <li>"¿Cuánto facturó el salón esta semana?"</li>
+    <li>"¿Qué turno tiene Giuli mañana a las 15?"</li>
+  </ul>
+
+  <div class="info">
+    <strong>Athenas necesita una API key de Claude (Anthropic)</strong>
+    Si Athenas no responde o dice que falta configuración, avisale a administración para que configure la API key en Ajustes → Athenas.
+  </div>
+</div>
+
+<!-- ══ S12 ══ -->
+<div class="section" id="s12">
+  <h1><span class="section-num">12.</span>Preguntas frecuentes</h1>
+
+  <h2>La app no muestra los últimos cambios</h2>
+  <p>Cerrá completamente el navegador y volvé a abrirlo. Si sigue igual, borrá la caché del navegador o probá desde modo incógnito.</p>
+
+  <h2>¿Cómo sé si la caja está abierta?</h2>
+  <p>En Caja, el indicador de estado muestra "Caja abierta" o "Caja cerrada" con la hora de apertura. Si está cerrada, no podés registrar cobros en efectivo.</p>
+
+  <h2>¿Qué pasa si me equivoqué al cobrar?</h2>
+  <p>Anulá el ticket (botón en la pestaña Tickets) e ingresá el cobro nuevamente. Los tickets anulados quedan registrados con fondo rojo y el motivo visible.</p>
+
+  <h2>Una cliente tiene saldo de seña pero no aparece</h2>
+  <p>El saldo de seña se aplica automáticamente al cobrar. Si no aparece, verificá que la seña esté asociada al turno correcto o al cliente en la pantalla de cobro.</p>
+
+  <h2>¿Cómo veo los movimientos de días anteriores?</h2>
+  <p>En Caja → Ledger, usá el selector de fecha. Para fechas anteriores se muestran los cobros y los movimientos de la sesión de ese día si fue cerrada correctamente.</p>
+
+  <h2>¿Puedo crear usuarios para el equipo?</h2>
+  <p>Sí, desde Equipo → Usuarios (solo admin). Completás email, contraseña temporal y asignás el rol. La colaboradora recibe acceso con esas credenciales.</p>
+</div>
+
+<div style="text-align:center;padding:40px 0 20px;border-top:1px solid var(--glamb-line);margin-top:40px;color:var(--glamb-muted);font-size:11px;letter-spacing:1px;">
+  GLAMB OS · Manual Recepción &amp; Administración · v1.0 · 2026
+</div>
+
+</body>
+</html>

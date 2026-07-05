@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLAMB OS — Manual de Colaboradora</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Inter:wght@300;400;500;600&display=swap');
+
+  :root {
+    --glamb-dark: #1a1a1a;
+    --glamb-gold: #b8960c;
+    --glamb-gold-light: #f5ede4;
+    --glamb-line: #e8e0d8;
+    --glamb-muted: #888;
+    --glamb-surface: #faf9f7;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--glamb-dark);
+    background: #fff;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 48px 40px;
+  }
+
+  /* ── Portada ── */
+  .cover {
+    text-align: center;
+    padding: 60px 0 48px;
+    border-bottom: 1px solid var(--glamb-line);
+    margin-bottom: 48px;
+  }
+  .cover-logo {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 42px;
+    font-weight: 300;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: var(--glamb-dark);
+  }
+  .cover-subtitle {
+    font-size: 12px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--glamb-muted);
+    margin-top: 6px;
+  }
+  .cover-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 28px;
+    font-weight: 300;
+    margin-top: 36px;
+    color: var(--glamb-dark);
+  }
+  .cover-role {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 4px 18px;
+    border: 1px solid var(--glamb-gold);
+    border-radius: 20px;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--glamb-gold);
+  }
+  .cover-note {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--glamb-muted);
+  }
+
+  /* ── Índice ── */
+  .toc {
+    background: var(--glamb-surface);
+    border: 1px solid var(--glamb-line);
+    border-radius: 10px;
+    padding: 28px 32px;
+    margin-bottom: 48px;
+  }
+  .toc h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 400;
+    margin-bottom: 16px;
+    color: var(--glamb-dark);
+  }
+  .toc ol {
+    padding-left: 20px;
+  }
+  .toc li {
+    margin-bottom: 6px;
+  }
+  .toc a {
+    color: var(--glamb-dark);
+    text-decoration: none;
+    font-size: 13px;
+  }
+  .toc a:hover { color: var(--glamb-gold); }
+  .toc .toc-sub {
+    padding-left: 20px;
+    margin-top: 4px;
+    list-style: disc;
+  }
+  .toc .toc-sub li { margin-bottom: 3px; }
+  .toc .toc-sub a { color: var(--glamb-muted); font-size: 12px; }
+
+  /* ── Secciones ── */
+  .section {
+    margin-bottom: 48px;
+  }
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px;
+    font-weight: 300;
+    border-bottom: 1px solid var(--glamb-line);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+    scroll-margin-top: 20px;
+  }
+  h1 .section-num {
+    color: var(--glamb-gold);
+    margin-right: 8px;
+  }
+  h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 24px 0 10px;
+    scroll-margin-top: 20px;
+  }
+  p { margin-bottom: 12px; }
+
+  /* ── Pasos ── */
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+    margin: 12px 0 20px;
+  }
+  .steps li {
+    counter-increment: step;
+    display: flex;
+    gap: 14px;
+    margin-bottom: 10px;
+    align-items: flex-start;
+  }
+  .steps li::before {
+    content: counter(step);
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    background: var(--glamb-dark);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 11px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2px;
+  }
+
+  /* ── Tips / Alertas ── */
+  .tip, .warning, .info {
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-size: 13px;
+  }
+  .tip    { background: #e8f5e9; border-left: 3px solid #2d7a4a; }
+  .warning{ background: #fff3e0; border-left: 3px solid #e65100; }
+  .info   { background: var(--glamb-gold-light); border-left: 3px solid var(--glamb-gold); }
+  .tip strong, .warning strong, .info strong { display: block; margin-bottom: 4px; }
+
+  /* ── Botón visual ── */
+  .btn-visual {
+    display: inline-block;
+    background: var(--glamb-dark);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 5px;
+    vertical-align: middle;
+  }
+  .btn-visual.light {
+    background: var(--glamb-surface);
+    color: var(--glamb-dark);
+    border: 1px solid var(--glamb-line);
+  }
+  .btn-visual.gold {
+    background: var(--glamb-gold);
+  }
+
+  /* ── Tabla ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin: 14px 0;
+  }
+  th {
+    background: var(--glamb-dark);
+    color: #fff;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 500;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+  }
+  td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--glamb-line);
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background: var(--glamb-surface); }
+
+  /* ── Print ── */
+  @media print {
+    body { padding: 20px 30px; font-size: 12px; }
+    .cover { padding: 30px 0; }
+    h1 { page-break-before: always; }
+    .cover, .toc { page-break-after: always; }
+    .tip, .warning, .info { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ PORTADA ══ -->
+<div class="cover">
+  <div class="cover-logo">GLAMB</div>
+  <div class="cover-subtitle">Sistema de gestión</div>
+  <div class="cover-title">Manual de uso</div>
+  <div class="cover-role">Colaboradora</div>
+  <div class="cover-note">Versión 1.0 · Julio 2026</div>
+</div>
+
+<!-- ══ ÍNDICE ══ -->
+<div class="toc">
+  <h2>Índice</h2>
+  <ol>
+    <li><a href="#s1">Acceso a la aplicación</a></li>
+    <li><a href="#s2">Panel de inicio</a></li>
+    <li>
+      <a href="#s3">Agenda del día</a>
+      <ul class="toc-sub">
+        <li><a href="#s3-1">Ver turnos</a></li>
+        <li><a href="#s3-2">Cambiar estado de un turno</a></li>
+        <li><a href="#s3-3">Ver detalles del cliente</a></li>
+      </ul>
+    </li>
+    <li>
+      <a href="#s4">Caja — Registrar un cobro</a>
+      <ul class="toc-sub">
+        <li><a href="#s4-1">Cobrar desde un turno de agenda</a></li>
+        <li><a href="#s4-2">Cobrar una venta nueva (sin turno)</a></li>
+        <li><a href="#s4-3">Agregar adicionales</a></li>
+        <li><a href="#s4-4">Aplicar descuentos</a></li>
+        <li><a href="#s4-5">Registrar propina</a></li>
+        <li><a href="#s4-6">Confirmar y cobrar</a></li>
+        <li><a href="#s4-7">Guardar como pendiente</a></li>
+      </ul>
+    </li>
+    <li><a href="#s5">Ver mis tickets del día</a></li>
+    <li><a href="#s6">Preguntas frecuentes</a></li>
+  </ol>
+</div>
+
+<!-- ══ SECCIÓN 1 ══ -->
+<div class="section" id="s1">
+  <h1><span class="section-num">1.</span>Acceso a la aplicación</h1>
+
+  <p>GLAMB OS es una aplicación web. Se usa desde el navegador del celular, tablet o computadora. No requiere instalar nada.</p>
+
+  <h2>Cómo ingresar</h2>
+  <ol class="steps">
+    <li>Abrí el navegador (Chrome recomendado) e ingresá a <strong>glamb-os.web.app</strong></li>
+    <li>Escribí tu correo electrónico y contraseña.</li>
+    <li>Tocá <span class="btn-visual">Ingresar</span>.</li>
+  </ol>
+
+  <div class="tip">
+    <strong>Tip: agregá la app a tu pantalla de inicio</strong>
+    En Chrome, tocá el menú (⋮) → "Agregar a pantalla de inicio". Así podés abrirla como si fuera una app sin buscarla en el navegador.
+  </div>
+
+  <h2>Olvidé mi contraseña</h2>
+  <p>Avisale a la administración para que restablezca tu acceso. No hay recuperación automática desde la pantalla de login.</p>
+
+  <h2>Cerrar sesión</h2>
+  <p>Tocá tu nombre/avatar en la esquina superior derecha → <strong>Cerrar sesión</strong>.</p>
+
+  <div class="warning">
+    <strong>Importante</strong>
+    No compartas tu usuario y contraseña. Cada colaboradora tiene su propio acceso y los registros quedan a tu nombre.
+  </div>
+</div>
+
+<!-- ══ SECCIÓN 2 ══ -->
+<div class="section" id="s2">
+  <h1><span class="section-num">2.</span>Panel de inicio</h1>
+
+  <p>Al ingresar vas a ver el <strong>Panel de inicio</strong> (♦ en el menú). Te muestra un resumen rápido del día:</p>
+
+  <table>
+    <thead><tr><th>Indicador</th><th>Qué significa</th></tr></thead>
+    <tbody>
+      <tr><td>Turnos de hoy</td><td>Cuántos turnos tenés programados para hoy.</td></tr>
+      <tr><td>En curso</td><td>El turno que está siendo atendido ahora.</td></tr>
+      <tr><td>Mis ventas hoy</td><td>El total de servicios que ya cobraste.</td></tr>
+      <tr><td>Pendientes</td><td>Cobros guardados como pendientes que todavía no se cerraron.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="info">
+    <strong>Tu acceso es limitado a tu propio trabajo</strong>
+    Solo ves tus turnos y tus ventas. Los totales del salón, la apertura/cierre de caja y las finanzas son exclusivos de recepción y administración.
+  </div>
+</div>
+
+<!-- ══ SECCIÓN 3 ══ -->
+<div class="section" id="s3">
+  <h1><span class="section-num">3.</span>Agenda del día</h1>
+
+  <p>Tocá el ícono de reloj (🕐) en el menú para ir a la Agenda. Siempre vas a ver <strong>el día de hoy</strong>; no podés navegar a otras fechas.</p>
+
+  <h2 id="s3-1">3.1 Ver turnos</h2>
+  <p>La agenda muestra todas las columnas de colaboradoras. Tus turnos aparecen en tu columna con el nombre del cliente, el servicio y el horario.</p>
+  <p>Los colores indican el estado:</p>
+  <table>
+    <thead><tr><th>Color / Estado</th><th>Significado</th></tr></thead>
+    <tbody>
+      <tr><td>🔵 Confirmado</td><td>Turno agendado, el cliente viene.</td></tr>
+      <tr><td>🟡 En curso</td><td>El servicio está siendo realizado ahora.</td></tr>
+      <tr><td>🟢 Completado</td><td>El servicio terminó.</td></tr>
+      <tr><td>🔴 Cancelado / No show</td><td>El cliente canceló o no se presentó.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="s3-2">3.2 Cambiar el estado de un turno</h2>
+  <ol class="steps">
+    <li>Tocá el turno en la agenda.</li>
+    <li>En la ficha que se abre, usá los botones para cambiar el estado:<br>
+      <span class="btn-visual light">En curso</span> &nbsp;
+      <span class="btn-visual light">Completado</span> &nbsp;
+      <span class="btn-visual light">No show</span>
+    </li>
+    <li>El cambio se guarda automáticamente.</li>
+  </ol>
+
+  <div class="tip">
+    <strong>Recomendación</strong>
+    Marcá el turno como "En curso" cuando empezás el servicio y como "Completado" al terminar. Esto le permite a recepción saber en tiempo real el estado del salón.
+  </div>
+
+  <h2 id="s3-3">3.3 Ver detalles del cliente</h2>
+  <p>Dentro de la ficha del turno podés ver el nombre del cliente y el servicio agendado. El teléfono y email no son visibles desde tu perfil — esos datos los maneja recepción.</p>
+
+  <div class="tip">
+    <strong>Cobrar desde la agenda</strong>
+    Desde la ficha del turno podés tocar <span class="btn-visual gold">Cobrar turno</span> para pasar directamente a Caja con los datos del cliente y servicio ya cargados. ¡Es la forma más rápida!
+  </div>
+</div>
+
+<!-- ══ SECCIÓN 4 ══ -->
+<div class="section" id="s4">
+  <h1><span class="section-num">4.</span>Caja — Registrar un cobro</h1>
+
+  <p>Tocá el ícono de diamante (◇) en el menú para ir a Caja. Solo podés registrar ventas de tus propios servicios.</p>
+
+  <div class="warning">
+    <strong>No ves en caja:</strong> apertura/cierre, retiros, gastos, ni los cobros de otras colaboradoras. Solo tus propias ventas.
+  </div>
+
+  <h2 id="s4-1">4.1 Cobrar desde un turno de agenda (recomendado)</h2>
+  <ol class="steps">
+    <li>Andá a Agenda y tocá el turno que vas a cobrar.</li>
+    <li>Tocá <span class="btn-visual gold">Cobrar turno</span>. Vas a ir directo a Caja con el cliente y servicio ya seleccionados.</li>
+    <li>Revisá que el servicio y precio sean correctos. Si cambiaste algo (servicio diferente o agregaste extras), modificalo acá.</li>
+    <li>Completá propina si corresponde y continuá al cobro.</li>
+  </ol>
+
+  <h2 id="s4-2">4.2 Cobrar una venta nueva (sin turno de agenda)</h2>
+  <ol class="steps">
+    <li>En Caja, tocá <span class="btn-visual">+ Agregar servicio</span>.</li>
+    <li>Seleccioná la colaboradora (vos misma) y el servicio del menú desplegable.</li>
+    <li>El precio se carga solo según el catálogo.</li>
+    <li>Escribí el nombre del cliente en el campo de búsqueda o creá uno nuevo.</li>
+  </ol>
+
+  <h2 id="s4-3">4.3 Agregar adicionales</h2>
+  <p>Los adicionales son servicios extras que se suman al servicio principal (por ejemplo: Ojo de gato, Retiro de semi, etc.).</p>
+  <ol class="steps">
+    <li>Dentro de la línea del servicio, tocá <span class="btn-visual light">+ extras</span>.</li>
+    <li>Tocá los adicionales que correspondan. Cada uno se suma al total automáticamente.</li>
+    <li>Para quitarlos, tocalos de nuevo.</li>
+  </ol>
+
+  <h2 id="s4-4">4.4 Aplicar descuentos</h2>
+  <p>Tocá <span class="btn-visual light">% descuento</span> en la línea del servicio. Hay tres tipos:</p>
+
+  <table>
+    <thead><tr><th>Tipo</th><th>Cuándo usarlo</th><th>Cómo funciona</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Canje</strong></td>
+        <td>El cliente no paga nada (servicio de regalo o canje).</td>
+        <td>El cobro queda en $0. La colaboradora igual cobra su comisión sobre el precio de catálogo.</td>
+      </tr>
+      <tr>
+        <td><strong>Descuento empleada</strong></td>
+        <td>Una colaboradora se atiende a sí misma.</td>
+        <td>Elegís el % de descuento y la empleada que se atendió. No se cobra en caja: se descuenta del sueldo en la liquidación.</td>
+      </tr>
+      <tr>
+        <td><strong>Bonificación a cliente</strong></td>
+        <td>Se le hace un descuento especial a un cliente.</td>
+        <td>Escribís el % y el motivo. La comisión se calcula sobre el precio final con descuento.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="info">
+    <strong>Los descuentos aplican sobre el total (servicio + adicionales)</strong>
+    Si elegís un descuento de 30% y tenés adicionales seleccionados, el 30% se aplica sobre el precio total del servicio más los extras.
+  </div>
+
+  <h2 id="s4-5">4.5 Registrar propina</h2>
+  <p>En la línea del servicio hay un campo <strong>Propina</strong>. Ingresá el monto si el cliente dejó propina. Esto no afecta el cobro del servicio pero queda registrado en el ticket.</p>
+
+  <h2 id="s4-6">4.6 Confirmar y cobrar</h2>
+  <ol class="steps">
+    <li>Revisá el <strong>SALDO A COBRAR</strong> que aparece en el ticket a la derecha.</li>
+    <li>Tocá <span class="btn-visual gold">Continuar a cobro →</span>.</li>
+    <li>Seleccioná el método de pago: Efectivo, Transferencia, Débito, etc.</li>
+    <li>Ingresá el monto recibido.</li>
+    <li>Tocá <span class="btn-visual gold">Confirmar venta</span>.</li>
+  </ol>
+
+  <div class="tip">
+    <strong>Pago combinado</strong>
+    Si el cliente paga una parte en efectivo y otra por transferencia, activá "Método adicional" para dividir el cobro entre dos medios de pago.
+  </div>
+
+  <h2 id="s4-7">4.7 Guardar como pendiente</h2>
+  <p>Si el cliente va a pagar después (o quedó un saldo pendiente), tocá <span class="btn-visual light">Guardar como pendiente</span>. El cobro queda registrado y recepción puede verlo para cobrarlo más tarde.</p>
+</div>
+
+<!-- ══ SECCIÓN 5 ══ -->
+<div class="section" id="s5">
+  <h1><span class="section-num">5.</span>Ver mis tickets del día</h1>
+
+  <p>En Caja, andá a la pestaña <strong>Tickets</strong>. Vas a ver solo los tickets del día donde vos participaste.</p>
+
+  <table>
+    <thead><tr><th>Estado del ticket</th><th>Qué significa</th></tr></thead>
+    <tbody>
+      <tr><td>Confirmado</td><td>Cobro registrado correctamente.</td></tr>
+      <tr><td>Pago parcial</td><td>Quedó un saldo pendiente de pago.</td></tr>
+      <tr><td style="color:#c0392b;font-weight:600">Anulado</td><td>El ticket fue cancelado (aparece con fondo rojo).</td></tr>
+    </tbody>
+  </table>
+
+  <div class="warning">
+    <strong>Anular un ticket</strong>
+    Solo podés anular tickets del día de hoy y que sean propios. Si necesitás anular algo de otro día o de otra persona, avisale a recepción.
+  </div>
+</div>
+
+<!-- ══ SECCIÓN 6 ══ -->
+<div class="section" id="s6">
+  <h1><span class="section-num">6.</span>Preguntas frecuentes</h1>
+
+  <h2>¿Por qué no puedo ver el teléfono de la cliente?</h2>
+  <p>Los datos de contacto (teléfono, email) son visibles solo para el rol de administración/recepción. Si necesitás contactar a una cliente, pedíselo a recepción.</p>
+
+  <h2>¿Por qué no puedo abrir o cerrar la caja?</h2>
+  <p>La apertura, cierre, retiros y gastos de caja son tareas exclusivas de recepción/administración. Si hay un problema con la caja, avisale a quien esté a cargo.</p>
+
+  <h2>¿Qué pasa si me equivoqué al registrar un cobro?</h2>
+  <p>Podés anular el ticket en la pestaña Tickets (solo el día de hoy). Si el error fue en otro día, avisale a administración para que lo corrija.</p>
+
+  <h2>¿Por qué la app no muestra mis cambios?</h2>
+  <p>A veces la app queda guardada en caché. Probá cerrando la app completamente y volviendo a abrirla. Si sigue igual, cerrá el navegador y reAbrilo.</p>
+
+  <h2>¿Cómo sé cuánto gané de comisión?</h2>
+  <p>Las comisiones las calcula y comunica administración a través de las liquidaciones. Consultale a recepción o a la administración del salón.</p>
+
+  <h2>¿Qué es Athenas?</h2>
+  <p>Athenas es la IA del sistema. Podés consultarle cosas del negocio (turnos, historial, ventas del día, etc.) en lenguaje natural. Está disponible desde el menú si tenés acceso.</p>
+</div>
+
+<div style="text-align:center;padding:40px 0 20px;border-top:1px solid var(--glamb-line);margin-top:40px;color:var(--glamb-muted);font-size:11px;letter-spacing:1px;">
+  GLAMB OS · Manual Colaboradora · v1.0 · 2026
+</div>
+
+</body>
+</html>
