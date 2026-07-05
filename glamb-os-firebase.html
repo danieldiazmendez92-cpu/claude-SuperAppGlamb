@@ -3933,10 +3933,12 @@
           <button class="finanzas-tab-btn active" data-tab="cfo" data-action="showFinanzasTab" data-tab="cfo">CFO</button>
           <button class="finanzas-tab-btn" data-tab="contador" data-action="showFinanzasTab" data-tab="contador">Contador</button>
           <button class="finanzas-tab-btn" data-tab="analista" data-action="showFinanzasTab" data-tab="analista">Analista</button>
+          <button class="finanzas-tab-btn" data-tab="libros" data-action="showFinanzasTab" data-tab="libros">Libros</button>
         </div>
         <div id="finanzas-cfo" class="finanzas-panel active"></div>
         <div id="finanzas-contador" class="finanzas-panel"></div>
         <div id="finanzas-analista" class="finanzas-panel"></div>
+        <div id="finanzas-libros" class="finanzas-panel"></div>
       </section>
 
       <section class="page" id="page-comms">
@@ -4804,7 +4806,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig','accounting'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -4850,7 +4852,7 @@
     // Firestore. Recepción y colaboradoras nunca las descargan: ni siquiera por
     // la consola del navegador. No las usa ninguna página de rol bajo (solo
     // RRHH y Finanzas, ambas exclusivas de admin).
-    const FINANCE_KEYS=['liquidations','payrollDeductions','expenses','taxRecords','budgets','expenseCategories'];
+    const FINANCE_KEYS=['liquidations','payrollDeductions','expenses','taxRecords','budgets','expenseCategories','accounting'];
 
     // ── Configuración compartida en documento propio (anti-pisado) ──────
     // Estas claves (plantillas de comunicación, sesión de caja abierta, reseñas,
@@ -5619,7 +5621,9 @@
       //    cuando se aplican a una venta o se retienen por inasistencia.
       const sold = state.salesTickets.filter(t=>t.status==='confirmed'||t.status==='partial');
       const byPrefix = p => sold.filter(t=>(t.createdAt||'').startsWith(p));
-      const svcTotal = t => t.servicesTotal!==undefined ? Number(t.servicesTotal||0) : (Number(t.grossTotal||0)-Number(t.tipsTotal||0));
+      //  - se resta el saldo pendiente del parcial: al cobrarse genera un
+      //    ticket nuevo por ese monto y se contaría dos veces.
+      const svcTotal = t => Math.max(0,(t.servicesTotal!==undefined ? Number(t.servicesTotal||0) : (Number(t.grossTotal||0)-Number(t.tipsTotal||0))) - Number(t.pendingBalance||0));
       const sumSvc = arr => arr.reduce((s,t)=>s+svcTotal(t),0);
       const ym = today.slice(0,7);
       const prevD = new Date(); prevD.setDate(1); prevD.setMonth(prevD.getMonth()-1);
@@ -7504,7 +7508,7 @@
       const list = state.pendingCharges.filter(p=>p.status==='pending');
       $('pendingChargesList').innerHTML = list.length ? list.map(p=>`<div class="mini-row"><strong>${p.clientNameSnapshot}</strong><span>${p.service} · ${p.serviceOf||fullName(member(p.collaboratorId))} · ${money(p.finalPrice)}<br>Creado por: ${p.createdBy||'—'} · ${new Date(p.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span><div style="margin-top:8px"><button class="small-btn primary" data-action="injectPending" data-id="${p.id}">Cobrar</button><button class="small-btn" data-action="voidPending" data-id="${p.id}">Anular</button></div></div>`).join('') : '<div class="mini-row"><strong>Sin pendientes</strong><span>No hay servicios pendientes de cobro.</span></div>';
     }
-    function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; saveState(); renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
+    function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; p.voidedAt=new Date().toISOString(); saveState(); renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
     function setCashDailyDate(v){ state.cashDailyDate=v; renderCashDaily(); }
     function setCashTicketsDate(v){ state.cashTicketsDate=v; renderTickets(); }
     function renderCashDaily(){
@@ -10043,7 +10047,11 @@
     function finTicketDay(t){ return t.date || (t.createdAt ? t.createdAt.slice(0,10) : ''); }
     // Ingreso del ticket = servicios (sin propinas, que son pass-through a la colaboradora);
     // coincide con la suma de finalPrice por línea usada en los desgloses.
-    function finTicketRevenue(t){ return t.servicesTotal != null ? t.servicesTotal : (t.lines||[]).reduce((s,l)=>s+(l.finalPrice||0),0); }
+    // Ingreso reconocido de un ticket: servicios MENOS el saldo que quedó
+    // pendiente. Al cobrar ese saldo, injectPending genera un ticket NUEVO por
+    // ese monto ('Saldo de visita'): si acá se contara el total, el ingreso se
+    // duplicaría (una vez en el parcial y otra al cobrar el saldo).
+    function finTicketRevenue(t){ const base = t.servicesTotal != null ? t.servicesTotal : (t.lines||[]).reduce((s,l)=>s+(l.finalPrice||0),0); return Math.max(0, base - Number(t.pendingBalance||0)); }
     function finRevenue(from,to){
       return state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).reduce((s,t)=>s+finTicketRevenue(t),0);
     }
@@ -10115,6 +10123,325 @@
       const pct=nextCat?Math.round((annual/nextCat.limit)*100):100;
       return {annual,cat,nextCat,pct};
     }
+    // ═══ CONTABILIDAD FORMAL (pestaña Libros) ═══════════════════════════
+    // Los asientos de la operación diaria NO se cargan a mano ni se almacenan:
+    // se DERIVAN de lo que el salón ya registra (tickets, señas, propinas,
+    // pendientes, gastos, retiros, liquidaciones) desde la fecha del asiento
+    // de apertura. Solo se guardan la apertura y los ajustes manuales, en
+    // state.accounting (viaja en financePrivate => solo admin).
+    const ACC_ACCOUNTS=[
+      {id:'caja',      label:'Caja (efectivo)',           type:'activo'},
+      {id:'banco',     label:'Banco',                     type:'activo'},
+      {id:'mp',        label:'Mercado Pago',              type:'activo'},
+      {id:'deudores',  label:'Deudores por ventas',       type:'activo'},
+      {id:'empleadas', label:'Créditos a empleadas',      type:'activo'},
+      {id:'equipo',    label:'Equipamiento y mobiliario', type:'activo'},
+      {id:'senas',     label:'Señas en haber',            type:'pasivo'},
+      {id:'propinas',  label:'Propinas por rendir',       type:'pasivo'},
+      {id:'deudas',    label:'Deudas y préstamos',        type:'pasivo'},
+      {id:'capital',   label:'Capital inicial',           type:'patrimonio'},
+      {id:'retiros',   label:'Retiros de socio',          type:'patrimonio'},
+      {id:'ventas',    label:'Ventas de servicios',       type:'ingreso'},
+      {id:'nomina',    label:'Sueldos y comisiones',      type:'egreso'},
+    ];
+    function accAccounts(){ return [...ACC_ACCOUNTS, ...expenseCats().map(c=>({id:'gasto:'+c.id, label:'Gasto — '+c.label, type:'egreso'}))]; }
+    function accAccount(id){ return accAccounts().find(a=>a.id===id) || {id, label:id, type:'egreso'}; }
+    // Medio de pago -> cuenta de dinero. Débito/crédito acreditan en banco.
+    function accMethodAccount(m){
+      const s=String(m||'').toLowerCase();
+      if(/transf/.test(s)) return 'banco';
+      if(/^mp$|mercado/.test(s)) return 'mp';
+      if(/d[eé]bito|cr[eé]dito/.test(s)) return 'banco';
+      return 'caja';
+    }
+    function accOpening(){ return (state.accounting && state.accounting.opening) || null; }
+    function _accE(date,desc,ref,lines){
+      return {date:(date||'').slice(0,10), desc, ref, lines:lines.filter(l=>Number(l[1]||0)>0.005||Number(l[2]||0)>0.005)};
+    }
+    // Libro diario completo, ordenado por fecha. [cuenta, debe, haber] por línea.
+    function accJournal(){
+      const op=accOpening(); if(!op) return [];
+      const D0=op.date;
+      const inR=d=>{ const k=(d||'').slice(0,10); return !!k && k>=D0; };
+      const out=[];
+      out.push(_accE(op.date,'Asiento de apertura','apertura',[
+        ['caja',Number(op.caja||0),0],['banco',Number(op.banco||0),0],['mp',Number(op.mp||0),0],
+        ['equipo',Number(op.equipo||0),0],['deudas',0,Number(op.deudas||0)],['capital',Number(op.capital||0)<0?-Number(op.capital||0):0,Number(op.capital||0)>0?Number(op.capital||0):0]
+      ]));
+      // Ventas: Debe medios cobrados + seña aplicada + crédito empleada;
+      // Haber ventas (menos saldo pendiente: ese se devenga vía el pendiente) + propinas.
+      state.salesTickets.filter(t=>(t.status==='confirmed'||t.status==='partial')&&inR(t.createdAt)).forEach(t=>{
+        const svc=Number(t.servicesTotal||0), tips=Number(t.tipsTotal||0), dep=Number(t.depositAppliedTotal||0), pend=Number(t.pendingBalance||0);
+        const due=(t.totalDueToday!==undefined)?Number(t.totalDueToday):Math.max(0,svc+tips-dep);
+        const emp=Math.max(0,(svc+tips)-dep-due); // descuento empleada (se cobra por liquidación)
+        const byAcc={};
+        state.payments.filter(p=>p.ticketId===t.id&&p.type==='service'&&!p.voided).forEach(p=>{const a=accMethodAccount(p.method); byAcc[a]=(byAcc[a]||0)+Number(p.amount||0);});
+        const lines=Object.entries(byAcc).map(([a,v])=>[a,v,0]);
+        if(dep>0) lines.push(['senas',dep,0]);
+        if(emp>0.005) lines.push(['empleadas',emp,0]);
+        lines.push(['ventas',0,Math.max(0,svc-pend)]);
+        if(tips>0) lines.push(['propinas',0,tips]);
+        out.push(_accE(t.createdAt,`Venta — ${t.clientNameSnapshot||'Cliente'}${t.status==='partial'?' (parcial)':''}`,'ticket:'+t.id,lines));
+      });
+      // Señas recibidas: entra dinero, nace el pasivo.
+      state.payments.filter(p=>p.type==='deposit_received'&&!p.voided&&inR(p.createdAt)).forEach(p=>{
+        out.push(_accE(p.createdAt,'Seña recibida'+(p.reference?' — '+p.reference:''),'pago:'+p.id,[[accMethodAccount(p.method),Number(p.amount||0),0],['senas',0,Number(p.amount||0)]]));
+      });
+      // Propinas por transferencia: entran al banco, se le deben a la colaboradora.
+      state.payments.filter(p=>p.type==='tip_in'&&!p.voided&&inR(p.createdAt)).forEach(p=>{
+        out.push(_accE(p.createdAt,p.reference||'Propina por transferencia','pago:'+p.id,[['banco',Number(p.amount||0),0],['propinas',0,Number(p.amount||0)]]));
+      });
+      // Saldos pendientes: nace el deudor (devenga la venta) al crearse.
+      // Al cobrarse, injectPending genera un ticket nuevo que vuelve a acreditar
+      // Ventas: acá se revierte contra el deudor para no duplicar. Igual al anularse.
+      state.pendingCharges.forEach(p=>{
+        if(!inR(p.createdAt)) return;
+        const amt=Number(p.finalPrice||p.amountToCollectToday||0); if(!(amt>0)) return;
+        const who=p.clientNameSnapshot||'Cliente';
+        out.push(_accE(p.createdAt,`Saldo a cobrar — ${who}`,'pend:'+p.id,[['deudores',amt,0],['ventas',0,amt]]));
+        if(p.status==='converted') out.push(_accE(p.convertedAt||p.createdAt,`Cobro de saldo — ${who}`,'pendconv:'+p.id,[['ventas',amt,0],['deudores',0,amt]]));
+        if(p.status==='voided')    out.push(_accE(p.voidedAt||p.createdAt,`Saldo anulado — ${who}`,'pendvoid:'+p.id,[['ventas',amt,0],['deudores',0,amt]]));
+      });
+      // Retiros de caja (sesión activa + cierres históricos, dedup por id).
+      const withs=[]; (state.cashSession?.withdrawals||[]).forEach(w=>withs.push(w));
+      (state.cashClosings||[]).forEach(cl=>(cl.withdrawals||[]).forEach(w=>withs.push(w)));
+      const seenW=new Set();
+      withs.forEach(w=>{
+        if(!w||seenW.has(w.id)) return; seenW.add(w.id);
+        if(!inR(w.createdAt)) return;
+        const amt=Number(w.amount||0); if(!(amt>0)) return;
+        if(w.isTipWithdrawal||/propina/i.test(w.reason||'')) out.push(_accE(w.createdAt,'Pago de propina'+(w.note?' — '+w.note:''),'ret:'+w.id,[['propinas',amt,0],['caja',0,amt]]));
+        else out.push(_accE(w.createdAt,`Retiro — ${w.reason||''}${w.note?' · '+w.note:''}`,'ret:'+w.id,[['retiros',amt,0],['caja',0,amt]]));
+      });
+      // Gastos (Finanzas + Caja).
+      [...(state.expenses||[]).map(e=>({...e,src:'fin'})), ...cajaExpensesAsFinance().map(e=>({...e,src:'caja'}))].forEach(e=>{
+        if(!inR(e.date)) return;
+        const amt=Number(e.amount||0); if(!(amt>0)) return;
+        out.push(_accE(e.date,`Gasto — ${e.description||''}`,'exp:'+e.src+':'+e.id,[['gasto:'+(e.category||'other'),amt,0],[accMethodAccount(e.paymentMethod),0,amt]]));
+      });
+      // Liquidaciones pagadas. Costo = neto pagado + deducciones (las deducciones
+      // cancelan el crédito a la empleada nacido en ventas con descuento employee).
+      (state.liquidations||[]).forEach(l=>{
+        if(l.status!=='paid'||!inR(l.paidAt)) return;
+        const ded=Number(l.totalDeductions||0), net=Number(l.netPay||0);
+        const lines=[['nomina',net+ded,0]];
+        if(ded>0.005) lines.push(['empleadas',0,ded]);
+        lines.push(['caja',0,net]);
+        out.push(_accE(l.paidAt,`Liquidación — ${l.collaboratorName||''}`,'liq:'+l.id,lines));
+      });
+      // Ajustes manuales.
+      ((state.accounting&&state.accounting.manualEntries)||[]).forEach(a=>{
+        out.push(_accE(a.date,(a.desc||'Ajuste manual')+' (manual)','man:'+a.id,(a.lines||[]).map(l=>[l.account,Number(l.debe||0),Number(l.haber||0)])));
+      });
+      out.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+      return out;
+    }
+    // Saldo por cuenta hasta una fecha inclusive (positivo = saldo deudor).
+    function accBalances(upTo){
+      const bal={};
+      accJournal().forEach(e=>{ if(upTo && e.date>upTo) return; e.lines.forEach(([acc,d,h])=>{ bal[acc]=(bal[acc]||0)+Number(d||0)-Number(h||0); }); });
+      return bal;
+    }
+    const _accRow=(label,amt,strong)=>`<div class="mini-row" style="display:flex;justify-content:space-between;gap:10px"><span style="${strong?'font-weight:700':''}">${esc(label)}</span><span style="font-variant-numeric:tabular-nums;${strong?'font-weight:700':''}">${money(Math.round(amt))}</span></div>`;
+    function accBalanceHtml(){
+      const upTo=state.finLibrosDate||dateKey(new Date());
+      const bal=accBalances(upTo);
+      const of=t=>accAccounts().filter(a=>a.type===t);
+      const val=a=>bal[a.id]||0;
+      let activo=0, pasivo=0;
+      const actRows=of('activo').map(a=>{const v=val(a); if(Math.abs(v)<0.5&&!['caja','banco','mp'].includes(a.id)) return ''; activo+=v; return _accRow(a.label,v);}).join('');
+      const pasRows=of('pasivo').map(a=>{const v=-val(a); if(Math.abs(v)<0.5) return ''; pasivo+=v; return _accRow(a.label,v);}).join('');
+      const cap=-(bal['capital']||0), ret=bal['retiros']||0;
+      let resultado=0; accAccounts().forEach(a=>{ if(a.type==='ingreso') resultado+= -(bal[a.id]||0); if(a.type==='egreso') resultado-= (bal[a.id]||0); });
+      const patrimonio=cap-ret+resultado;
+      const cierra=Math.abs(activo-pasivo-patrimonio)<1;
+      return `
+        <div class="fin-section"><div class="fin-section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px">Balance general <input type="date" value="${upTo}" onchange="setFinLibrosDate(this.value)" style="font-size:13px;padding:4px 8px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text)"></div>
+          <div class="fin-section-title" style="margin-top:8px">Activo</div>${actRows}${_accRow('TOTAL ACTIVO',activo,true)}
+          <div class="fin-section-title" style="margin-top:14px">Pasivo</div>${pasRows||'<div class="mini-row"><span>Sin pasivos</span></div>'}${_accRow('TOTAL PASIVO',pasivo,true)}
+          <div class="fin-section-title" style="margin-top:14px">Patrimonio neto</div>
+          ${_accRow('Capital inicial',cap)}${Math.abs(ret)>0.5?_accRow('(−) Retiros de socio',-ret):''}${_accRow('Resultado del ejercicio',resultado)}${_accRow('TOTAL PATRIMONIO',patrimonio,true)}
+          <div class="mini-row" style="margin-top:10px"><strong>${cierra?'✓ El balance cierra':'⚠ El balance NO cierra'}</strong><span>Activo ${money(Math.round(activo))} = Pasivo ${money(Math.round(pasivo))} + Patrimonio ${money(Math.round(patrimonio))}</span></div>
+        </div>`;
+    }
+    function accResultsHtml(){
+      const ym=state.finLibrosMonth||dateKey(new Date()).slice(0,7);
+      const from=ym+'-01', to=ym+'-31';
+      const sums={};
+      accJournal().forEach(e=>{ if(e.date<from||e.date>to) return; e.lines.forEach(([acc,d,h])=>{ sums[acc]=(sums[acc]||0)+Number(h||0)-Number(d||0); }); }); // ingresos en haber (+), egresos en debe (−)
+      let ing=0, egr=0;
+      const ingRows=accAccounts().filter(a=>a.type==='ingreso').map(a=>{const v=sums[a.id]||0; if(Math.abs(v)<0.5) return ''; ing+=v; return _accRow(a.label,v);}).join('');
+      const egrRows=accAccounts().filter(a=>a.type==='egreso').map(a=>{const v=-(sums[a.id]||0); if(Math.abs(v)<0.5) return ''; egr+=v; return _accRow(a.label,v);}).join('');
+      return `
+        <div class="fin-section"><div class="fin-section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px">Estado de resultados <input type="month" value="${ym}" onchange="setFinLibrosMonth(this.value)" style="font-size:13px;padding:4px 8px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text)"></div>
+          <div class="fin-section-title" style="margin-top:8px">Ingresos</div>${ingRows||'<div class="mini-row"><span>Sin ingresos en el período</span></div>'}${_accRow('TOTAL INGRESOS',ing,true)}
+          <div class="fin-section-title" style="margin-top:14px">Egresos</div>${egrRows||'<div class="mini-row"><span>Sin egresos en el período</span></div>'}${_accRow('TOTAL EGRESOS',egr,true)}
+          <div style="margin-top:12px">${_accRow('RESULTADO DEL PERÍODO',ing-egr,true)}</div>
+        </div>`;
+    }
+    function accDiarioEntries(ym){
+      return accJournal().filter(e=>e.date.startsWith(ym));
+    }
+    function accDiarioHtml(){
+      const ym=state.finLibrosMonth||dateKey(new Date()).slice(0,7);
+      const entries=accDiarioEntries(ym);
+      let td=0, th=0;
+      const rows=entries.map(e=>{
+        const first=`<tr style="border-top:1px solid var(--line)"><td style="padding:6px 8px;white-space:nowrap">${e.date.slice(8,10)}/${e.date.slice(5,7)}</td><td style="padding:6px 8px" colspan="3"><strong>${esc(e.desc)}</strong></td></tr>`;
+        const lines=e.lines.map(([acc,d,h])=>{ td+=Number(d||0); th+=Number(h||0);
+          return `<tr><td></td><td style="padding:2px 8px 2px ${d>0?'16px':'34px'};color:var(--text-muted)">${esc(accAccount(acc).label)}</td><td style="padding:2px 8px;text-align:right;font-variant-numeric:tabular-nums">${d>0?money(Math.round(d)):''}</td><td style="padding:2px 8px;text-align:right;font-variant-numeric:tabular-nums">${h>0?money(Math.round(h)):''}</td></tr>`;}).join('');
+        return first+lines;
+      }).join('');
+      return `
+        <div class="fin-section"><div class="fin-section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">Libro diario
+          <span style="display:flex;gap:8px;align-items:center"><input type="month" value="${ym}" onchange="setFinLibrosMonth(this.value)" style="font-size:13px;padding:4px 8px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text)">
+          <button class="btn" onclick="accExportDiarioCSV()">Exportar CSV</button></span></div>
+          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+            <thead><tr style="color:var(--text-muted)"><th style="text-align:left;padding:6px 8px">Fecha</th><th style="text-align:left;padding:6px 8px">Cuenta</th><th style="text-align:right;padding:6px 8px">Debe</th><th style="text-align:right;padding:6px 8px">Haber</th></tr></thead>
+            <tbody>${rows||'<tr><td colspan="4" style="padding:10px 8px">Sin movimientos en el período.</td></tr>'}</tbody>
+            <tfoot><tr style="border-top:2px solid var(--line);font-weight:700"><td style="padding:6px 8px" colspan="2">Totales</td><td style="padding:6px 8px;text-align:right">${money(Math.round(td))}</td><td style="padding:6px 8px;text-align:right">${money(Math.round(th))}</td></tr></tfoot>
+          </table></div>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Los asientos se generan automáticamente desde la operación diaria. Los marcados “(manual)” se cargaron como ajuste.</p>
+        </div>`;
+    }
+    function accMayorHtml(){
+      const accId=state.finLibrosAcc||'caja';
+      const opts=accAccounts().map(a=>`<option value="${a.id}" ${a.id===accId?'selected':''}>${esc(a.label)}</option>`).join('');
+      let saldo=0;
+      const rows=accJournal().flatMap(e=>e.lines.filter(l=>l[0]===accId).map(([_,d,h])=>{ saldo+=Number(d||0)-Number(h||0);
+        return `<tr style="border-top:1px solid var(--line)"><td style="padding:5px 8px;white-space:nowrap">${e.date.slice(8,10)}/${e.date.slice(5,7)}/${e.date.slice(0,4)}</td><td style="padding:5px 8px">${esc(e.desc)}</td><td style="padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums">${d>0?money(Math.round(d)):''}</td><td style="padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums">${h>0?money(Math.round(h)):''}</td><td style="padding:5px 8px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${money(Math.round(saldo))}</td></tr>`;})).join('');
+      return `
+        <div class="fin-section"><div class="fin-section-title" style="display:flex;justify-content:space-between;align-items:center;gap:10px">Libro mayor
+          <select onchange="setFinLibrosAcc(this.value)" style="font-size:13px;padding:4px 8px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text)">${opts}</select></div>
+          <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px">
+            <thead><tr style="color:var(--text-muted)"><th style="text-align:left;padding:5px 8px">Fecha</th><th style="text-align:left;padding:5px 8px">Concepto</th><th style="text-align:right;padding:5px 8px">Debe</th><th style="text-align:right;padding:5px 8px">Haber</th><th style="text-align:right;padding:5px 8px">Saldo</th></tr></thead>
+            <tbody>${rows||'<tr><td colspan="5" style="padding:10px 8px">Sin movimientos en esta cuenta.</td></tr>'}</tbody>
+          </table></div>
+        </div>`;
+    }
+    function accOpeningFormHtml(){
+      const op=accOpening()||{};
+      const f=(id,label,ph)=>`<div class="fin-form-field"><label>${label}</label><input type="number" min="0" step="0.01" id="${id}" value="${op[id.replace('accOp','').toLowerCase()]??''}" placeholder="${ph||'0'}" class="input-like"/></div>`;
+      return `
+        <div class="fin-section"><div class="fin-section-title">Asiento de apertura</div>
+          <p style="font-size:12.5px;color:var(--text-muted);margin:4px 0 10px">La foto inicial de la empresa. La contabilidad corre desde esta fecha: todo lo anterior no entra en los libros. El capital inicial se calcula solo (activos − deudas).</p>
+          <div class="fin-expense-form">
+            <div class="fin-form-row">
+              <div class="fin-form-field"><label>Fecha de apertura</label><input type="date" id="accOpDate" value="${op.date||dateKey(new Date())}" class="input-like"/></div>
+              ${f('accOpCaja','Efectivo en caja')}
+              ${f('accOpBanco','Saldo en banco')}
+            </div>
+            <div class="fin-form-row">
+              ${f('accOpMp','Saldo en Mercado Pago')}
+              ${f('accOpEquipo','Equipamiento y mobiliario (valor estimado)')}
+              ${f('accOpDeudas','Deudas y préstamos')}
+            </div>
+            <div class="fin-form-row"><div class="fin-form-field" style="flex:1"><label>Nota (opcional)</label><input type="text" id="accOpNote" value="${esc(op.note||'')}" placeholder="Detalle de bienes, a quién se debe, etc." class="input-like"/></div>
+            <div class="fin-form-field" style="display:flex;align-items:flex-end"><button class="btn primary" onclick="accSaveOpening()">${op.date?'Actualizar apertura':'Registrar apertura'}</button></div></div>
+          </div>
+        </div>`;
+    }
+    function accAjustesHtml(){
+      const accsOpts=accAccounts().map(a=>`<option value="${a.id}">${esc(a.label)}</option>`).join('');
+      const rowInput=i=>`<div class="fin-form-row"><div class="fin-form-field" style="flex:2"><label>${i===0?'Cuenta':''}</label><select id="accMan${i}Acc" class="input-like"><option value="">—</option>${accsOpts}</select></div>
+        <div class="fin-form-field"><label>${i===0?'Debe':''}</label><input type="number" min="0" step="0.01" id="accMan${i}D" class="input-like" placeholder="0"/></div>
+        <div class="fin-form-field"><label>${i===0?'Haber':''}</label><input type="number" min="0" step="0.01" id="accMan${i}H" class="input-like" placeholder="0"/></div></div>`;
+      const list=((state.accounting&&state.accounting.manualEntries)||[]).slice().reverse().map(a=>{
+        const det=(a.lines||[]).map(l=>`${accAccount(l.account).label}: ${l.debe?'D '+money(l.debe):'H '+money(l.haber)}`).join(' · ');
+        return `<div class="mini-row"><strong>${a.date} · ${esc(a.desc||'Ajuste')}</strong><span>${esc(det)}</span><div style="margin-top:6px"><button class="small-btn" onclick="accDeleteManualEntry('${a.id}')">Eliminar</button></div></div>`;
+      }).join('');
+      return accOpeningFormHtml()+`
+        <div class="fin-section"><div class="fin-section-title">Asiento manual de ajuste</div>
+          <p style="font-size:12.5px;color:var(--text-muted);margin:4px 0 10px">Para correcciones que la operación diaria no captura (compra de equipamiento, aporte de capital, pago de deuda, etc.). El total del Debe tiene que igualar al del Haber.</p>
+          <div class="fin-expense-form">
+            <div class="fin-form-row">
+              <div class="fin-form-field"><label>Fecha</label><input type="date" id="accManDate" value="${dateKey(new Date())}" class="input-like"/></div>
+              <div class="fin-form-field" style="flex:2"><label>Concepto</label><input type="text" id="accManDesc" placeholder="Ej: Compra de camilla nueva" class="input-like"/></div>
+            </div>
+            ${rowInput(0)}${rowInput(1)}${rowInput(2)}${rowInput(3)}
+            <div class="fin-form-row"><div class="fin-form-field" style="display:flex;align-items:flex-end"><button class="btn primary" onclick="accSaveManualEntry()">Registrar asiento</button></div></div>
+          </div>
+        </div>
+        <div class="fin-section"><div class="fin-section-title">Ajustes registrados</div>${list||'<div class="mini-row"><span>Sin ajustes manuales.</span></div>'}</div>`;
+    }
+    function renderFinanzasLibros(){
+      const panel=$('finanzas-libros'); if(!panel) return;
+      const op=accOpening();
+      if(!op){ panel.innerHTML=accOpeningFormHtml(); return; }
+      const sub=state.finLibrosTab||'balance';
+      const tabs=[['balance','Balance'],['resultados','Resultados'],['diario','Libro diario'],['mayor','Libro mayor'],['ajustes','Apertura y ajustes']];
+      const nav=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${tabs.map(([id,l])=>`<button class="small-btn ${sub===id?'primary':''}" onclick="setFinLibrosTab('${id}')">${l}</button>`).join('')}</div>`;
+      let body='';
+      if(sub==='balance') body=accBalanceHtml();
+      else if(sub==='resultados') body=accResultsHtml();
+      else if(sub==='diario') body=accDiarioHtml();
+      else if(sub==='mayor') body=accMayorHtml();
+      else body=accAjustesHtml();
+      panel.innerHTML=nav+body;
+    }
+    function setFinLibrosTab(t){ state.finLibrosTab=t; renderFinanzasLibros(); }
+    function setFinLibrosDate(v){ if(v){ state.finLibrosDate=v; renderFinanzasLibros(); } }
+    function setFinLibrosMonth(v){ if(v){ state.finLibrosMonth=v; renderFinanzasLibros(); } }
+    function setFinLibrosAcc(v){ if(v){ state.finLibrosAcc=v; renderFinanzasLibros(); } }
+    function accSaveOpening(){
+      const n=id=>Math.max(0,parseFloat($(id)?.value||0)||0);
+      const date=$('accOpDate')?.value||dateKey(new Date());
+      const caja=n('accOpCaja'), banco=n('accOpBanco'), mp=n('accOpMp'), equipo=n('accOpEquipo'), deudas=n('accOpDeudas');
+      const capital=caja+banco+mp+equipo-deudas;
+      const doSave=()=>{
+        if(!state.accounting) state.accounting={};
+        state.accounting.opening={date,caja,banco,mp,equipo,deudas,capital,note:($('accOpNote')?.value||'').trim()};
+        saveState(); try{ if(_blobReady) flushCloudNow(); }catch(e){}
+        state.finLibrosTab='balance'; renderFinanzasLibros();
+        showToast('Apertura registrada. Capital inicial: '+money(Math.round(capital)));
+      };
+      if(accOpening()) showConfirm('Ya hay un asiento de apertura registrado. ¿Reemplazarlo? Los libros se recalculan desde la nueva fecha.',doSave);
+      else doSave();
+    }
+    function accSaveManualEntry(){
+      const date=$('accManDate')?.value||dateKey(new Date());
+      const desc=($('accManDesc')?.value||'').trim();
+      if(!desc) return showToast('Poné un concepto al asiento.');
+      const lines=[];
+      for(let i=0;i<4;i++){
+        const acc=$('accMan'+i+'Acc')?.value; if(!acc) continue;
+        const d=parseFloat($('accMan'+i+'D')?.value||0)||0, h=parseFloat($('accMan'+i+'H')?.value||0)||0;
+        if(d>0&&h>0) return showToast('Cada línea va al Debe O al Haber, no ambos.');
+        if(d>0||h>0) lines.push({account:acc,debe:d,haber:h});
+      }
+      if(lines.length<2) return showToast('El asiento necesita al menos dos líneas.');
+      const td=lines.reduce((s,l)=>s+l.debe,0), th=lines.reduce((s,l)=>s+l.haber,0);
+      if(Math.abs(td-th)>0.5) return showToast(`No balancea: Debe ${money(td)} ≠ Haber ${money(th)}.`);
+      if(!state.accounting) state.accounting={};
+      if(!state.accounting.manualEntries) state.accounting.manualEntries=[];
+      state.accounting.manualEntries.push({id:uid('asi'),date,desc,lines,createdBy:cashActorName(),createdAt:new Date().toISOString()});
+      saveState(); try{ if(_blobReady) flushCloudNow(); }catch(e){}
+      renderFinanzasLibros(); showToast('Asiento registrado.');
+    }
+    function accDeleteManualEntry(id){
+      showConfirm('¿Eliminar este asiento manual?',()=>{
+        if(state.accounting&&state.accounting.manualEntries) state.accounting.manualEntries=state.accounting.manualEntries.filter(a=>a.id!==id);
+        saveState(); try{ if(_blobReady) flushCloudNow(); }catch(e){}
+        renderFinanzasLibros(); showToast('Asiento eliminado.');
+      });
+    }
+    function accExportDiarioCSV(){
+      const ym=state.finLibrosMonth||dateKey(new Date()).slice(0,7);
+      const entries=accDiarioEntries(ym);
+      if(!entries.length) return showToast('Sin movimientos en el período.');
+      const lines=[['Fecha','Concepto','Cuenta','Debe','Haber'].join(',')];
+      entries.forEach(e=>e.lines.forEach(([acc,d,h])=>{
+        lines.push([e.date,csvCell(e.desc),csvCell(accAccount(acc).label),d>0?Math.round(d):'',h>0?Math.round(h):''].join(','));
+      }));
+      const blob=new Blob(['﻿'+lines.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='libro-diario-'+ym+'.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      showToast('Libro diario exportado.');
+    }
+    // ═══ FIN CONTABILIDAD FORMAL ════════════════════════════════════════
+
     function finBreakEven(){
       const {from,to}=finDateRange('month');
       const allExp=state.expenses||[];
@@ -10138,6 +10465,7 @@
       if(tab==='cfo') renderFinanzasCFO();
       else if(tab==='contador') renderFinanzasContador();
       else if(tab==='analista') renderFinanzasAnalista();
+      else if(tab==='libros') renderFinanzasLibros();
     }
     function renderFinanzasCFO(){
       const panel=$('finanzas-cfo'); if(!panel) return;
@@ -12094,6 +12422,7 @@ ${context}`;
           // en el mismo navegador no herede lo del admin anterior)
           state.liquidations=[]; state.payrollDeductions=[]; state.expenses=[];
           state.taxRecords=[]; state.budgets={}; state.expenseCategories=null;
+          state.accounting=null; // libros contables: solo admin
           state.authUser=null;
           state.systemUsers=[];
           state.clientsPrivate={};
@@ -12157,6 +12486,9 @@ ${context}`;
       showPage, showRrhhTab, showToast,
       toggleAgendaFilters, toggleApptAdditionals, togglePaid,
       setFinanzasCFOMonth,
+      // Contabilidad formal (pestaña Libros)
+      setFinLibrosTab, setFinLibrosDate, setFinLibrosMonth, setFinLibrosAcc,
+      accSaveOpening, accSaveManualEntry, accDeleteManualEntry, accExportDiarioCSV,
       setCashDailyDate, setCashTicketsDate,
       setLedgerDate, setLedgerSubTab, renderLedger,
       updateApptStatus, voidDeposit, voidPending, voidTicket,
