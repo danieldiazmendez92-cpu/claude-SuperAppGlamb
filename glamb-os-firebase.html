@@ -5441,6 +5441,12 @@
     const ROLE_LABELS={admin:'Administrador',medio:'Recepción',bajo:'Colaboradora'};
     function curUser(){ return state.authUser || null; }
     function curRole(){ return state.authUser ? state.authUser.role : null; }
+    // Nombre del usuario que efectivamente realiza la acción en caja (registro/anulación).
+    // Prioriza el usuario logueado; si no hay auth (modo demo/offline) usa el comportamiento anterior.
+    function cashActorName(){
+      if(state.authUser && state.authUser.name) return state.authUser.name;
+      return state.cashMode==='admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId));
+    }
     function permCfg(){ return PERMISSIONS[curRole()] || PERMISSIONS.bajo; }
     function canPage(p){ return permCfg().pages.includes(p); }
     function canSeeClientData(){ return permCfg().clientData==='full'; }
@@ -6721,7 +6727,7 @@
       const amount = Number($('withdrawalAmount')?.value || 0);
       if(!amount || amount <= 0) return showToast('Ingresá un monto válido.');
       const reason = $('withdrawalReason')?.value || 'Retiro';
-      const createdBy = state.cashMode === 'admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId));
+      const createdBy = cashActorName();
       if(reason === 'Propina'){
         const collabId = $('tipCollaboratorSelect')?.value;
         if(!collabId) return showToast('Seleccioná la colaboradora que recibe la propina.');
@@ -6862,7 +6868,7 @@
         method: $('expenseMethod')?.value || 'Efectivo',
         note: $('expenseNote')?.value || '',
         createdAt: new Date().toISOString(),
-        createdBy: state.cashMode === 'admin' ? 'Admin caja' : fullName(member(state.cashCurrentCollaboratorId))
+        createdBy: cashActorName()
       });
       closeDrawers();
       renderAll();
@@ -7273,7 +7279,7 @@
       const salePayments = collectSalePayments();
       const pendingBalance = Math.max(0, t.due - t.payments);
       const isPartial = pendingBalance > 1;
-      const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:isPartial?'partial':'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.payments,pendingBalance,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),createdAt:new Date().toISOString()};
+      const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:isPartial?'partial':'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.payments,pendingBalance,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:cashActorName(),createdAt:new Date().toISOString()};
       state.salesTickets.unshift(ticket);
       if(t.depositApplied>0){
         addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
@@ -7319,7 +7325,7 @@
         depositAmount:deposit,
         appointmentId:sourceApptId,
         reservationId:reservationKey(sourceAppt)||null,
-        createdBy:state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),
+        createdBy:cashActorName(),
         serviceOf:fullName(member(l.collaboratorId)),
         createdAt:new Date().toISOString()
       }));
@@ -7352,7 +7358,7 @@
       $('saleLines').innerHTML='';
       addSaleLine(p);
       if($('reservationDeposit')) $('reservationDeposit').value = p.depositAmount||0;
-      p.status='converted'; p.convertedBy = state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)); p.convertedAt = new Date().toISOString();
+      p.status='converted'; p.convertedBy = cashActorName(); p.convertedAt = new Date().toISOString();
       saveState(); renderPendingCharges(); updateSaleSummary(); showToast('Pendiente cargado en venta');
     }
     function renderPendingCharges(){
@@ -7497,7 +7503,7 @@
       showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{
         if(!reason)return;
         t.status='voided'; t.voidReason=reason;
-        t.voidedBy=state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId));
+        t.voidedBy=cashActorName();
         t.voidedAt=new Date().toISOString();
         state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true);
         saveState(); renderAll(); showToast('Ticket anulado');
@@ -8140,7 +8146,7 @@
             depositAppliedTotal:applied, amountToCollectToday:Math.max(0,sena-applied),
             pendingBalance:0, totalDueToday:sena,
             note:'Inasistencia — seña retenida como ingreso',
-            createdBy: state.cashMode==='admin'?'Admin caja':fullName(member(state.cashCurrentCollaboratorId)),
+            createdBy: cashActorName(),
             createdAt:new Date().toISOString()
           };
           state.salesTickets.unshift(ticket);
