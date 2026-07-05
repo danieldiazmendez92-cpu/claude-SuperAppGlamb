@@ -9283,7 +9283,8 @@
           : discType==='employee' ? ` · Desc. empleada −${discPct}%`
           : discType==='client' ? ` · Bonificación −${discPct}%`
           : '';
-        return `<div class="t-line"><span style="font-size:12px;">${svcTxt}<span style="display:block;font-size:10px;color:var(--text-soft);">${colName}${addons.length?` · ${addons.length} adicional(es)`:''}${discLabel}</span></span><span style="font-weight:500;">${money(price+addonsAmt)}</span></div>`;
+        const displayAmt = discType === 'canje' ? 0 : price + addonsAmt;
+        return `<div class="t-line"><span style="font-size:12px;">${svcTxt}<span style="display:block;font-size:10px;color:var(--text-soft);">${colName}${addons.length?` · ${addons.length} adicional(es)`:''}${discLabel}</span></span><span style="font-weight:500;">${money(displayAmt)}</span></div>`;
       }).filter(Boolean).join('');
       if($('wizTicketLines')) $('wizTicketLines').innerHTML = linesHtml || '<div style="font-size:12px;color:var(--text-soft);text-align:center;padding:10px 0;">Sin servicios aún</div>';
       const t = saleTotals();
