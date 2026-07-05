@@ -7130,8 +7130,9 @@
         finalInput.value = 0;
         finalInput.readOnly = true;
       } else {
+        const addonTotal = Array.from(line.querySelectorAll('.sale-addon.selected')).reduce((s,a)=>s+Number(a.dataset.price||0),0);
         const pct = Math.max(0, Math.min(100, Number(pctInput.value||0)));
-        finalInput.value = Math.round(base * (1 - pct/100));
+        finalInput.value = Math.round((base + addonTotal) * (1 - pct/100));
         finalInput.readOnly = true;
       }
     }
@@ -7153,11 +7154,13 @@
       line.querySelector('.sale-discount-base').addEventListener('input', () => { applyLineDiscount(line); updateSaleSummary(); });
       line.querySelector('.sale-discount-pct').addEventListener('input', () => { applyLineDiscount(line); updateSaleSummary(); });
       line.querySelectorAll('input,select').forEach(el=>{el.oninput=()=>updateSaleSummary(); el.onchange=()=>updateSaleSummary();});
-      line.querySelectorAll('.sale-addon').forEach(chip=>chip.onclick=()=>{chip.classList.toggle('selected'); updateSaleSummary();});
+      line.querySelectorAll('.sale-addon').forEach(chip=>chip.onclick=()=>{chip.classList.toggle('selected'); applyLineDiscount(line); updateSaleSummary();});
     }
     function lineServiceSubtotal(line){
       const discountType = line.querySelector('.sale-discount-type')?.value || 'none';
       if(discountType === 'canje') return 0;
+      // Para descuentos con %, sale-final ya incluye los adicionales en el precio descontado
+      if(discountType === 'employee' || discountType === 'client') return Number(line.querySelector('.sale-final').value||0);
       const addons = Array.from(line.querySelectorAll('.sale-addon.selected')).reduce((s,a)=>s+Number(a.dataset.price||0),0);
       return Number(line.querySelector('.sale-final').value||0) + addons;
     }
@@ -7177,7 +7180,10 @@
         const discountReason = line.querySelector('.sale-discount-reason')?.value||'';
         const employeeId = line.querySelector('.sale-discount-employee')?.value||'';
         const addonTotal = addons.reduce((s,a)=>s+a.price,0);
-        const baseFinal = discountType === 'canje' ? 0 : (Number(line.querySelector('.sale-final').value||0) + addonTotal);
+        // Para descuentos con %, sale-final ya contiene (base+addons)*(1-pct%), no sumar addons de nuevo
+        const baseFinal = discountType === 'canje' ? 0
+          : (discountType === 'employee' || discountType === 'client') ? Number(line.querySelector('.sale-final').value||0)
+          : Number(line.querySelector('.sale-final').value||0) + addonTotal;
         return {
           collaboratorId:line.querySelector('.sale-collaborator').value,group:groupName,service:serviceName,variantId,addons,
           finalPrice:baseFinal,tipAmount:Number(line.querySelector('.sale-tip')?.value||0),reference:line.querySelector('.sale-reference')?.value||'',
@@ -9283,7 +9289,9 @@
           : discType==='employee' ? ` · Desc. empleada −${discPct}%`
           : discType==='client' ? ` · Bonificación −${discPct}%`
           : '';
-        const displayAmt = discType === 'canje' ? 0 : price + addonsAmt;
+        const displayAmt = discType === 'canje' ? 0
+          : (discType === 'employee' || discType === 'client') ? price
+          : price + addonsAmt;
         return `<div class="t-line"><span style="font-size:12px;">${svcTxt}<span style="display:block;font-size:10px;color:var(--text-soft);">${colName}${addons.length?` · ${addons.length} adicional(es)`:''}${discLabel}</span></span><span style="font-weight:500;">${money(displayAmt)}</span></div>`;
       }).filter(Boolean).join('');
       if($('wizTicketLines')) $('wizTicketLines').innerHTML = linesHtml || '<div style="font-size:12px;color:var(--text-soft);text-align:center;padding:10px 0;">Sin servicios aún</div>';
