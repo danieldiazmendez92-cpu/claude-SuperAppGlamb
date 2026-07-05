@@ -5610,15 +5610,22 @@
       const remaining = todayAppts.filter(a=>(a.start||'')>=nowHM);
       const next = remaining[0]||null;
 
-      // Tickets confirmados por período (misma semántica que los KPIs de Caja: createdAt)
-      const confirmed = state.salesTickets.filter(t=>t.status==='confirmed');
-      const byPrefix = p => confirmed.filter(t=>(t.createdAt||'').startsWith(p));
-      const sumGross = arr => arr.reduce((s,t)=>s+Number(t.grossTotal||0),0);
+      // Ventas por período (criterio contable, consistente con Caja):
+      //  - cuentan tickets confirmados Y parciales (el servicio se prestó; el
+      //    saldo que falta ya se muestra aparte en "Pendiente de cobro");
+      //  - se suma servicesTotal, SIN propinas (la propina es de la
+      //    colaboradora, no facturación del local);
+      //  - las señas NO se cuentan al recibirse (son pasivo): entran recién
+      //    cuando se aplican a una venta o se retienen por inasistencia.
+      const sold = state.salesTickets.filter(t=>t.status==='confirmed'||t.status==='partial');
+      const byPrefix = p => sold.filter(t=>(t.createdAt||'').startsWith(p));
+      const svcTotal = t => t.servicesTotal!==undefined ? Number(t.servicesTotal||0) : (Number(t.grossTotal||0)-Number(t.tipsTotal||0));
+      const sumSvc = arr => arr.reduce((s,t)=>s+svcTotal(t),0);
       const ym = today.slice(0,7);
       const prevD = new Date(); prevD.setDate(1); prevD.setMonth(prevD.getMonth()-1);
       const prevYm = `${prevD.getFullYear()}-${String(prevD.getMonth()+1).padStart(2,'0')}`;
       const monthTk = byPrefix(ym), prevTk = byPrefix(prevYm);
-      const monthRev = sumGross(monthTk), prevRev = sumGross(prevTk);
+      const monthRev = sumSvc(monthTk), prevRev = sumSvc(prevTk);
       const monthAppts = appts.filter(a=>!a.isAdditional && (a.date||'').startsWith(ym)).length;
       const prevAppts  = appts.filter(a=>!a.isAdditional && (a.date||'').startsWith(prevYm)).length;
       const avgTk = monthTk.length ? monthRev/monthTk.length : 0;
@@ -5642,7 +5649,7 @@
       let items;
       if(cmd==='full'){
         items=[
-          ['Facturación del mes',money(monthRev),delta(monthRev,prevRev)],
+          ['Ventas del mes (sin propinas)',money(monthRev),delta(monthRev,prevRev)],
           ['Turnos del mes',monthAppts,delta(monthAppts,prevAppts)],
           ['Ticket promedio',money(Math.round(avgTk)),delta(avgTk,prevAvgTk)],
           ['Pendiente de cobro',money(pendingAmount),`${pendings.length} cobro(s)`],
