@@ -7156,6 +7156,8 @@
       line.querySelectorAll('.sale-addon').forEach(chip=>chip.onclick=()=>{chip.classList.toggle('selected'); updateSaleSummary();});
     }
     function lineServiceSubtotal(line){
+      const discountType = line.querySelector('.sale-discount-type')?.value || 'none';
+      if(discountType === 'canje') return 0;
       const addons = Array.from(line.querySelectorAll('.sale-addon.selected')).reduce((s,a)=>s+Number(a.dataset.price||0),0);
       return Number(line.querySelector('.sale-final').value||0) + addons;
     }
@@ -7174,12 +7176,13 @@
         const discountPct = Number(line.querySelector('.sale-discount-pct')?.value||0);
         const discountReason = line.querySelector('.sale-discount-reason')?.value||'';
         const employeeId = line.querySelector('.sale-discount-employee')?.value||'';
-        const baseFinal = Number(line.querySelector('.sale-final').value||0) + addons.reduce((s,a)=>s+a.price,0);
+        const addonTotal = addons.reduce((s,a)=>s+a.price,0);
+        const baseFinal = discountType === 'canje' ? 0 : (Number(line.querySelector('.sale-final').value||0) + addonTotal);
         return {
           collaboratorId:line.querySelector('.sale-collaborator').value,group:groupName,service:serviceName,variantId,addons,
           finalPrice:baseFinal,tipAmount:Number(line.querySelector('.sale-tip')?.value||0),reference:line.querySelector('.sale-reference')?.value||'',
           discountType,
-          basePrice: discountType==='none' ? baseFinal : basePrice,
+          basePrice: discountType==='none' ? baseFinal : (discountType==='canje' ? basePrice + addonTotal : basePrice),
           discountPct: (discountType==='employee'||discountType==='client') ? discountPct : 0,
           discountReason: discountType==='client' ? discountReason : '',
           employeeId: discountType==='employee' ? employeeId : ''
