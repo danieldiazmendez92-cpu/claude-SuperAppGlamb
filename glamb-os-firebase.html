@@ -10787,7 +10787,9 @@
       const col = colId ? member(colId) : null;
       let date = r.date || (appt && appt.date) || '';
       if(!date && r.submittedAt){ try{ date=r.submittedAt?.toDate?.()?.toLocaleDateString('es-AR')??''; }catch(_){ } }
-      return { service: service||'—', colName: col?fullName(col):'', date, appt };
+      // Etiqueta clara del turno vinculado: fecha + hora del turno agendado.
+      const turnoLabel = appt ? `${appt.date||''}${appt.start?' · '+appt.start:''}` : '';
+      return { service: service||'—', colName: col?fullName(col):'', date, appt, turnoLabel };
     }
     function renderProfileReviews(clientId){
       const el=$('profileReviews'); if(!el) return;
@@ -10801,7 +10803,7 @@
         const srcBadge=r._src==='survey'?' · <span style="font-size:10px;color:var(--text-muted);background:var(--surface-2,#f3f4f6);border-radius:8px;padding:1px 6px">encuesta anónima</span>':'';
         return `<div class="review-card-mini">
           <div class="review-stars-mini">${starsHtml(r.stars)}</div>
-          <div class="review-meta-mini">${esc(info.service)}${info.colName?' · atendió '+esc(info.colName):''}${info.date?' · '+esc(info.date):''}${srcBadge}</div>
+          <div class="review-meta-mini">${info.turnoLabel?`<strong>Turno: ${esc(info.turnoLabel)}</strong> · `:''}${esc(info.service)}${info.colName?' · atendió '+esc(info.colName):''}${!info.appt&&info.date?' · '+esc(info.date):''}${!info.appt?' · <em>sin turno vinculado</em>':''}${srcBadge}</div>
           ${tags.length?`<div class="survey-tag-chips" style="margin-top:4px">${tags.map(t=>`<span class="survey-tag-chip">${esc(t)}</span>`).join('')}</div>`:''}
           ${r.comment?`<div class="review-comment-mini">"${esc(r.comment)}"</div>`:''}
         </div>`;
@@ -11013,7 +11015,7 @@
                 ${!r._manual?`<span style="font-size:10px;color:var(--text-muted);background:var(--surface-2,#f3f4f6);border-radius:10px;padding:1px 7px">encuesta</span>`:''}
                 ${r._manual&&curRole()==='admin'?`<button class="small-btn danger" data-action="deleteReview" data-id="${r.id}" style="padding:2px 8px;font-size:11px">✕</button>`:''}
               </div>
-              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Servicio: ${esc(info.service)}${info.appt?'':' · <em>sin turno vinculado</em>'}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${info.turnoLabel?`<strong>Turno: ${esc(info.turnoLabel)}</strong> · `:''}Servicio: ${esc(info.service)}${info.appt?'':' · <em>sin turno vinculado</em>'}</div>
               ${tags.length?`<div class="survey-tag-chips">${tags.map(t=>`<span class="survey-tag-chip">${esc(t)}</span>`).join('')}</div>`:''}
               ${r.comment?`<div class="review-comment">"${esc(r.comment)}"</div>`:''}
             </div>`;
