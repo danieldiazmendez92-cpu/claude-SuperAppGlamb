@@ -7432,17 +7432,59 @@
       const todayTickets = state.salesTickets.filter(t=>(t.createdAt||'').startsWith(selDate));
       const visibleTickets = state.cashMode==='collaborator' ? todayTickets.filter(t=>t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) : todayTickets;
       $('ticketsList').innerHTML = visibleTickets.length ? visibleTickets.map(t=>{
-        const statusLabel = t.status==='partial'?'Pago parcial':t.status==='confirmed'?'Confirmado':'Anulado';
-        const statusColor = t.status==='partial'?'warn':t.status==='confirmed'?'ok':'';
-        const breakdown = `Total: ${money(t.grossTotal)}${t.depositAppliedTotal>0?' · Seña: −'+money(t.depositAppliedTotal):''}${t.pendingBalance>0?' · <strong style="color:#8a5a14;">Saldo pendiente: '+money(t.pendingBalance)+'</strong>':''}`;
-        const discountBadges = [...new Set((t.lines||[]).filter(l=>l.discountType&&l.discountType!=='none').map(l=>
-          l.discountType==='canje'?'Canje':l.discountType==='employee'?`Desc. empleada −${l.discountPct}%`:`Bonificación −${l.discountPct}%`
-        ))].map(b=>` <span class="tag" style="font-size:10px">${esc(b)}</span>`).join('');
         const isVoided = t.status === 'voided';
-        const voidedStyle = isVoided ? 'background:#fff0f0;border-left:3px solid #e74c3c;padding-left:10px;' : '';
-        const voidInfo = isVoided ? ` · <strong style="color:#c0392b">Motivo: ${esc(t.voidReason||'—')}</strong>` : '';
-        const voidBtn = !isVoided ? `<button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button>` : '';
-        return `<div class="mini-row" style="${voidedStyle}"><strong>${esc(t.clientNameSnapshot)} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong>${discountBadges}<span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${esc(t.createdBy||'—')} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span>${voidInfo}</span>${voidBtn?`<div style="margin-top:8px">${voidBtn}</div>`:''}</div>`;
+        const statusLabel = t.status==='partial'?'Pago parcial':t.status==='confirmed'?'Confirmado':t.status==='voided'?'Anulado':'—';
+        const statusColor = t.status==='partial'?'#8a5a14':t.status==='confirmed'?'#2d7a4a':t.status==='voided'?'#c0392b':'#888';
+        const statusBg   = t.status==='partial'?'#fff8e1':t.status==='confirmed'?'#e8f5e9':t.status==='voided'?'#fdecea':'#f5f5f5';
+        const hour = t.createdAt ? new Date(t.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '';
+
+        // Services list
+        const linesHtml = (t.lines||[]).map(l=>{
+          const discBadge = l.discountType && l.discountType!=='none'
+            ? ` <span style="font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:10px;font-weight:600">${l.discountType==='canje'?'Canje':l.discountType==='employee'?`Empleada −${l.discountPct}%`:`Bonif. −${l.discountPct}%`}</span>` : '';
+          const addonsHtml = (l.addons||[]).length ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">+ ${l.addons.map(a=>esc(a.name)).join(', ')}</div>` : '';
+          const tip = l.tip>0 ? `<span style="font-size:11px;color:#5a8a5a"> · Propina ${money(l.tip)}</span>` : '';
+          const collab = l.collaboratorName ? `<span style="font-size:11px;color:var(--text-muted)"> · ${esc(l.collaboratorName)}</span>` : '';
+          return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)">
+            <div style="flex:1">
+              <span style="font-weight:500;font-size:13px">${esc(l.service||'Servicio')}</span>${discBadge}${collab}${tip}
+              ${addonsHtml}
+            </div>
+            <div style="font-size:13px;font-weight:600;white-space:nowrap;margin-left:12px">${money(l.baseFinal||0)}</div>
+          </div>`;
+        }).join('');
+
+        // Payment methods
+        const pays = (state.payments||[]).filter(p=>p.ticketId===t.id&&!p.voided);
+        const paysHtml = pays.length ? pays.map(p=>`<span style="font-size:11px;background:var(--surface);border:0.5px solid var(--line);padding:2px 8px;border-radius:10px">${esc(p.method||'—')} ${money(p.amount)}</span>`).join(' ') : '';
+
+        const seña = t.depositAppliedTotal>0 ? `<div style="font-size:12px;color:#5a8a5a;margin-top:4px">Seña aplicada: −${money(t.depositAppliedTotal)}</div>` : '';
+        const pendiente = t.pendingBalance>0 ? `<div style="font-size:12px;color:#8a5a14;font-weight:600;margin-top:2px">Saldo pendiente: ${money(t.pendingBalance)}</div>` : '';
+        const voidInfo = isVoided ? `<div style="font-size:12px;color:#c0392b;margin-top:4px;font-weight:600">Motivo anulación: ${esc(t.voidReason||'—')}</div>` : '';
+        const voidBtn = !isVoided ? `<button class="small-btn" data-action="voidTicket" data-id="${t.id}" style="margin-top:10px">Anular ticket</button>` : '';
+
+        const cardBorder = isVoided ? 'border-left:3px solid #e74c3c;' : '';
+        const cardBg = isVoided ? 'background:#fff0f0;' : '';
+
+        return `<div style="border:0.5px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px;${cardBg}${cardBorder}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div>
+              <span style="font-weight:700;font-size:14px">${esc(t.clientNameSnapshot||'Sin cliente')}</span>
+              ${hour?`<span style="font-size:11px;color:var(--text-muted);margin-left:8px">${hour}</span>`:''}
+              ${t.createdBy?`<span style="font-size:11px;color:var(--text-muted);margin-left:6px">· ${esc(t.createdBy)}</span>`:''}
+            </div>
+            <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:${statusBg};color:${statusColor}">${statusLabel}</span>
+          </div>
+          <div style="margin-bottom:10px">${linesHtml}</div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:6px">
+            <div>${paysHtml}</div>
+            <div style="text-align:right">
+              <div style="font-size:13px;font-weight:700">Total cobrado: ${money(t.amountToCollectToday||t.totalDueToday||0)}</div>
+              ${seña}${pendiente}
+            </div>
+          </div>
+          ${voidInfo}${voidBtn?`<div>${voidBtn}</div>`:''}
+        </div>`;
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
     function voidTicket(id){
