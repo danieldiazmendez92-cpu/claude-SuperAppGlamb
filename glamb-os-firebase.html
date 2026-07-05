@@ -10789,7 +10789,7 @@
       if(!date && r.submittedAt){ try{ date=r.submittedAt?.toDate?.()?.toLocaleDateString('es-AR')??''; }catch(_){ } }
       // Etiqueta clara del turno vinculado: fecha + hora del turno agendado.
       const turnoLabel = appt ? `${appt.date||''}${appt.start?' · '+appt.start:''}` : '';
-      return { service: service||'—', colName: col?fullName(col):'', date, appt, turnoLabel };
+      return { service: service||'—', colName: col?fullName(col):'', colId, date, appt, turnoLabel };
     }
     function renderProfileReviews(clientId){
       const el=$('profileReviews'); if(!el) return;
@@ -10813,6 +10813,12 @@
     // ── Módulo de Encuestas ───────────────────────────────────────────────
     let _surveyTab = 'solicitar';
     let _surveyDateSel = null;
+    let _reviewsCollabFilter = '';
+    function setReviewsCollabFilter(v){
+      _reviewsCollabFilter = v||'';
+      const panel=$('comms-reviews');
+      if(panel){ panel.innerHTML=renderCommsReviews(); bindSurveyHandlers(); }
+    }
     const SURVEY_TAG_LABELS = {great:'Servicio excelente', attention:'Buena atención', quality:'Calidad', price:'Buenos precios'};
 
     function getSurveyLink(apptId, clientId, collabId){
@@ -10909,6 +10915,8 @@
     function bindSurveyHandlers(){
       const dp=$('surveyDatePicker');
       if(dp) dp.onchange=()=>{ _surveyDateSel=dp.value||null; refreshSurveyPanel(); };
+      const cf=$('reviewsCollabFilterSel');
+      if(cf) cf.onchange=()=>setReviewsCollabFilter(cf.value);
       const bulkBtn=$('sendAllSurveyEmailsBtn');
       if(bulkBtn) bulkBtn.onclick=doSendAllSurveyEmails;
       const ssBtn=$('saveSurveySettings');
@@ -10988,22 +10996,34 @@
       }
 
       if(_surveyTab==='respuestas'){
-        const allRevs=[...responses,...manualRevs.map(r=>({...r,_manual:true}))];
+        const allRevsRaw=[...responses,...manualRevs.map(r=>({...r,_manual:true}))].map(r=>({...r,_info:reviewApptInfo(r)}));
+        // Ranking y KPIs siempre sobre el universo completo (sin filtrar), para no distorsionar el promedio general.
+        const colMap={};
+        allRevsRaw.forEach(r=>{ const id=r._info.colId; if(!id)return; if(!colMap[id])colMap[id]={sum:0,cnt:0}; colMap[id].sum+=r.stars||0; colMap[id].cnt++; });
+        const ranking=Object.entries(colMap).map(([id,{sum,cnt}])=>({id,avg:sum/cnt,cnt})).sort((a,b)=>b.avg-a.avg);
+        // Filtro por colaboradora: permite ver solo las reseñas de una persona.
+        const allRevs = _reviewsCollabFilter ? allRevsRaw.filter(r=>r._info.colId===_reviewsCollabFilter) : allRevsRaw;
         const total=allRevs.length;
         const avg=total?allRevs.reduce((s,r)=>s+(r.stars||0),0)/total:0;
         const thisMonth=dateKey(new Date()).slice(0,7);
-        const monthCount=responses.filter(r=>{
+        const monthCount=(_reviewsCollabFilter?allRevs.filter(r=>!r._manual):responses).filter(r=>{
           const t=r.submittedAt?.toDate?.()?.toISOString?.()??r.submittedAt??'';
           return (typeof t==='string'?t:(t.seconds?new Date(t.seconds*1000).toISOString():'')).slice(0,7)===thisMonth;
         }).length;
-        const colMap={};
-        allRevs.forEach(r=>{ if(!r.collaboratorId)return; if(!colMap[r.collaboratorId])colMap[r.collaboratorId]={sum:0,cnt:0}; colMap[r.collaboratorId].sum+=r.stars||0; colMap[r.collaboratorId].cnt++; });
-        const ranking=Object.entries(colMap).map(([id,{sum,cnt}])=>({id,avg:sum/cnt,cnt})).sort((a,b)=>b.avg-a.avg);
+        const filterOptions=Object.keys(colMap).map(id=>member(id)).filter(m=>m&&m.id).sort((a,b)=>fullName(a).localeCompare(fullName(b)));
+        const filterBar=`<div class="form-card" style="margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <strong style="font-size:13px">Colaboradora:</strong>
+          <select id="reviewsCollabFilterSel" class="select-like" style="max-width:220px">
+            <option value=""${!_reviewsCollabFilter?' selected':''}>Todas</option>
+            ${filterOptions.map(m=>`<option value="${m.id}"${_reviewsCollabFilter===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}
+          </select>
+          ${_reviewsCollabFilter?`<button class="small-btn" data-action="clearReviewsCollabFilter">✕ Quitar filtro</button>`:''}
+        </div>`;
         const listHtml=!allRevs.length
           ?'<div class="mini-row"><strong>Sin respuestas todavía</strong><span>Las encuestas que completen las clientas van a aparecer acá.</span></div>'
           :allRevs.slice(0,50).map(r=>{
             const c=state.clients.find(x=>x.id===r.clientId);
-            const info=reviewApptInfo(r);
+            const info=r._info;
             let dateStr=info.date||'';
             if(!dateStr&&r.createdAt) dateStr=(r.createdAt||'').slice(0,10);
             const tags=r.tags?Object.entries(r.tags).filter(([,v])=>v).map(([k])=>SURVEY_TAG_LABELS[k]||k):[];
@@ -11022,13 +11042,14 @@
           }).join('');
         return `${tabBar}
           <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-            <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${avg?avg.toFixed(1):'—'}</div><div class="kpi-label">Promedio</div><span class="kpi-mini">${starsHtml(Math.round(avg))}</span></article>
-            <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${total}</div><div class="kpi-label">Total</div><span class="kpi-mini">encuestas y reseñas</span></article>
+            <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${avg?avg.toFixed(1):'—'}</div><div class="kpi-label">Promedio${_reviewsCollabFilter?' (filtrado)':''}</div><span class="kpi-mini">${starsHtml(Math.round(avg))}</span></article>
+            <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${total}</div><div class="kpi-label">Total${_reviewsCollabFilter?' (filtrado)':''}</div><span class="kpi-mini">encuestas y reseñas</span></article>
             <article class="card" style="flex:1;min-width:100px"><div class="kpi-value">${monthCount}</div><div class="kpi-label">Este mes</div><span class="kpi-mini">encuestas recibidas</span></article>
           </div>
-          ${ranking.length?`<div class="form-card" style="margin-bottom:16px"><h3 style="margin-bottom:12px">Ranking colaboradoras</h3>${ranking.map(r=>{const m=member(r.id);return `<div class="mini-row"><strong>${esc(m.first)} ${esc(m.last)}</strong><span>${starsHtml(Math.round(r.avg))} ${r.avg.toFixed(1)} · ${r.cnt}</span></div>`;}).join('')}</div>`:''}
+          ${filterBar}
+          ${ranking.length?`<div class="form-card" style="margin-bottom:16px"><h3 style="margin-bottom:12px">Ranking colaboradoras <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— clic para filtrar</span></h3>${ranking.map(r=>{const m=member(r.id);return `<div class="mini-row" style="cursor:pointer;${_reviewsCollabFilter===r.id?'background:var(--surface-2,#f3f4f6);border-radius:8px':''}" data-action="setReviewsCollabFilter" data-id="${r.id}"><strong>${esc(m.first)} ${esc(m.last)}</strong><span>${starsHtml(Math.round(r.avg))} ${r.avg.toFixed(1)} · ${r.cnt}</span></div>`;}).join('')}</div>`:''}
           <div style="display:flex;justify-content:flex-end;margin-bottom:12px"><button class="btn primary" data-action="openReviewDrawer">+ Nueva reseña manual</button></div>
-          <div class="form-card"><h3 style="margin-bottom:12px">Respuestas</h3>${listHtml}</div>`;
+          <div class="form-card"><h3 style="margin-bottom:12px">Respuestas${_reviewsCollabFilter?` de ${esc(fullName(member(_reviewsCollabFilter)))}`:''}</h3>${listHtml}</div>`;
       }
 
       if(_surveyTab==='configurar'){
@@ -12054,6 +12075,8 @@ ${context}`;
       deleteReview:            el => deleteReview(el.dataset.id),
       switchSurveySubTab:      el => switchSurveySubTab(el),
       setSurveyDate:           el => setSurveyDate(el),
+      setReviewsCollabFilter:  el => setReviewsCollabFilter(el.dataset.id),
+      clearReviewsCollabFilter:() => setReviewsCollabFilter(''),
       doSendSurveyWA:          el => doSendSurveyWA(el.dataset.client, el.dataset.appt),
       doSendSurveyEmail:       el => doSendSurveyEmail(el.dataset.client, el.dataset.appt),
       cancelAppointment:       el => cancelAppointment(el.dataset.id),
