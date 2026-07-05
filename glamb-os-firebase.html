@@ -10781,9 +10781,8 @@
     // Deriva el turno vinculado (appointmentId) para saber qué servicio se hizo, quién atendió y la fecha.
     function reviewApptInfo(r){
       const appt = r.appointmentId ? state.appointments.find(a=>reservationKey(a)===r.appointmentId||a.id===r.appointmentId) : null;
-      let service = r.service || '';
-      if(!service && appt) service = (appt.lines||[]).map(l=>l.name||l.serviceId||'').filter(Boolean).join(', ') || appt.service || '';
-      const colId = r.collaboratorId || (appt && appt.lines?.[0]?.collaboratorId) || null;
+      let service = r.service || (appt && appt.service) || '';
+      const colId = r.collaboratorId || (appt && appt.memberId) || null;
       const col = colId ? member(colId) : null;
       let date = r.date || (appt && appt.date) || '';
       if(!date && r.submittedAt){ try{ date=r.submittedAt?.toDate?.()?.toLocaleDateString('es-AR')??''; }catch(_){ } }
@@ -10854,8 +10853,8 @@
       const c=state.clients.find(x=>x.id===clientId);
       if(!c) return showToast('Cliente no encontrado.');
       if(!c.email) return showToast(`${c.first} no tiene email registrado.`);
-      const appt=state.appointments.find(x=>x.id===apptId)||{id:apptId,lines:[]};
-      const collabId=(appt.lines||[])[0]?.collaboratorId||'';
+      const appt=state.appointments.find(x=>x.id===apptId)||{id:apptId};
+      const collabId=appt.memberId||'';
       const link=getSurveyLink(apptId,clientId,collabId);
       const p=buildSurveyEmailPayload(c,appt,link);
       try{
@@ -10870,8 +10869,8 @@
       const c=state.clients.find(x=>x.id===clientId);
       if(!c) return showToast('Cliente no encontrado.');
       if(!c.phone) return showToast(`${c.first} no tiene WhatsApp.`);
-      const appt=state.appointments.find(x=>x.id===apptId)||{id:apptId,lines:[]};
-      const collabId=(appt.lines||[])[0]?.collaboratorId||'';
+      const appt=state.appointments.find(x=>x.id===apptId)||{id:apptId};
+      const collabId=appt.memberId||'';
       const link=getSurveyLink(apptId,clientId,collabId);
       const ss=state.surveySettings||{};
       const biz=state.comms?.bizName||'GLAMB';
@@ -10892,7 +10891,7 @@
       for(const a of toSend){
         try{
           const c=state.clients.find(x=>x.id===a.clientId);
-          const collabId=(a.lines||[])[0]?.collaboratorId||'';
+          const collabId=a.memberId||'';
           const link=getSurveyLink(a.id,a.clientId,collabId);
           const p=buildSurveyEmailPayload(c,a,link);
           await db.collection('mail').add({to:[c.email],message:{subject:p.subject,html:p.html,text:p.text},createdAt:firebase.firestore.FieldValue.serverTimestamp()});
@@ -10968,8 +10967,8 @@
           :dayAppts.map(a=>{
             const c=state.clients.find(x=>x.id===a.clientId);
             if(!c) return '';
-            const col=a.lines?.[0]?.collaboratorId?member(a.lines[0].collaboratorId):null;
-            const svc=(a.lines||[]).map(l=>l.name||l.serviceId||'').filter(Boolean).join(', ')||'—';
+            const col=a.memberId?member(a.memberId):null;
+            const svc=a.service||'—';
             const sent=isSurveySent(a.clientId,a.id);
             return `<div class="survey-client-row">
               <div class="survey-client-info">
