@@ -7503,10 +7503,14 @@
     function ledgerEfectivo(selDate,hasSes){
       // Build sorted event list
       const events=[];
+
+      // Para fechas históricas buscar en cashClosings el snapshot que tiene los retiros/gastos de sesión
+      const pastClosing = !hasSes ? (state.cashClosings||[]).find(cl=>(cl.openedAt||'').slice(0,10)===selDate) : null;
+
       if(hasSes && state.cashSession.openingAmount){
         events.push({ts:state.cashSession.openedAt,tipo:'apertura',label:'Apertura de caja',detalle:state.cashSession.openedBy||'Admin caja',entra:Number(state.cashSession.openingAmount),sale:0,cashIn:Number(state.cashSession.openingAmount),cashOut:0});
-      } else if(!hasSes){
-        // past date: check closings for opening amount
+      } else if(pastClosing && pastClosing.openingAmount){
+        events.push({ts:pastClosing.openedAt||selDate+'T00:00:00',tipo:'apertura',label:'Apertura de caja',detalle:pastClosing.openedBy||'Admin caja',entra:Number(pastClosing.openingAmount),sale:0,cashIn:Number(pastClosing.openingAmount),cashOut:0});
       }
       // Payments
       state.payments.filter(p=>(p.createdAt||'').slice(0,10)===selDate).forEach(p=>{
@@ -7519,13 +7523,19 @@
         const detalleStr=ticket?`${esc(ticket.clientNameSnapshot||'')} — ${(ticket.lines||[]).map(l=>l.service||l.group).join(', ')}`:(clientObj?esc(fullName(clientObj)):p.reference||typeLabel);
         events.push({ts:p.createdAt,tipo:p.type,label:typeLabel,detalle:detalleStr,method:p.method||'—',voided:p.voided,entra:!isOut?amt:0,sale:isOut?amt:0,cashIn:isCash&&!isOut&&!p.voided?amt:0,cashOut:isOut&&isCash&&!p.voided?amt:0,payId:p.id,isDeposit:p.type==='deposit_received'});
       });
-      // Withdrawals (current session only if same date)
-      if(hasSes)(state.cashSession.withdrawals||[]).forEach(w=>{
-        events.push({ts:w.createdAt,tipo:'retiro',label:`Retiro: ${w.reason}`,detalle:w.note||w.createdBy||'',entra:0,sale:Number(w.amount||0),cashIn:0,cashOut:Number(w.amount||0)});
+      // Retiros de sesión: sesión activa o histórica guardada en cashClosings
+      const sessionWithdrawals = hasSes ? (state.cashSession.withdrawals||[]) : (pastClosing?.withdrawals||[]);
+      sessionWithdrawals.forEach(w=>{
+        events.push({ts:w.createdAt,tipo:'retiro',label:`Retiro: ${w.reason||'—'}`,detalle:w.note||w.createdBy||'',entra:0,sale:Number(w.amount||0),cashIn:0,cashOut:Number(w.amount||0)});
       });
-      // Cash expenses (current session)
-      if(hasSes)(state.cashSession.expenses||[]).filter(e=>/efectivo/i.test(e.method||'')).forEach(e=>{
-        events.push({ts:e.createdAt,tipo:'gasto',label:`Gasto: ${e.category}`,detalle:e.note||'',entra:0,sale:Number(e.amount||0),cashIn:0,cashOut:Number(e.amount||0)});
+      // Gastos rápidos de sesión de caja (efectivo)
+      const sessionExpenses = hasSes ? (state.cashSession.expenses||[]) : (pastClosing?.expenses||[]);
+      sessionExpenses.filter(e=>/efectivo/i.test(e.method||'')).forEach(e=>{
+        events.push({ts:e.createdAt||selDate+'T00:00:00',tipo:'gasto',label:`Gasto caja: ${e.category}`,detalle:e.note||'',entra:0,sale:Number(e.amount||0),cashIn:0,cashOut:Number(e.amount||0)});
+      });
+      // Gastos del módulo Finanzas pagados en efectivo (insumos, servicios, etc.)
+      (state.expenses||[]).filter(e=>e.date===selDate&&/efectivo/i.test(e.paymentMethod||'')).forEach(e=>{
+        events.push({ts:selDate+'T00:00:01',tipo:'gasto',label:`Gasto: ${e.category}`,detalle:e.description||'',entra:0,sale:Number(e.amount||0),cashIn:0,cashOut:Number(e.amount||0)});
       });
 
       events.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
@@ -7551,7 +7561,7 @@
       const totalCashIn=events.filter(e=>!e.voided).reduce((s,e)=>s+e.cashIn,0);
       const totalCashOut=events.filter(e=>!e.voided).reduce((s,e)=>s+e.cashOut,0);
 
-      const noSesNote=!hasSes?`<div class="ledger-info">⚠ Sesión cerrada — retiros y apertura de caja de esta fecha no están disponibles. Solo se muestran los cobros registrados.</div>`:'';
+      const noSesNote=!hasSes?(pastClosing?`<div class="ledger-info">Sesión cerrada el ${new Date(pastClosing.closedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} — mostrando historial completo de la sesión.</div>`:`<div class="ledger-info">⚠ Sin sesión registrada para esta fecha — se muestran cobros y gastos del módulo Finanzas pagados en efectivo.</div>`):'';
 
       return `${noSesNote}<div class="ledger-wrap"><table class="ledger-tbl">
         <thead><tr>
@@ -7699,11 +7709,15 @@
       const snapshot = {
         id:'close'+Date.now(),
         openingAmount: state.cashSession.openingAmount,
+        openedAt: state.cashSession.openedAt,
+        openedBy: state.cashSession.openedBy,
         expectedCash,
         countedCash: counted,
         difference: counted - expectedCash,
         paymentsTotal: state.payments.filter(p=>!p.voided&&(p.type==='service'||p.type==='deposit_applied')&&(p.createdAt||'')>=(state.cashSession.openedAt||'')).reduce((sum,p)=>sum+Number(p.amount||0),0),
         withdrawalsTotal: state.cashSession.withdrawals.reduce((sum,w)=>sum+Number(w.amount||0),0),
+        withdrawals: [...(state.cashSession.withdrawals||[])],
+        expenses: [...(state.cashSession.expenses||[])],
         pendingCount: state.pendingCharges.filter(p=>p.status==='pending').length,
         closedBy: 'Admin caja',
         note: $('closeCashNote')?.value || '',
