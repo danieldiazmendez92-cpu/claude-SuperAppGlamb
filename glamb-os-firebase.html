@@ -10285,6 +10285,7 @@
       if($('expDesc')) $('expDesc').value='';
       if($('expAmount')) $('expAmount').value='';
       saveState();
+      try{ if(_blobReady) flushCloudNow(); }catch(e){ console.error('[GLAMB] flush gasto falló:',e); } // guardado inmediato: los gastos son críticos, no esperar el debounce
       renderFinanzasContador();
       showToast('Gasto registrado');
     }
@@ -10292,6 +10293,7 @@
       showConfirm('¿Eliminar este gasto?',()=>{
         state.expenses=(state.expenses||[]).filter(e=>e.id!==id);
         saveState();
+        try{ if(_blobReady) flushCloudNow(); }catch(e){ console.error('[GLAMB] flush borrado gasto falló:',e); }
         renderFinanzasContador();
         showToast('Gasto eliminado');
       });
