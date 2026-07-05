@@ -74,10 +74,14 @@ jobs:
           SA_EMAIL=$(python3 -c "import json; print(json.load(open('/tmp/firebase-sa.json'))['client_email'])" 2>/dev/null || echo "desconocido")
           # El CLI necesita las dependencias instaladas para analizar las funciones
           npm install --prefix functions
+          # --force: configura automáticamente la política de limpieza de imágenes
+          # de Artifact Registry (sin ella, cada deploy acumula imágenes viejas
+          # que generan un cargo mensual pequeño pero creciente).
           GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json firebase deploy \
             --only functions \
             --project glamb-os \
-            --non-interactive
+            --non-interactive \
+            --force
           STATUS=$?
           rm -f /tmp/firebase-sa.json
           if [ $STATUS -ne 0 ]; then
