@@ -3434,18 +3434,18 @@
           <div>
             <div class="eyebrow">Centro de mando</div>
             <h1>Inicio</h1>
-            <p class="subtitle">Resumen vivo de GLAMB: caja esperada, agenda, clientes importantes, huecos y alertas.</p>
+            <p class="subtitle">Lo que importa hoy: qué requiere acción, cómo viene el mes y los turnos del día.</p>
           </div>
           <div class="top-actions">
-            <button class="btn" data-open-client>Crear cliente</button>
-            <button class="btn primary" data-go="agenda">Ir a agenda</button>
+            <button class="btn" data-go="agenda">Ir a agenda</button>
+            <button class="btn primary" id="cmdCashBtn" data-go="cash">Abrir caja</button>
           </div>
         </div>
         <div class="grid kpis" id="commandKpis"></div>
         <div class="layout-2">
           <div class="grid">
             <section class="card">
-              <h2 class="section-title">Alertas inteligentes</h2>
+              <h2 class="section-title">Requiere acción</h2>
               <div id="commandAlerts"></div>
             </section>
             <section class="card">
@@ -5591,26 +5591,97 @@
       if(!appts.length) return 0;
       return appts.reduce((sum,a)=>sum+Number(a.bookingDepositAmount||a.depositAmount||0),0);
     }
+    // Inicio (rediseño): todos los números salen de datos reales.
+    //  - full (admin): comparativa del mes vs. el anterior + panel de acción.
+    //  - simple (recepción): operación de hoy (turnos, cobros, caja), sin
+    //    números del negocio.
+    //  - min (colaboradora): solo su día (sus turnos y sus ventas).
     function renderCommand(){
-      const appts = activeAppointments();
-      const pros=state.collaborators.filter(c=>c.can).length;
-      const confirmed = state.salesTickets.filter(t=>t.status==='confirmed');
-      const serviceRevenue = confirmed.reduce((s,t)=>s+Number(t.servicesTotal||0),0);
-      const pendingAmount = state.pendingCharges.filter(p=>p.status==='pending').reduce((s,p)=>s+Number(p.finalPrice||p.amountToCollectToday||0),0);
-      const openSlots = Math.max(0, (pros*4) - appts.length);
-      const clientsAtRisk = state.clients.filter(c=>!appts.some(a=>a.clientId===c.id)).length;
-      const collaboratorRevenue = id => confirmed.reduce((sum,t)=>sum+t.lines.filter(l=>l.collaboratorId===id).reduce((lineSum,l)=>lineSum+Number(l.finalPrice||0),0),0);
-      const lowCollaborators = state.collaborators.filter(c=>c.can && collaboratorRevenue(c.id)<20000).length;
+      const appts = activeAppointments(); // todas las fechas: lo usa el widget de Athenas (reactivación/huecos)
       const cmd = permCfg().command; // 'full' | 'simple' | 'min'
-      const moneyItems=[['Venta servicios',money(serviceRevenue),'tickets confirmados'],['Pendiente cobro',money(pendingAmount),'a recuperar']];
-      const opItems=[['Turnos hoy',appts.length,'en agenda'],['Huecos',openSlots,'vendibles'],['Clientes riesgo',clientsAtRisk,'sin turno activo']];
-      const items = cmd==='full' ? [...moneyItems,...opItems] : cmd==='simple' ? opItems : [['Turnos hoy',appts.length,'en agenda'],['Huecos',openSlots,'vendibles']];
+      const today = dateKey(new Date());
+      const nowHM = `${String(new Date().getHours()).padStart(2,'0')}:${String(new Date().getMinutes()).padStart(2,'0')}`;
+      const myCollabId = (cmd==='min' && state.authUser && state.authUser.collaboratorId) || null;
+
+      // Turnos de HOY, ordenados por hora (rol colaboradora: solo los suyos)
+      let todayAppts = appts.filter(a=>a.date===today && !a.isAdditional);
+      if(myCollabId) todayAppts = todayAppts.filter(a=>a.memberId===myCollabId);
+      todayAppts.sort((a,b)=>String(a.start||'').localeCompare(String(b.start||'')));
+      const remaining = todayAppts.filter(a=>(a.start||'')>=nowHM);
+      const next = remaining[0]||null;
+
+      // Tickets confirmados por período (misma semántica que los KPIs de Caja: createdAt)
+      const confirmed = state.salesTickets.filter(t=>t.status==='confirmed');
+      const byPrefix = p => confirmed.filter(t=>(t.createdAt||'').startsWith(p));
+      const sumGross = arr => arr.reduce((s,t)=>s+Number(t.grossTotal||0),0);
+      const ym = today.slice(0,7);
+      const prevD = new Date(); prevD.setDate(1); prevD.setMonth(prevD.getMonth()-1);
+      const prevYm = `${prevD.getFullYear()}-${String(prevD.getMonth()+1).padStart(2,'0')}`;
+      const monthTk = byPrefix(ym), prevTk = byPrefix(prevYm);
+      const monthRev = sumGross(monthTk), prevRev = sumGross(prevTk);
+      const monthAppts = appts.filter(a=>!a.isAdditional && (a.date||'').startsWith(ym)).length;
+      const prevAppts  = appts.filter(a=>!a.isAdditional && (a.date||'').startsWith(prevYm)).length;
+      const avgTk = monthTk.length ? monthRev/monthTk.length : 0;
+      const prevAvgTk = prevTk.length ? prevRev/prevTk.length : 0;
+      const delta=(cur,prv)=> prv>0 ? `${cur>=prv?'▲':'▼'} ${Math.abs(Math.round((cur-prv)/prv*100))}% vs mes pasado` : 'sin datos del mes pasado';
+
+      // Cobros pendientes reales
+      const pendings = state.pendingCharges.filter(p=>p.status==='pending');
+      const pendingAmount = pendings.reduce((s,p)=>s+Number(p.finalPrice||p.amountToCollectToday||0),0);
+
+      // Ventas de hoy de la colaboradora logueada (suma de SUS líneas)
+      const mySalesToday = myCollabId ? byPrefix(today).reduce((s,t)=>s+(t.lines||[]).filter(l=>l.collaboratorId===myCollabId).reduce((x,l)=>x+Number(l.finalPrice||0),0),0) : 0;
+
+      // Estado de caja + botón del topbar
+      const cashOpen = !!(state.cashSession && state.cashSession.isOpen);
+      const cashHours = (cashOpen && state.cashSession.openedAt) ? Math.floor((Date.now()-new Date(state.cashSession.openedAt).getTime())/3600000) : 0;
+      const cashBtn=$('cmdCashBtn');
+      if(cashBtn) cashBtn.textContent = cmd==='min' ? 'Ir a caja' : (cashOpen ? 'Cerrar caja' : 'Abrir caja');
+
+      // KPIs por rol
+      let items;
+      if(cmd==='full'){
+        items=[
+          ['Facturación del mes',money(monthRev),delta(monthRev,prevRev)],
+          ['Turnos del mes',monthAppts,delta(monthAppts,prevAppts)],
+          ['Ticket promedio',money(Math.round(avgTk)),delta(avgTk,prevAvgTk)],
+          ['Pendiente de cobro',money(pendingAmount),`${pendings.length} cobro(s)`],
+        ];
+      } else if(cmd==='simple'){
+        items=[
+          ['Turnos hoy',todayAppts.length, next?`próximo ${next.start}`:'no quedan turnos'],
+          ['Pendiente de cobro',money(pendingAmount),`${pendings.length} cobro(s)`],
+          ['Caja',cashOpen?'Abierta':'Cerrada',cashOpen?`hace ${cashHours}h`:'lista para abrir'],
+        ];
+      } else {
+        items=[
+          ['Mis turnos hoy',todayAppts.length, next?`próximo ${next.start}`:'no quedan turnos'],
+          ['Mis ventas hoy',money(mySalesToday),'tickets confirmados'],
+        ];
+      }
       $('commandKpis').innerHTML=items.map(i=>`<article class="card"><div class="kpi-value">${i[1]}</div><div class="kpi-label">${i[0]}</div><span class="kpi-mini">${i[2]}</span></article>`).join('');
-      const moneyAlert = cmd==='full' ? `<div class="mini-row"><strong>${money(pendingAmount)} pendientes de cobro</strong><span>Caja necesita seguimiento antes del cierre.</span></div>` : '';
-      const lowAlert = cmd==='min' ? '' : `<div class="mini-row"><strong>${lowCollaborators} colaboradora(s) bajo objetivo</strong><span>Controlar ocupación y facturación por profesional.</span></div>`;
-      $('commandAlerts').innerHTML=`<div class="mini-row"><strong>${clientsAtRisk} clientas en riesgo</strong><span>Sin turno activo cargado para hoy. Priorizar contacto por WhatsApp.</span></div><div class="mini-row"><strong>${openSlots} huecos vendibles</strong><span>Revisar lista de espera y servicios de mayor margen.</span></div>${lowAlert}${moneyAlert}`;
-      $('commandAppointments').innerHTML=appts.slice(0,4).map(a=>`<div class="mini-row"><strong>${esc(a.start)} · ${esc(client(a.clientId).first)} ${esc(client(a.clientId).last)}</strong><span>${esc(a.service)} con ${esc(member(a.memberId).first)}</span></div>`).join('') || '<div class="mini-row"><strong>Sin turnos activos</strong><span>La agenda está libre para vender huecos.</span></div>';
-      renderAthenasWidget({appts, pendingAmount, openSlots, lowCollaborators, cmd});
+
+      // Requiere acción: solo cosas reales y accionables; si no hay nada, decirlo
+      const actions=[];
+      if(cmd!=='min'){
+        if(!cashOpen) actions.push(['Caja cerrada','Abrila desde Caja para registrar cobros del día.']);
+        else if(cashHours>=10) actions.push([`Caja abierta hace ${cashHours}h`,'Revisá si corresponde hacer el cierre del día.']);
+        if(pendings.length) actions.push([`${money(pendingAmount)} pendientes de cobro`,`${pendings.length} cobro(s) por gestionar desde Caja.`]);
+      }
+      if(next){
+        const c=client(next.clientId);
+        actions.push([`Próximo turno ${next.start||''}`,`${c.first} ${c.last} · ${next.service||''}${cmd==='min'?'':' con '+member(next.memberId).first}`]);
+      }
+      $('commandAlerts').innerHTML = actions.length
+        ? actions.map(([t,s])=>`<div class="mini-row"><strong>${esc(String(t))}</strong><span>${esc(String(s))}</span></div>`).join('')
+        : '<div class="mini-row"><strong>Todo en orden ✓</strong><span>Nada pendiente por ahora.</span></div>';
+
+      // Turnos del día: SOLO los de hoy; primero los que faltan, hasta 6
+      const dayList=(remaining.length?remaining:todayAppts).slice(0,6);
+      $('commandAppointments').innerHTML = (dayList.map(a=>{const c=client(a.clientId);return `<div class="mini-row"><strong>${esc(a.start||'')} · ${esc(c.first)} ${esc(c.last)}</strong><span>${esc(a.service||'')}${cmd==='min'?'':' con '+esc(member(a.memberId).first)}</span></div>`;}).join('')
+        + (todayAppts.length>dayList.length?`<div class="mini-row"><span>+${todayAppts.length-dayList.length} turno(s) más hoy — el detalle está en Agenda.</span></div>`:''))
+        || '<div class="mini-row"><strong>Sin turnos hoy</strong><span>La agenda del día está libre.</span></div>';
+      renderAthenasWidget({appts, pendingAmount, cmd});
     }
 
     function renderAthenasWidget({appts, pendingAmount, openSlots, lowCollaborators, cmd}){
