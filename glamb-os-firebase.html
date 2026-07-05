@@ -10143,6 +10143,10 @@
       {id:'retiros',   label:'Retiros de socio',          type:'patrimonio'},
       {id:'ventas',    label:'Ventas de servicios',       type:'ingreso'},
       {id:'nomina',    label:'Sueldos y comisiones',      type:'egreso'},
+      // Cuenta puente: si un registro histórico viene con datos incompletos
+      // (p.ej. un ticket viejo sin desglose), el asiento igual balancea y la
+      // diferencia queda VISIBLE acá para revisar, en vez de romper el balance.
+      {id:'ajustes',   label:'Diferencias de registro',   type:'egreso'},
     ];
     function accAccounts(){ return [...ACC_ACCOUNTS, ...expenseCats().map(c=>({id:'gasto:'+c.id, label:'Gasto — '+c.label, type:'egreso'}))]; }
     function accAccount(id){ return accAccounts().find(a=>a.id===id) || {id, label:id, type:'egreso'}; }
@@ -10156,7 +10160,13 @@
     }
     function accOpening(){ return (state.accounting && state.accounting.opening) || null; }
     function _accE(date,desc,ref,lines){
-      return {date:(date||'').slice(0,10), desc, ref, lines:lines.filter(l=>Number(l[1]||0)>0.005||Number(l[2]||0)>0.005)};
+      const ls=lines.filter(l=>Number(l[1]||0)>0.005||Number(l[2]||0)>0.005);
+      // Ley de partida doble: TODO asiento debe balancear (Debe = Haber).
+      // Si los datos de origen no cierran, la diferencia va a la cuenta
+      // puente 'ajustes' para que quede visible y auditable.
+      const td=ls.reduce((s,l)=>s+Number(l[1]||0),0), th=ls.reduce((s,l)=>s+Number(l[2]||0),0);
+      if(Math.abs(td-th)>0.5) ls.push(td<th?['ajustes',th-td,0]:['ajustes',0,td-th]);
+      return {date:(date||'').slice(0,10), desc, ref, lines:ls};
     }
     // Libro diario completo, ordenado por fecha. [cuenta, debe, haber] por línea.
     function accJournal(){
@@ -10171,7 +10181,10 @@
       // Ventas: Debe medios cobrados + seña aplicada + crédito empleada;
       // Haber ventas (menos saldo pendiente: ese se devenga vía el pendiente) + propinas.
       state.salesTickets.filter(t=>(t.status==='confirmed'||t.status==='partial')&&inR(t.createdAt)).forEach(t=>{
-        const svc=Number(t.servicesTotal||0), tips=Number(t.tipsTotal||0), dep=Number(t.depositAppliedTotal||0), pend=Number(t.pendingBalance||0);
+        // Fallbacks para tickets viejos sin desglose: servicios desde las líneas.
+        const svc=(t.servicesTotal!=null)?Number(t.servicesTotal||0):(t.lines||[]).reduce((s,l)=>s+Number(l.finalPrice||0),0);
+        const tips=(t.tipsTotal!=null)?Number(t.tipsTotal||0):(t.lines||[]).reduce((s,l)=>s+Number(l.tipAmount||0),0);
+        const dep=Number(t.depositAppliedTotal||0), pend=Number(t.pendingBalance||0);
         const due=(t.totalDueToday!==undefined)?Number(t.totalDueToday):Math.max(0,svc+tips-dep);
         const emp=Math.max(0,(svc+tips)-dep-due); // descuento empleada (se cobra por liquidación)
         const byAcc={};
@@ -10179,8 +10192,11 @@
         const lines=Object.entries(byAcc).map(([a,v])=>[a,v,0]);
         if(dep>0) lines.push(['senas',dep,0]);
         if(emp>0.005) lines.push(['empleadas',emp,0]);
+        // El saldo impago reduce primero los servicios; si los supera, reduce
+        // la propina (la propina solo es deuda con la colaboradora si se cobró).
         lines.push(['ventas',0,Math.max(0,svc-pend)]);
-        if(tips>0) lines.push(['propinas',0,tips]);
+        const tipsCobradas=Math.max(0,tips-Math.max(0,pend-svc));
+        if(tipsCobradas>0.005) lines.push(['propinas',0,tipsCobradas]);
         out.push(_accE(t.createdAt,`Venta — ${t.clientNameSnapshot||'Cliente'}${t.status==='partial'?' (parcial)':''}`,'ticket:'+t.id,lines));
       });
       // Señas recibidas: entra dinero, nace el pasivo.
@@ -10198,9 +10214,16 @@
         if(!inR(p.createdAt)) return;
         const amt=Number(p.finalPrice||p.amountToCollectToday||0); if(!(amt>0)) return;
         const who=p.clientNameSnapshot||'Cliente';
-        out.push(_accE(p.createdAt,`Saldo a cobrar — ${who}`,'pend:'+p.id,[['deudores',amt,0],['ventas',0,amt]]));
-        if(p.status==='converted') out.push(_accE(p.convertedAt||p.createdAt,`Cobro de saldo — ${who}`,'pendconv:'+p.id,[['ventas',amt,0],['deudores',0,amt]]));
-        if(p.status==='voided')    out.push(_accE(p.voidedAt||p.createdAt,`Saldo anulado — ${who}`,'pendvoid:'+p.id,[['ventas',amt,0],['deudores',0,amt]]));
+        // Si el saldo viene de un ticket, separar qué parte es servicio y qué
+        // parte es propina impaga (espejo de la asignación del asiento de venta).
+        const tk=p.ticketId?state.salesTickets.find(t=>t.id===p.ticketId):null;
+        const tkSvc=tk?((tk.servicesTotal!=null)?Number(tk.servicesTotal||0):(tk.lines||[]).reduce((s,l)=>s+Number(l.finalPrice||0),0)):amt;
+        const svcPart=Math.min(amt,tkSvc), tipPart=amt-svcPart;
+        const nace=[['deudores',amt,0],['ventas',0,svcPart]]; if(tipPart>0.005) nace.push(['propinas',0,tipPart]);
+        const rev=[['ventas',svcPart,0],['deudores',0,amt]]; if(tipPart>0.005) rev.splice(1,0,['propinas',tipPart,0]);
+        out.push(_accE(p.createdAt,`Saldo a cobrar — ${who}`,'pend:'+p.id,nace));
+        if(p.status==='converted') out.push(_accE(p.convertedAt||p.createdAt,`Cobro de saldo — ${who}`,'pendconv:'+p.id,rev));
+        if(p.status==='voided')    out.push(_accE(p.voidedAt||p.createdAt,`Saldo anulado — ${who}`,'pendvoid:'+p.id,rev));
       });
       // Retiros de caja (sesión activa + cierres históricos, dedup por id).
       const withs=[]; (state.cashSession?.withdrawals||[]).forEach(w=>withs.push(w));
