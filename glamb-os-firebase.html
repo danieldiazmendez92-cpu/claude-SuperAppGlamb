@@ -7438,7 +7438,11 @@
         const discountBadges = [...new Set((t.lines||[]).filter(l=>l.discountType&&l.discountType!=='none').map(l=>
           l.discountType==='canje'?'Canje':l.discountType==='employee'?`Desc. empleada −${l.discountPct}%`:`Bonificación −${l.discountPct}%`
         ))].map(b=>` <span class="tag" style="font-size:10px">${esc(b)}</span>`).join('');
-        return `<div class="mini-row"><strong>${esc(t.clientNameSnapshot)} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong>${discountBadges}<span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${esc(t.createdBy||'—')} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span></span><div style="margin-top:8px"><button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button></div></div>`;
+        const isVoided = t.status === 'voided';
+        const voidedStyle = isVoided ? 'background:#fff0f0;border-left:3px solid #e74c3c;padding-left:10px;' : '';
+        const voidInfo = isVoided ? ` · <strong style="color:#c0392b">Motivo: ${esc(t.voidReason||'—')}</strong>` : '';
+        const voidBtn = !isVoided ? `<button class="small-btn" data-action="voidTicket" data-id="${t.id}">Anular ticket</button>` : '';
+        return `<div class="mini-row" style="${voidedStyle}"><strong>${esc(t.clientNameSnapshot)} · Cobrado hoy: ${money(t.amountToCollectToday||t.totalDueToday)}</strong>${discountBadges}<span>${breakdown} · ${t.lines.length} servicio(s) · propinas ${money(t.tipsTotal)} · ${esc(t.createdBy||'—')} · <span class="sale-line-status ${statusColor}" style="display:inline-flex;">${statusLabel}</span>${voidInfo}</span>${voidBtn?`<div style="margin-top:8px">${voidBtn}</div>`:''}</div>`;
       }).join('') : '<div class="mini-row"><strong>Sin tickets</strong><span>Las ventas confirmadas aparecerán acá.</span></div>';
     }
     function voidTicket(id){
@@ -9018,18 +9022,109 @@
       const STATUS_COLOR={'completed':'#2d7a4a','confirmed':'#1a5fa8','in_progress':'#b8760a','cancelled':'#c0392b','cancelado':'#c0392b','voided':'#c0392b','no_show':'#888'};
       const renderProfileHistory = () => {
         const filt = $('profileHistoryFilter')?.value || 'active';
-        const history = state.appointments
-          .filter(a=>{
-            if(a.clientId!==c.id) return false;
-            if(filt==='active') return !CANCELLED_STATUSES.includes(a.status);
-            if(filt==='all') return true;
-            return a.status===filt;
-          })
-          .sort((a,b)=>(b.date||'').localeCompare(a.date||'')||(b.start||'').localeCompare(a.start||''));
-        const statusBadge=st=>{const label=STATUS_LABEL[st]||st||'Confirmado';const color=STATUS_COLOR[st]||'#1a5fa8';return `<span style="font-size:10px;font-weight:600;color:${color};background:${color}18;padding:1px 6px;border-radius:4px">${label}</span>`;};
-        $('profileHistory').innerHTML = history.length
-          ? history.map(a=>`<div class="history-item"><strong>${esc(a.service)}</strong><span>${a.date||'—'} · ${a.start}–${a.end} · ${esc(fullName(member(a.memberId))||'Sin profesional')} ${statusBadge(a.status)}</span></div>`).join('')
-          : '<div class="history-item"><strong>Sin turnos</strong><span>No hay turnos con este filtro.</span></div>';
+        const statusBadge = st => { const label=STATUS_LABEL[st]||st||'Confirmado'; const color=STATUS_COLOR[st]||'#1a5fa8'; return `<span style="font-size:10px;font-weight:600;color:${color};background:${color}18;padding:1px 6px;border-radius:4px">${label}</span>`; };
+        const norm = s => (s||'').toLowerCase().trim();
+        const discBadgesStr = lines => [...new Set((lines||[]).filter(l=>l.discountType&&l.discountType!=='none').map(l=>
+          l.discountType==='canje'?'Canje':l.discountType==='employee'?`Emp. −${l.discountPct}%`:`Bonif. −${l.discountPct}%`
+        ))].map(b=>`<span style="font-size:10px;font-weight:600;color:#8a5a14;background:#fef9e7;padding:1px 5px;border-radius:4px">${esc(b)}</span>`).join(' ');
+
+        // Indexar tickets de esta clienta por reservationId y appointmentId
+        const clientTickets = state.salesTickets.filter(t => t.clientId === c.id);
+        const ticketByRKey = {}, ticketByApptId = {};
+        clientTickets.forEach(t => {
+          if(t.reservationId) ticketByRKey[t.reservationId] = t;
+          if(t.appointmentId) ticketByApptId[t.appointmentId] = t;
+        });
+
+        // Turnos filtrados
+        const appts = state.appointments.filter(a => {
+          if(a.clientId !== c.id) return false;
+          if(filt==='active') return !CANCELLED_STATUSES.includes(a.status);
+          if(filt==='all') return true;
+          return a.status === filt;
+        });
+
+        // Rastrear tickets ya asociados a turnos
+        const linkedTicketIds = new Set();
+        appts.forEach(a => {
+          const rKey = reservationKey(a);
+          const t = (rKey && ticketByRKey[rKey]) || ticketByApptId[a.id];
+          if(t) linkedTicketIds.add(t.id);
+        });
+
+        // Construir lista unificada: turnos + tickets sueltos (venta sin turno)
+        const items = [];
+        appts.forEach(a => {
+          const rKey = reservationKey(a);
+          const ticket = (rKey && ticketByRKey[rKey]) || ticketByApptId[a.id] || null;
+          const activeTicket = ticket && ticket.status !== 'voided' ? ticket : null;
+          items.push({ sortKey: (a.date||'') + ' ' + (a.start||''), type: 'appt', appt: a, ticket: activeTicket });
+        });
+        if(filt === 'active' || filt === 'all') {
+          clientTickets.filter(t => !linkedTicketIds.has(t.id) && (filt==='all' || t.status!=='voided')).forEach(t => {
+            items.push({ sortKey: (t.createdAt||'').slice(0,16), type: 'ticket', ticket: t });
+          });
+        }
+        items.sort((a,b) => b.sortKey.localeCompare(a.sortKey));
+
+        if(!items.length) {
+          $('profileHistory').innerHTML = '<div class="history-item"><strong>Sin historial</strong><span>No hay registros con este filtro.</span></div>';
+          return;
+        }
+
+        $('profileHistory').innerHTML = items.map(item => {
+          // Ticket de venta directa (sin turno agendado)
+          if(item.type === 'ticket') {
+            const t = item.ticket;
+            const lines = t.lines || [];
+            const dateStr = (t.createdAt||'').slice(0,10) || '—';
+            const cols = [...new Set(lines.map(l=>(member(l.collaboratorId)?.first||'')).filter(Boolean))].join(', ');
+            const svcsHtml = lines.map(l => {
+              const addons = (l.addons||[]).map(a=>a.name);
+              return esc(l.service) + (addons.length?` <span style="color:var(--text-soft)">+ ${esc(addons.join(', '))}</span>`:'');
+            }).join(' · ');
+            const disc = discBadgesStr(lines);
+            return `<div class="history-item"><strong>${svcsHtml}</strong><span>${dateStr} · Sin turno · ${esc(cols||'—')} · ${money(t.grossTotal)}${disc?` · ${disc}`:''} ${t.status==='voided'?statusBadge('voided'):''}</span></div>`;
+          }
+
+          // Turno de agenda
+          const a = item.appt;
+          const ticket = item.ticket;
+          const dateStr = a.date || '—';
+          const timeStr = `${a.start||''}–${a.end||''}`;
+          const schedBadge = statusBadge(a.status);
+
+          if(!ticket) {
+            // Sin ticket: mostrar datos del turno tal cual
+            return `<div class="history-item"><strong>${esc(a.service)}</strong><span>${dateStr} · ${timeStr} · ${esc(fullName(member(a.memberId))||'Sin profesional')} ${schedBadge}</span></div>`;
+          }
+
+          // Con ticket: mostrar lo que se hizo realmente
+          const lines = ticket.lines || [];
+          const cols = [...new Set(lines.map(l=>(member(l.collaboratorId)?.first||'')).filter(Boolean))].join(', ');
+          const disc = discBadgesStr(lines);
+          const schedNorm = norm(a.service);
+          const mainActualNorm = norm(lines[0]?.service||'');
+          const mainMatches = mainActualNorm === schedNorm || mainActualNorm.includes(schedNorm) || schedNorm.includes(mainActualNorm);
+
+          let strongContent;
+          if(mainMatches) {
+            // Mismo servicio principal: mostrar con adicionales y servicios extra
+            const allExtras = [
+              ...(lines[0].addons||[]).map(ad=>ad.name),
+              ...lines.slice(1).map(l => { const ad=(l.addons||[]).map(a=>a.name).join(', '); return l.service+(ad?` + ${ad}`:''); })
+            ];
+            strongContent = esc(lines[0].service) + (allExtras.length ? ` <span style="color:var(--text-soft);font-size:11px">+ ${esc(allExtras.join(', '))}</span>` : '');
+          } else {
+            // Servicio cambiado: mostrar lo real con nota del agendado
+            const actualList = lines.map(l => { const ad=(l.addons||[]).map(a=>a.name).join(', '); return l.service+(ad?` + ${ad}`:''); }).join(' / ');
+            strongContent = esc(actualList);
+          }
+          const agendadoNote = !mainMatches ? ` · <em>Agendado: ${esc(a.service)}</em>` : '';
+          const meta = `${dateStr} · ${timeStr} · ${esc(cols||'—')} · ${money(ticket.grossTotal)}${disc?` · ${disc}`:''}${agendadoNote} ${schedBadge}`;
+
+          return `<div class="history-item"><strong>${strongContent}</strong><span>${meta}</span></div>`;
+        }).join('');
       };
       renderProfileHistory();
       if($('profileHistoryFilter')) $('profileHistoryFilter').onchange = renderProfileHistory;
