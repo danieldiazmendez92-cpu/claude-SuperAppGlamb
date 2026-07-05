@@ -9903,8 +9903,36 @@
     function finRevenue(from,to){
       return state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).reduce((s,t)=>s+finTicketRevenue(t),0);
     }
+    // Gastos registrados desde Caja (sesión activa + cierres históricos), normalizados al formato de Finanzas.
+    // Son de solo lectura en Finanzas: se editan/anulan desde Caja. Se deduplican por id.
+    function cajaExpensesAsFinance(){
+      const raw=[];
+      (state.cashSession?.expenses||[]).forEach(e=>raw.push(e));
+      (state.cashClosings||[]).forEach(cl=>(cl.expenses||[]).forEach(e=>raw.push(e)));
+      const seen=new Set();
+      const out=[];
+      raw.forEach(e=>{
+        if(!e||seen.has(e.id)) return;
+        seen.add(e.id);
+        const catStr=(e.category||'').toString();
+        const matched=expenseCats().find(c=>c.label.toLowerCase()===catStr.toLowerCase());
+        out.push({
+          id:e.id,
+          date:(e.createdAt||'').slice(0,10),
+          category: matched?matched.id:'other',
+          description: e.note || catStr || 'Gasto de caja',
+          amount: Number(e.amount||0),
+          paymentMethod: e.method || 'Efectivo',
+          source:'caja',
+          createdBy: e.createdBy||''
+        });
+      });
+      return out;
+    }
     function finExpenses(from,to){
-      return (state.expenses||[]).filter(e=>e.date>=from&&e.date<=to).reduce((s,e)=>s+(e.amount||0),0);
+      const own=(state.expenses||[]).filter(e=>e.date>=from&&e.date<=to).reduce((s,e)=>s+(e.amount||0),0);
+      const caja=cajaExpensesAsFinance().filter(e=>e.date>=from&&e.date<=to).reduce((s,e)=>s+(e.amount||0),0);
+      return own+caja;
     }
     function finPayrollCost(from,to){
       return (state.liquidations||[]).filter(l=>l.status==='paid'&&l.paidAt&&(l.paidAt||'').slice(0,10)>=from&&(l.paidAt||'').slice(0,10)<=to).reduce((s,l)=>s+(l.netPay||0),0);
@@ -10054,7 +10082,8 @@
     }
     function renderFinanzasContador(){
       const panel=$('finanzas-contador'); if(!panel) return;
-      const expenses=state.expenses||[];
+      // Gastos propios de Finanzas + gastos provenientes de Caja (solo lectura).
+      const expenses=[...(state.expenses||[]), ...cajaExpensesAsFinance()];
       const grouped={};
       expenses.forEach(e=>{
         const cat=expenseCats().find(c=>c.id===e.category)||{id:'other',label:'Otros',type:'other'};
@@ -10103,15 +10132,15 @@
                 <span>${cat.label} <span class="fin-type-badge fin-type-${cat.type}">${TYPE_LABELS[cat.type]||cat.type}</span></span>
                 <span>${money(items.reduce((s,e)=>s+(e.amount||0),0))}</span>
               </div>
-              ${items.sort((a,b)=>b.date.localeCompare(a.date)).map(e=>`
+              ${items.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(e=>`
                 <div class="fin-expense-row">
                   <div>
-                    <span class="fin-expense-desc">${e.description||'Sin descripción'}</span>
+                    <span class="fin-expense-desc">${e.description||'Sin descripción'}${e.source==='caja'?` <span style="font-size:10px;background:var(--surface);border:0.5px solid var(--line);color:var(--text-muted);padding:1px 6px;border-radius:8px">Caja</span>`:''}</span>
                     <span class="fin-expense-meta">${e.date} · ${e.paymentMethod||'—'}</span>
                   </div>
                   <div class="fin-expense-right">
                     <span class="fin-expense-amount">${money(e.amount)}</span>
-                    <button class="small-btn danger" data-action="deleteExpense" data-id="${e.id}">✕</button>
+                    ${e.source==='caja'?'':`<button class="small-btn danger" data-action="deleteExpense" data-id="${e.id}">✕</button>`}
                   </div>
                 </div>
               `).join('')}
