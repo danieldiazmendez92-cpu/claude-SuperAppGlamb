@@ -6687,6 +6687,10 @@
     state.afterClientCreate = null;
     state.saleSource = 'appointment';
     state.saleAppointmentId = null;
+    // Turno para el que están armadas las líneas de venta actuales. Permite
+    // detectar cuando el select de turnos se actualizó (p.ej. la agenda llegó
+    // de Firestore DESPUÉS de armar el formulario) y las líneas quedaron viejas.
+    let _saleLinesApptId = null;
 
     function renderCash(){
       if(!$('cashKpis')) return;
@@ -7053,11 +7057,7 @@
       const today = dateKey(new Date());
       const reservations = [];
       const seen = new Set();
-      const allActive = activeAppointments();
-      const todayActive = allActive.filter(a=>!a.isAdditional && (!a.date || a.date===today));
-      console.log('[CAJA] today=', today, 'activeAppts=', allActive.length, 'todayFiltered=', todayActive.length,
-        'allDates=', [...new Set(allActive.map(a=>a.date||'sin-date'))],
-        'excluded=', allActive.filter(a=>!a.isAdditional && a.date && a.date!==today).map(a=>({id:a.id,date:a.date,client:a.clientId,service:a.service})));
+      const todayActive = activeAppointments().filter(a=>!a.isAdditional && (!a.date || a.date===today));
       todayActive.forEach(a=>{
         const key = reservationKey(a);
         if(seen.has(key)) return;
@@ -7079,6 +7079,15 @@
         $('saleAppointmentSelect').value = state.saleAppointmentId;
       } else {
         state.saleAppointmentId = null;
+      }
+      // Si el turno efectivo del select NO es el turno para el que se armaron
+      // las líneas, rearmarlas. Cubre el caso donde la agenda llega de la nube
+      // después de inicializar el formulario: el select mostraba el turno
+      // correcto pero las líneas quedaban con el servicio genérico por defecto
+      // (y el onchange nunca dispara porque la opción ya viene preseleccionada).
+      // Si el usuario está editando una venta del MISMO turno, no se toca nada.
+      if(state.saleSource==='appointment' && state.saleAppointmentId && state.saleAppointmentId!==_saleLinesApptId && $('saleLines')){
+        selectSaleAppointment(state.saleAppointmentId);
       }
     }
     function setSaleSource(source){
@@ -7149,6 +7158,7 @@
           $('reservationBanner').style.display='none';
         }
       }
+      _saleLinesApptId = appt.id; // las líneas quedan armadas para ESTE turno
       updateSaleSummary();
     }
     function servicesShort(text){ return text.length>42 ? text.slice(0,39)+'...' : text; }
@@ -7481,13 +7491,16 @@
       if($('saleNote')) $('saleNote').value='';
       if($('saleNoteBox')) $('saleNoteBox').style.display='none';
       if($('saleLines')) $('saleLines').innerHTML='';
+      _saleLinesApptId = null;
       if($('reservationDeposit')) $('reservationDeposit').value='0';
       if($('checkoutPaymentPrimary')) $('checkoutPaymentPrimary').value='';
       if($('checkoutPaymentSecondary')) $('checkoutPaymentSecondary').value='0';
       if($('checkoutMixedRow')) $('checkoutMixedRow').style.display='none';
       if($('reservationBanner')) $('reservationBanner').style.display='none';
-      fillSaleSourceOptions();
-      if(state.saleSource === 'appointment' && state.saleAppointmentId) selectSaleAppointment(state.saleAppointmentId);
+      fillSaleSourceOptions(); // si hay turno seleccionable, ya arma las líneas
+      if(state.saleSource === 'appointment' && state.saleAppointmentId){
+        if(state.saleAppointmentId!==_saleLinesApptId) selectSaleAppointment(state.saleAppointmentId);
+      }
       else addSaleLine();
       updateSaleSummary();
       wizGoTo(1);
