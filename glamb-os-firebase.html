@@ -6174,7 +6174,7 @@
         return `
           <div class="catalog-group-card">
             <div class="catalog-group-head">
-              <div class="catalog-group-name">${g.name}</div>
+              <div class="catalog-group-name">${g.color?`<span title="Color en la agenda" style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${g.color};margin-right:7px;vertical-align:middle"></span>`:''}${g.name}</div>
               <div class="group-head-actions">
                 <span class="catalog-group-type">Servicio</span>
                 <button class="icon-btn" data-action="editCatalogItem" data-type="service-group" data-id="${g.id}" title="Editar grupo">✎</button>
@@ -6446,7 +6446,11 @@
         const group = catalog.groups.find(g=>g.id===id);
         if(!group) return showToast('Grupo no encontrado.');
         title = `Editar grupo: ${group.name}`;
-        bodyHtml = `<div class="catalog-drawer-section"><h4>Nombre del grupo</h4><input id="editGroupName" value="${group.name}" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px"></div><div class="catalog-drawer-section"><h4>Servicios y variantes</h4><div id="editSvcList"></div><button class="add-variant-btn" type="button" data-action="addServiceToGroup">+ Agregar servicio</button></div><div style="margin-top:16px;padding-top:12px;border-top:0.5px solid var(--line)"><button class="small-btn danger" data-action="deleteServiceGroup" data-id="${id}">Eliminar grupo y servicios</button></div>`;
+        bodyHtml = `<div class="catalog-drawer-section"><h4>Nombre del grupo</h4><input id="editGroupName" value="${group.name}" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:14px"></div>`
+          + `<div class="catalog-drawer-section"><h4>Color en la agenda</h4>`
+          + `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="editGroupColorOn" ${group.color?'checked':''}> Distinguir los turnos de este grupo con un color</label>`
+          + `<div style="display:flex;align-items:center;gap:10px;margin-top:8px"><input type="color" id="editGroupColor" value="${group.color||'#8E44AD'}" style="width:52px;height:36px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer"><span style="font-size:12px;color:var(--text-muted)">Elegí un color bien distinto para reconocer estos turnos de un vistazo en la agenda.</span></div></div>`
+          + `<div class="catalog-drawer-section"><h4>Servicios y variantes</h4><div id="editSvcList"></div><button class="add-variant-btn" type="button" data-action="addServiceToGroup">+ Agregar servicio</button></div><div style="margin-top:16px;padding-top:12px;border-top:0.5px solid var(--line)"><button class="small-btn danger" data-action="deleteServiceGroup" data-id="${id}">Eliminar grupo y servicios</button></div>`;
         $('catalogSaveBtn').onclick = ()=>updateServiceGroup(id);
         $('catalogSaveHint').textContent = '';
         $('catalogDrawerBody').innerHTML = bodyHtml;
@@ -6589,7 +6593,14 @@
       const name = $('editGroupName')?.value.trim();
       if(!name) return showToast('Ingresá el nombre del grupo.');
       const group = state.catalog.groups.find(g=>g.id===id);
-      if(group) group.name = name;
+      if(group){
+        group.name = name;
+        // Color de agenda: si está tildado, se guarda; si no, se quita (el turno
+        // vuelve al color por estado de siempre).
+        const colorOn = $('editGroupColorOn')?.checked;
+        const colorVal = $('editGroupColor')?.value || '';
+        if(colorOn && colorVal) group.color = colorVal; else delete group.color;
+      }
       const svcRows = document.querySelectorAll('#editSvcList > [data-svc]');
       if(svcRows.length){
         group.services = [];
@@ -8128,6 +8139,28 @@
       else if(m.hours){const p=m.hours.split(' - ');if(p.length===2)wMins=mins(p[1].trim())-mins(p[0].trim());}
       return wMins>0?Math.min(100,Math.round(apptMins/wMins*100)):0;
     }
+    // Color de grupo para la agenda (opcional). Si el grupo del turno tiene un
+    // color configurado en el catálogo (g.color), se usa para tintar el bloque
+    // y distinguirlo de un vistazo (p.ej. depilación definitiva). Si el grupo no
+    // tiene color, devuelve null y NADA cambia respecto del comportamiento previo.
+    function apptGroupColor(a){
+      if(!a) return null;
+      const gname = a.group || (a.service ? findServiceGroup(a.service) : '');
+      if(!gname) return null;
+      const g = (state.catalog.groups||[]).find(x=>x.name===gname);
+      return (g && g.color) ? g.color : null;
+    }
+    // Estilo inline con el color del grupo. Solo se aplica a turnos en estado
+    // "normal" (confirmado / en curso) y sin señales especiales (cobrado, VIP):
+    // así los colores importantes que ya existen (verde=pagado, rojo=cancelado,
+    // dorado=VIP, atenuado=completado/inasistencia) siguen ganando y no se pisa
+    // ninguna información. El borde punteado de "seña pendiente" se conserva
+    // porque solo tocamos el COLOR del borde, no su estilo.
+    function apptGroupStyle(a, statusKey, charged, isVip){
+      const col = apptGroupColor(a);
+      if(!col || charged || isVip || !['confirmed','in_progress'].includes(statusKey)) return '';
+      return `background:${col}22;border-left-color:${col};`;
+    }
     function renderAppt(a){
       const c = client(a.clientId);
       const m = member(a.memberId);
@@ -8144,8 +8177,9 @@
       const pendingClass = paid==='pending' ? 'pending' : '';
       const additionalClass = a.isAdditional ? 'additional' : '';
       const durationMins = mins(a.end) - mins(a.start);
+      const gStyle = apptGroupStyle(a, statusKey, charged, vipClass);
       if(blockH < 28){
-        return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${paidClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px"><div class="appt-meta-tiny">${a.start}${!a.isAdditional?' '+fullName(c):''}</div></div>`;
+        return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${paidClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px;${gStyle}"><div class="appt-meta-tiny">${a.start}${!a.isAdditional?' '+fullName(c):''}</div></div>`;
       }
       const STATUS_LABELS={confirmed:'Confirmado',in_progress:'En curso',completed:'Completado',cancelled:'Cancelado',no_show:'Inasistencia'};
       const isPendingPay = paid==='pending';
@@ -8157,7 +8191,7 @@
       const bkId = 'BK-'+(a.id||'').slice(-4).toUpperCase();
       const hasFooter = blockH>=82;
       const footerRow = hasFooter ? `<div class="appt-footer-row">${depositAmount>0?`<span class="appt-seña">Seña ${money(depositAmount)}</span>`:'<span></span>'}<span class="appt-bkid">${bkId}</span></div>` : '';
-      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${paidClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${headerRow}${clientRow}${serviceRow}${footerRow}</div>`;
+      return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${paidClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px;${gStyle}">${headerRow}${clientRow}${serviceRow}${footerRow}</div>`;
     }
     function renderWeekView(){
       const d = new Date(state.agenda.currentDate);
@@ -8197,12 +8231,15 @@
       const c = client(a.clientId);
       const m = member(a.memberId);
       const blockH = Math.max(24, (mins(a.end)-mins(a.start))*pxPerMin - 3);
-      const statusClass = `status-${(a.status||'confirmed').replace(/\s+/g,'_')}`;
+      const statusKey = (a.status||'confirmed').replace(/\s+/g,'_');
+      const statusClass = `status-${statusKey}`;
       const vipClass = c.tags&&c.tags.includes('VIP') ? 'vip' : '';
+      const charged = !['cancelled','cancelado','voided','no_show'].includes(a.status) && reservationCharged(reservationKey(a));
+      const gStyle = apptGroupStyle(a, statusKey, charged, vipClass);
       const clientRow = blockH>=28 ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
       const proRow    = blockH>=52 ? `<div class="appt-professional">${initials(m)}</div>` : '';
       const timeRow   = blockH>=40 ? `<div class="appt-meta-tiny">${a.start}</div>` : '';
-      return `<div class="appointment-block ${statusClass} ${vipClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px">${clientRow}${timeRow}${proRow}</div>`;
+      return `<div class="appointment-block ${statusClass} ${vipClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px;${gStyle}">${clientRow}${timeRow}${proRow}</div>`;
     }
 
     function renderNowLine() {
