@@ -1,14 +1,13 @@
 name: Finance data recovery (PITR)
 
+# Se dispara al pushear el archivo tools/finance-recovery/MODE, cuyo contenido
+# ("diagnose" o "restore") define qué hace la corrida.
 on:
-  workflow_dispatch:
-    inputs:
-      mode:
-        description: "diagnose (solo lectura) o restore (agrega lo faltante)"
-        required: true
-        default: diagnose
-        type: choice
-        options: [diagnose, restore]
+  push:
+    branches:
+      - claude/beautiful-fermat-l5mac7
+    paths:
+      - 'tools/finance-recovery/MODE'
 
 jobs:
   recover:
@@ -21,9 +20,10 @@ jobs:
       - name: Run recovery
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLAMB_OS }}
-          MODE: ${{ inputs.mode }}
         run: |
           cd tools/finance-recovery
+          export MODE=$(cat MODE | tr -d ' \n')
+          echo "MODE=$MODE"
           npm init -y >/dev/null 2>&1
           npm install @google-cloud/firestore@7 --no-audit --no-fund 2>&1 | tail -1
           node recover.js
