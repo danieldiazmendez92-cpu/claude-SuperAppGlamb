@@ -60,6 +60,13 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Finanzas por-registro (gastos, deducciones, liquidaciones): un documento
+    // por registro para que una copia vieja no pueda pisar el conjunto entero.
+    // Mismo nivel de protección que financePrivate: SOLO admin.
+    match /financeExpenses/{id}     { allow read, write: if isAdmin(); }
+    match /financeDeductions/{id}   { allow read, write: if isAdmin(); }
+    match /financeLiquidations/{id} { allow read, write: if isAdmin(); }
+
     // Cola de emails — usada por la extensión "Trigger Email from Firestore".
     // Usuarios autenticados pueden crear documentos (encolar emails);
     // solo la extensión (service account) los lee y actualiza.

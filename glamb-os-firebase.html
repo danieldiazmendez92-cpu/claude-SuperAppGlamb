@@ -4834,6 +4834,16 @@
       // así dos equipos que agregan distinto ya no se pisan.
       {key:'blockers',       coll:'blockers'},
       {key:'cashClosings',   coll:'cashClosings',   sort:_byClosedDesc},
+      // Finanzas por-registro (adminOnly: solo el admin suscribe/escribe estas
+      // colecciones; las reglas de Firestore también lo exigen). Antes viajaban
+      // TODAS dentro del doc financePrivate/main: un dispositivo con una copia
+      // vieja —o una escritura pendiente re-enviada por el caché offline—
+      // podía pisar el documento ENTERO y borrar registros nuevos (pasó con un
+      // anticipo y un gasto de alquiler). Por-documento, el peor caso es que
+      // un registro individual reviva: nunca más se pierde todo el conjunto.
+      {key:'expenses',          coll:'financeExpenses',     adminOnly:true},
+      {key:'payrollDeductions', coll:'financeDeductions',   adminOnly:true},
+      {key:'liquidations',      coll:'financeLiquidations', adminOnly:true},
     ];
     const _syncShadow={};   // key -> Map(docId -> JSON conocido en el server)
     const _syncUnsub={};    // key -> función de desuscripción del onSnapshot
@@ -4852,7 +4862,10 @@
     // Firestore. Recepción y colaboradoras nunca las descargan: ni siquiera por
     // la consola del navegador. No las usa ninguna página de rol bajo (solo
     // RRHH y Finanzas, ambas exclusivas de admin).
-    const FINANCE_KEYS=['liquidations','payrollDeductions','expenses','taxRecords','budgets','expenseCategories','accounting'];
+    // liquidations/payrollDeductions/expenses se movieron a colecciones
+    // por-registro (SYNCED_COLLECTIONS adminOnly) — acá quedan solo las claves
+    // chicas y de baja escritura que siguen en el doc financePrivate/main.
+    const FINANCE_KEYS=['taxRecords','budgets','expenseCategories','accounting'];
 
     // ── Configuración compartida en documento propio (anti-pisado) ──────
     // Estas claves (plantillas de comunicación, sesión de caja abierta, reseñas,
@@ -5041,12 +5054,13 @@
     // sombra) y borra los que se quitaron. Por-documento => no se pisan.
     function syncCollections(){
       if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
-      SYNCED_COLLECTIONS.forEach(({key,coll,strip})=>{
+      SYNCED_COLLECTIONS.forEach(({key,coll,strip,adminOnly})=>{
         // No sincronizar hasta que el primer snapshot de Firestore haya establecido
         // el shadow correcto. Sin este guard, el localStorage (potencialmente viejo)
         // se empuja a Firestore antes de recibir la fuente de verdad, resucitando
         // registros eliminados en otras sesiones.
         if(!_syncInit[key]) return;
+        if(adminOnly && curRole()!=='admin') return; // finanzas: solo el admin escribe
         const arr=Array.isArray(state[key])?state[key]:[];
         const prev=_syncShadow[key]||new Map();
         const next=new Map();
@@ -5078,7 +5092,15 @@
     // pendientes ya vienen reflejadas en el snapshot (sin parpadeo).
     function subscribeCollectionsSync(){
       if(!fbReady || !db) return;
-      SYNCED_COLLECTIONS.forEach(cfg=>{
+      SYNCED_COLLECTIONS.filter(c=>!c.adminOnly).forEach(_subscribeColl);
+    }
+    // Colecciones de finanzas (adminOnly): se suscriben aparte, DESPUÉS de la
+    // migración que las siembra, y solo para el rol admin.
+    function subscribeFinanceCollectionsSync(){
+      if(!fbReady || !db || curRole()!=='admin') return;
+      SYNCED_COLLECTIONS.filter(c=>c.adminOnly).forEach(_subscribeColl);
+    }
+    function _subscribeColl(cfg){
         const {key,coll,sort}=cfg;
         if(_syncUnsub[key]) return;
         _syncUnsub[key]=db.collection(coll).onSnapshot(snap=>{
@@ -5113,7 +5135,6 @@
           try{ renderAll(); }catch(e){ console.error(e); }
           _applyingRemote=false;
         }, e=>console.error('[GLAMB] sync '+coll+' falló:',e));
-      });
     }
 
     function unsubscribeCollections(){
@@ -5209,6 +5230,34 @@
       }catch(e){
         console.error('[GLAMB] error al limpiar datos demo:',e);
         // No guardar el flag — reintentará en el próximo login
+      }
+    }
+
+    // Siembra única de las colecciones de finanzas por-registro, desde los
+    // arrays del doc financePrivate/main (fuente de verdad hasta hoy). Hito en
+    // appState/migrations para no re-sembrar (no resucita borrados a propósito).
+    async function migrateFinanceCollectionsIfNeeded(){
+      if(!fbReady || !db || curRole()!=='admin') return;
+      const migRef=db.collection('appState').doc('migrations');
+      let mig={}; try{ const s=await migRef.get(); if(s.exists) mig=s.data()||{}; }catch(e){}
+      let fp={}; try{ const s=await db.collection('financePrivate').doc('main').get(); if(s.exists) fp=s.data()||{}; }catch(e){}
+      for(const {key,coll} of SYNCED_COLLECTIONS.filter(c=>c.adminOnly)){
+        const fkey=coll+'V1';
+        if(mig[fkey]) continue;
+        try{
+          const existing=await db.collection(coll).limit(1).get();
+          if(existing.empty){
+            const src=(fp[key]!==undefined)?fp[key]:state[key];
+            const seed=(Array.isArray(src)?src:[]).filter(r=>r&&r.id!=null);
+            for(let i=0;i<seed.length;i+=450){
+              const batch=db.batch();
+              seed.slice(i,i+450).forEach(r=>batch.set(db.collection(coll).doc(_docId(r.id)),r));
+              await batch.commit();
+            }
+            if(seed.length) console.log('[GLAMB] migración '+coll+':',seed.length,'registros');
+          }
+          await migRef.set({[fkey]:true},{merge:true});
+        }catch(e){ console.error('[GLAMB] migración '+coll+' falló:',e); }
       }
     }
 
@@ -12484,7 +12533,9 @@ ${context}`;
               subscribeClientsPrivateSync();
               await migrateClientsPrivateIfNeeded();
               await migrateFinancePrivateIfNeeded();   // sembrar antes de suscribir
+              await migrateFinanceCollectionsIfNeeded(); // finanzas por-registro: sembrar antes de suscribir
               subscribeFinancePrivateSync();
+              subscribeFinanceCollectionsSync();
               subscribeSurveyResponsesSync();
             }
             bootAppData();
