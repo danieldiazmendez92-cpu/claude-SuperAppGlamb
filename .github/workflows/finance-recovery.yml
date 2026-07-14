@@ -1,0 +1,29 @@
+name: Finance data recovery (PITR)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "diagnose (solo lectura) o restore (agrega lo faltante)"
+        required: true
+        default: diagnose
+        type: choice
+        options: [diagnose, restore]
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run recovery
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLAMB_OS }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          cd tools/finance-recovery
+          npm init -y >/dev/null 2>&1
+          npm install @google-cloud/firestore@7 --no-audit --no-fund 2>&1 | tail -1
+          node recover.js
