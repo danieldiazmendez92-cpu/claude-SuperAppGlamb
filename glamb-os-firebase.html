@@ -9093,9 +9093,15 @@
           if(mins(addMinutes(line.start,line.duration))<=mins(line.start)) return showToast('Revisá horarios: el fin debe ser después del inicio.');
         }
         const existingRelated = state.appointments.filter(x=>x.bookingId===oldBookingId);
+        // Foto del horario ANTES de editar (día + horas de inicio de los
+        // servicios principales). Sirve para decidir si hay que reenviar el mail.
+        const _oldMains = existingRelated.filter(x=>!x.isAdditional);
+        const _schedKey = (d,starts)=>JSON.stringify({d, s:[...starts].sort()});
+        const _oldSched = _schedKey(_oldMains[0]?.date||original.date, _oldMains.map(x=>x.start));
         state.appointments = state.appointments.filter(x=>x.bookingId!==oldBookingId);
 
         let apptIndex = 0;
+        let _firstMain = null;
         lines.forEach((line,lineIdx)=>{
           const vInfo = getVariantName(line.variantId, line.serviceId);
           const mainAppt = {
@@ -9120,7 +9126,8 @@
             note,
             isAdditional:false
           };
-          addAppointment(mainAppt);
+          if(lineIdx===0) _firstMain = mainAppt;
+          addAppointment(mainAppt, {silent:true}); // la edición decide el mail aparte
           apptIndex++;
 
           line.additionals?.forEach(add=>{
@@ -9158,6 +9165,15 @@
           if(depositAmount>0&&state.appointmentClient.clientId&&!state.apDepositIsPreExisting){
             addPayment({id:uid('dep'),bookingId:oldBookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',reference:'Seña de reserva',note:'Seña recibida al agendar'});
           }else{saveState();}
+        }
+        // Reenviar el mail de confirmación al cliente SOLO si cambió la fecha o
+        // el horario. Cambios que no afectan al cliente (seña, adicional, nota,
+        // precio, colaboradora) no re-disparan el mail.
+        const _newSched = _schedKey(appointmentDate, lines.map(l=>l.start));
+        if(_oldSched!==_newSched && _firstMain){
+          triggerBookingReminder(_firstMain);
+          const c=client(_firstMain.clientId);
+          notifyStaff('Turno modificado',`${fullName(c)} · nueva fecha/horario`, 'appt-edit-'+oldBookingId);
         }
         state.editingAppointmentId = null;
         closeDrawers();showPage('agenda');showToast('Turno actualizado');
@@ -10886,13 +10902,18 @@
       state.payments.push(payment);
       saveState();
     }
-    function addAppointment(appt){
+    // opts.silent: no dispara el mail de confirmación al cliente ni la
+    // notificación "Turno creado". Lo usa la EDICIÓN de turnos, que borra y
+    // recrea los turnos del booking: sin esto, cada cambio (agregar seña,
+    // adicional, nota) reenviaba el mail aunque al cliente no le cambie nada.
+    // La edición decide aparte si reenviar (solo si cambió fecha u horario).
+    function addAppointment(appt, opts){
       if(!appt.id) appt.id='appt'+uid('');
       if(!appt.date) appt.date=dateKey(new Date());
       if(!state.appointments) state.appointments=[];
       state.appointments.push(appt);
       saveState();
-      if(!appt.isAdditional){
+      if(!appt.isAdditional && !(opts&&opts.silent)){
         triggerBookingReminder(appt);
         const c=client(appt.clientId);
         notifyStaff('Turno creado',`${fullName(c)} · ${appt.service} a las ${appt.start}`,'appt-new-'+appt.id);
