@@ -58,8 +58,71 @@ async function readAt(date) {
   }
 }
 
+// Lee una COLECCIÓN entera a un timestamp histórico (PITR).
+async function readCollAt(coll, date) {
+  try {
+    return await db.runTransaction(async (t) => {
+      const snap = await t.get(db.collection(coll));
+      return snap.docs.map(d => d.data());
+    }, { readOnly: true, readTime: Timestamp.fromDate(date) });
+  } catch (e) { return null; }
+}
+const CFG = db.collection('appState').doc('config');
+const cierreLine = c => `id=${c.id} apertura=${c.openingAmount ?? '?'} abierta=${(c.openedAt||'').slice(0,16)} cerrada=${(c.closedAt||'').slice(0,16)} retiros=${(c.withdrawals||[]).length} gastos=${(c.expenses||[]).length}`;
+
+async function inspectCaja() {
+  const cur = await db.collection('cashClosings').get();
+  console.log(`=== CIERRES DE CAJA HOY EN LA BASE: ${cur.size} ===`);
+  cur.docs.map(d => d.data()).sort((a,b)=>String(b.closedAt||'').localeCompare(String(a.closedAt||''))).forEach(c => console.log('  ·', cierreLine(c)));
+  const cfg = (await CFG.get()).data() || {};
+  const cs = cfg.cashSession || {};
+  console.log('=== SESIÓN ACTUAL (appState/config) ===', JSON.stringify({isOpen:cs.isOpen, openedAt:cs.openedAt, openingAmount:cs.openingAmount, retiros:(cs.withdrawals||[]).length, gastos:(cs.expenses||[]).length}));
+
+  // PITR: detectar cierres que existieron y hoy no están, y sesiones con retiros.
+  const nowIds = new Set(cur.docs.map(d => (d.data().id || d.id)));
+  const hours = [];
+  const end = new Date(); end.setMinutes(0,0,0); end.setHours(end.getHours()-1);
+  for (let h = 0; h < 142; h++) hours.push(new Date(end.getTime() - h*3600e3));
+  const missing = new Map(); const sessionsSeen = [];
+  for (const when of hours) {
+    const docs = await readCollAt('cashClosings', when);
+    if (docs) docs.forEach(c => { if (c && c.id && !nowIds.has(c.id) && !missing.has(c.id)) missing.set(c.id, c); });
+    const h = await readAt(when); // reutilizado para el doc financePrivate — acá necesitamos config:
+    try {
+      const cfgh = await db.runTransaction(async (t) => { const s = await t.get(CFG); return s.exists ? s.data() : null; }, { readOnly: true, readTime: Timestamp.fromDate(when) });
+      const c = cfgh && cfgh.cashSession;
+      if (c && (c.withdrawals||[]).length) sessionsSeen.push(`${when.toISOString()} sesión abierta=${(c.openedAt||'').slice(0,16)} apertura=${c.openingAmount} retiros=${(c.withdrawals||[]).length}: ${(c.withdrawals||[]).map(w=>`${w.reason||''} $${w.amount}`).join(' | ')}`);
+    } catch(e) {}
+  }
+  console.log(`=== CIERRES QUE EXISTIERON Y HOY FALTAN: ${missing.size} ===`);
+  [...missing.values()].forEach(c => console.log('  FALTA:', cierreLine(c), 'retirosDetalle:', JSON.stringify((c.withdrawals||[]).map(w=>({r:w.reason,a:w.amount,t:(w.createdAt||'').slice(0,16)})))));
+  console.log('=== SESIONES CON RETIROS VISTAS EN EL HISTORIAL (por hora) ===');
+  sessionsSeen.slice(0,80).forEach(s => console.log(' ', s));
+}
+
+async function restoreCaja() {
+  const cur = await db.collection('cashClosings').get();
+  const nowIds = new Set(cur.docs.map(d => (d.data().id || d.id)));
+  const hours = [];
+  const end = new Date(); end.setMinutes(0,0,0); end.setHours(end.getHours()-1);
+  for (let h = 0; h < 142; h++) hours.push(new Date(end.getTime() - h*3600e3));
+  const missing = new Map();
+  for (const when of hours) {
+    const docs = await readCollAt('cashClosings', when);
+    if (docs) docs.forEach(c => { if (c && c.id && !nowIds.has(c.id) && !missing.has(c.id)) missing.set(c.id, c); });
+  }
+  console.log('CIERRES a restaurar:', JSON.stringify([...missing.values()].map(cierreLine), null, 1));
+  const docId = v => String(v).replace(/[\/.]/g, '_');
+  let batch = db.batch(); let n = 0;
+  for (const c of missing.values()) { batch.set(db.collection('cashClosings').doc(docId(c.id)), c); n++; }
+  if (n) await batch.commit();
+  console.log(`RESTAURADO: ${n} cierre(s) de caja. Nada eliminado ni reemplazado.`);
+}
+
 (async () => {
   if (MODE === 'inspect') { await inspect(); return; }
+  if (MODE === 'inspect-caja') { await inspectCaja(); return; }
+  if (MODE === 'restore-caja') { await restoreCaja(); return; }
 
   if (MODE === 'restore-collections') {
     // La verdad ahora son las colecciones por-registro: comparar lo que existió
