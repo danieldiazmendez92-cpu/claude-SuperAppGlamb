@@ -15,6 +15,30 @@ const creds = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
 const db = new Firestore({ projectId: 'glamb-os', credentials: creds });
 const REF = db.collection('financePrivate').doc('main');
 
+// inspect: foto del estado actual — doc financePrivate/main + colecciones
+// nuevas por-registro + hitos de migración. Solo lectura.
+// restore-collections: PITR-escanea el doc histórico y escribe lo faltante
+// DIRECTO en las colecciones nuevas (la fuente de verdad desde el blindaje).
+async function inspect() {
+  const nowSnap = await REF.get();
+  const now = nowSnap.exists ? nowSnap.data() : {};
+  console.log('=== DOC financePrivate/main ===');
+  console.log(JSON.stringify({
+    expenses: (now.expenses||[]).length, payrollDeductions: (now.payrollDeductions||[]).length,
+    liquidations: (now.liquidations||[]).length, keys: Object.keys(now).sort(),
+    rents: (now.expenses||[]).filter(e=>/local|alquil/i.test(e.description||'')).map(e=>({id:e.id,d:e.date,a:e.amount,t:e.description})),
+    anticipos: (now.payrollDeductions||[]).map(x=>({id:x.id,d:x.date,a:x.amount,t:x.type,desc:x.description}))
+  }, null, 1));
+  for (const coll of ['financeExpenses','financeDeductions','financeLiquidations']) {
+    const s = await db.collection(coll).get();
+    const rents = coll==='financeExpenses' ? s.docs.map(d=>d.data()).filter(e=>/local|alquil/i.test(e.description||'')).map(e=>({id:e.id,d:e.date,a:e.amount,t:e.description})) : [];
+    console.log(`=== COLECCIÓN ${coll}: ${s.size} docs ===`, rents.length?JSON.stringify(rents):'');
+    if(coll!=='financeExpenses') s.docs.slice(0,10).forEach(d=>{const x=d.data();console.log('  ·',x.id,x.date||'',x.type||x.status||'',x.amount||x.netPay||'',(x.description||x.collaboratorName||'').slice(0,40));});
+  }
+  const mig = await db.collection('appState').doc('migrations').get();
+  console.log('=== MIGRACIONES ===', JSON.stringify(mig.exists?mig.data():{}));
+}
+
 const summarize = (d) => ({
   expenses: (d.expenses || []).length,
   payrollDeductions: (d.payrollDeductions || []).length,
@@ -35,6 +59,43 @@ async function readAt(date) {
 }
 
 (async () => {
+  if (MODE === 'inspect') { await inspect(); return; }
+
+  if (MODE === 'restore-collections') {
+    // La verdad ahora son las colecciones por-registro: comparar lo que existió
+    // en el doc histórico (PITR) contra las COLECCIONES y escribir lo faltante
+    // como documentos individuales. Aditivo, nunca borra.
+    const expSnap = await db.collection('financeExpenses').get();
+    const dedSnap = await db.collection('financeDeductions').get();
+    const haveExp = new Set(expSnap.docs.map(d => (d.data().id || d.id)));
+    const haveDed = new Set(dedSnap.docs.map(d => (d.data().id || d.id)));
+    console.log(`Colecciones hoy: financeExpenses=${expSnap.size} financeDeductions=${dedSnap.size}`);
+    const hours2 = [];
+    const end2 = new Date(); end2.setMinutes(0, 0, 0); end2.setHours(end2.getHours() - 1);
+    for (let h = 0; h < 142; h++) hours2.push(new Date(end2.getTime() - h * 3600e3));
+    const addExp = new Map(), addDed = new Map();
+    for (const when of hours2) {
+      const d = await readAt(when);
+      if (!d || d.__error) continue;
+      (d.expenses || []).forEach(e => { if (e && e.id && !haveExp.has(e.id) && !addExp.has(e.id)) addExp.set(e.id, e); });
+      (d.payrollDeductions || []).forEach(x => { if (x && x.id && !haveDed.has(x.id) && !addDed.has(x.id)) addDed.set(x.id, x); });
+    }
+    // También lo que esté en el doc ACTUAL y falte en las colecciones (por si
+    // la restauración anterior al doc quedó huérfana de la migración).
+    const curDoc = (await REF.get()).data() || {};
+    (curDoc.expenses || []).forEach(e => { if (e && e.id && !haveExp.has(e.id) && !addExp.has(e.id)) addExp.set(e.id, e); });
+    (curDoc.payrollDeductions || []).forEach(x => { if (x && x.id && !haveDed.has(x.id) && !addDed.has(x.id)) addDed.set(x.id, x); });
+    console.log('GASTOS a escribir en financeExpenses:', JSON.stringify([...addExp.values()], null, 1));
+    console.log('DESCUENTOS a escribir en financeDeductions:', JSON.stringify([...addDed.values()], null, 1));
+    const docId = v => String(v).replace(/[\/.]/g, '_');
+    let batch = db.batch(); let n = 0;
+    for (const e of addExp.values()) { batch.set(db.collection('financeExpenses').doc(docId(e.id)), e); n++; }
+    for (const x of addDed.values()) { batch.set(db.collection('financeDeductions').doc(docId(x.id)), x); n++; }
+    if (n) await batch.commit();
+    console.log(`RESTAURADO EN COLECCIONES: ${addExp.size} gasto(s), ${addDed.size} descuento(s).`);
+    return;
+  }
+
   const nowSnap = await REF.get();
   const now = nowSnap.exists ? nowSnap.data() : {};
   console.log('=== ESTADO ACTUAL ===');
