@@ -7601,8 +7601,12 @@
         const debitIn = state.payments.filter(p=>p.method==='Débito'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
         const creditIn = state.payments.filter(p=>p.method==='Crédito'&&cashInFilter(p)).reduce((s,p)=>s+Number(p.amount||0),0);
         const totalIn = state.payments.filter(p=>p.type==='service'&&!p.voided&&todayP(p)).reduce((s,p)=>s+Number(p.amount||0),0);
-        const withdrawalsTotal = (session.withdrawals||[]).reduce((s,w)=>s+Number(w.amount||0),0);
-        const expensesTotal = (session.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0);
+        // Retiros/gastos/apertura del DÍA SELECCIONADO (sesión + cierres), no
+        // solo de la sesión activa — si no, al cerrar caja "desaparecían".
+        const dayRecs = cajaSessionRecordsForDate(selDate);
+        const withdrawalsTotal = dayRecs.retiros.reduce((s,w)=>s+Number(w.amount||0),0);
+        const expensesTotal = dayRecs.gastos.reduce((s,e)=>s+Number(e.amount||0),0);
+        const aperturaDia = dayRecs.aperturas.reduce((s,a)=>s+Number(a.openingAmount||0),0) || (isToday?Number(session.openingAmount||0):0);
         const cashExpected = cashExpectedAmount();
         $('cashDailySummary').innerHTML = `
           <div class="eyebrow" style="color:#cbb8a6;margin-bottom:8px;">Resumen del día</div>
@@ -7612,7 +7616,7 @@
             <div><div style="color:#cbb8a6;font-size:11px;margin-bottom:4px;">GASTOS + RETIROS</div><div style="font-family:'Cormorant',serif;font-size:32px;color:#f5ede4;">${money(expensesTotal+withdrawalsTotal)}</div></div>
           </div>
           <div style="border-top:0.5px solid rgba(245,237,228,0.14);padding-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;">
-            <div style="font-size:12px;"><span style="color:#cbb8a6;">Apertura</span><br><strong style="color:#f5ede4;">${money(session.openingAmount||0)}</strong></div>
+            <div style="font-size:12px;"><span style="color:#cbb8a6;">Apertura</span><br><strong style="color:#f5ede4;">${money(aperturaDia)}</strong></div>
             <div style="font-size:12px;"><span style="color:#cbb8a6;">Efectivo recibido</span><br><strong style="color:#f5ede4;">${money(cashIn)}</strong></div>
             <div style="font-size:12px;"><span style="color:#cbb8a6;">Transferencia</span><br><strong style="color:#f5ede4;">${money(transferIn)}</strong></div>
             <div style="font-size:12px;"><span style="color:#cbb8a6;">Débito</span><br><strong style="color:#f5ede4;">${money(debitIn)}</strong></div>
@@ -7639,9 +7643,9 @@
         return total > 0 ? `<div class="mini-row"><strong>${m}</strong><span>${money(total)}</span></div>` : '';
       }).join('') || '<div class="mini-row"><strong>Sin cobros</strong><span>—</span></div>';
       // Retiros
-      if($('cashWithdrawals')) $('cashWithdrawals').innerHTML = (state.cashSession.withdrawals||[]).length ? state.cashSession.withdrawals.map(w=>`<div class="mini-row"><strong>${money(w.amount)} · ${w.reason}</strong><span>${new Date(w.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · ${w.createdBy}</span></div>`).join('') : '<div class="mini-row"><strong>Sin retiros</strong><span>—</span></div>';
+      if($('cashWithdrawals')){ const wl=cajaSessionRecordsForDate(selDate).retiros; $('cashWithdrawals').innerHTML = wl.length ? wl.map(w=>`<div class="mini-row"><strong>${money(w.amount)} · ${w.reason}</strong><span>${new Date(w.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · ${w.createdBy||'—'}</span></div>`).join('') : '<div class="mini-row"><strong>Sin retiros</strong><span>—</span></div>'; }
       // Gastos
-      if($('cashExpenses')) $('cashExpenses').innerHTML = (state.cashSession.expenses||[]).length ? state.cashSession.expenses.map(e=>`<div class="mini-row"><strong>${money(e.amount)} · ${e.category}</strong><span>${e.method} · ${e.note||'—'} · ${new Date(e.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span></div>`).join('') : '<div class="mini-row"><strong>Sin gastos</strong><span>—</span></div>';
+      if($('cashExpenses')){ const el2=cajaSessionRecordsForDate(selDate).gastos; $('cashExpenses').innerHTML = el2.length ? el2.map(e=>`<div class="mini-row"><strong>${money(e.amount)} · ${e.category}</strong><span>${e.method} · ${e.note||'—'} · ${new Date(e.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span></div>`).join('') : '<div class="mini-row"><strong>Sin gastos</strong><span>—</span></div>'; }
     }
     function renderTickets(){
       if(!$('ticketsList')) return;
@@ -7763,18 +7767,36 @@
       return d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     }
 
+    // Aperturas, retiros y gastos de caja de UN día, juntando la sesión activa
+    // y TODOS los cierres. Arregla dos fallas de la vista anterior (que buscaba
+    // UN solo cierre por fecha de apertura): (1) si la caja se abrió y cerró
+    // varias veces el mismo día, solo se veía uno (a veces el equivocado, p.ej.
+    // una prueba de $1); (2) las sesiones que cruzan días (abren sábado,
+    // cierran domingo/lunes) no aparecían. Cada retiro/gasto cuenta para el día
+    // de SU fecha, y las aperturas para el día en que se abrió.
+    function cajaSessionRecordsForDate(selDate){
+      const srcs=[state.cashSession, ...(state.cashClosings||[])].filter(Boolean);
+      const aperturas=[], retiros=[], gastos=[]; const sw=new Set(), se=new Set(), so=new Set();
+      srcs.forEach(s=>{
+        if(s.openedAt && Number(s.openingAmount) && (s.openedAt||'').slice(0,10)===selDate && !so.has(s.openedAt)){
+          so.add(s.openedAt);
+          aperturas.push({openedAt:s.openedAt, openingAmount:Number(s.openingAmount), openedBy:s.openedBy});
+        }
+        (s.withdrawals||[]).forEach(w=>{ if(w&&w.id&&!sw.has(w.id)&&(w.createdAt||'').slice(0,10)===selDate){ sw.add(w.id); retiros.push(w); } });
+        (s.expenses||[]).forEach(e=>{ if(e&&e.id&&!se.has(e.id)&&(e.createdAt||'').slice(0,10)===selDate){ se.add(e.id); gastos.push(e); } });
+      });
+      const byTs=(a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''));
+      return {aperturas:aperturas.sort((a,b)=>String(a.openedAt).localeCompare(String(b.openedAt))), retiros:retiros.sort(byTs), gastos:gastos.sort(byTs)};
+    }
+
     function ledgerEfectivo(selDate,hasSes){
       // Build sorted event list
       const events=[];
 
-      // Para fechas históricas buscar en cashClosings el snapshot que tiene los retiros/gastos de sesión
-      const pastClosing = !hasSes ? (state.cashClosings||[]).find(cl=>(cl.openedAt||'').slice(0,10)===selDate) : null;
-
-      if(hasSes && state.cashSession.openingAmount){
-        events.push({ts:state.cashSession.openedAt,tipo:'apertura',label:'Apertura de caja',detalle:state.cashSession.openedBy||'Admin caja',entra:Number(state.cashSession.openingAmount),sale:0,cashIn:Number(state.cashSession.openingAmount),cashOut:0});
-      } else if(pastClosing && pastClosing.openingAmount){
-        events.push({ts:pastClosing.openedAt||selDate+'T00:00:00',tipo:'apertura',label:'Apertura de caja',detalle:pastClosing.openedBy||'Admin caja',entra:Number(pastClosing.openingAmount),sale:0,cashIn:Number(pastClosing.openingAmount),cashOut:0});
-      }
+      const dayRecs = cajaSessionRecordsForDate(selDate);
+      dayRecs.aperturas.forEach(ap=>{
+        events.push({ts:ap.openedAt,tipo:'apertura',label:'Apertura de caja',detalle:ap.openedBy||'Admin caja',entra:ap.openingAmount,sale:0,cashIn:ap.openingAmount,cashOut:0});
+      });
       // Payments
       state.payments.filter(p=>(p.createdAt||'').slice(0,10)===selDate).forEach(p=>{
         const amt=Number(p.amount||0);
@@ -7786,14 +7808,12 @@
         const detalleStr=ticket?`${esc(ticket.clientNameSnapshot||'')} — ${(ticket.lines||[]).map(l=>l.service||l.group).join(', ')}`:(clientObj?esc(fullName(clientObj)):p.reference||typeLabel);
         events.push({ts:p.createdAt,tipo:p.type,label:typeLabel,detalle:detalleStr,method:p.method||'—',voided:p.voided,entra:!isOut?amt:0,sale:isOut?amt:0,cashIn:isCash&&!isOut&&!p.voided?amt:0,cashOut:isOut&&isCash&&!p.voided?amt:0,payId:p.id,isDeposit:p.type==='deposit_received'});
       });
-      // Retiros de sesión: sesión activa o histórica guardada en cashClosings
-      const sessionWithdrawals = hasSes ? (state.cashSession.withdrawals||[]) : (pastClosing?.withdrawals||[]);
-      sessionWithdrawals.forEach(w=>{
+      // Retiros del día (sesión activa + todos los cierres, por fecha del retiro)
+      dayRecs.retiros.forEach(w=>{
         events.push({ts:w.createdAt,tipo:'retiro',label:`Retiro: ${w.reason||'—'}`,detalle:w.note||w.createdBy||'',entra:0,sale:Number(w.amount||0),cashIn:0,cashOut:Number(w.amount||0)});
       });
-      // Gastos rápidos de sesión de caja (efectivo)
-      const sessionExpenses = hasSes ? (state.cashSession.expenses||[]) : (pastClosing?.expenses||[]);
-      sessionExpenses.filter(e=>/efectivo/i.test(e.method||'')).forEach(e=>{
+      // Gastos rápidos de caja del día (efectivo)
+      dayRecs.gastos.filter(e=>/efectivo/i.test(e.method||'')).forEach(e=>{
         events.push({ts:e.createdAt||selDate+'T00:00:00',tipo:'gasto',label:`Gasto caja: ${e.category}`,detalle:e.note||'',entra:0,sale:Number(e.amount||0),cashIn:0,cashOut:Number(e.amount||0)});
       });
       // Gastos del módulo Finanzas pagados en efectivo (insumos, servicios, etc.)
@@ -7824,7 +7844,7 @@
       const totalCashIn=events.filter(e=>!e.voided).reduce((s,e)=>s+e.cashIn,0);
       const totalCashOut=events.filter(e=>!e.voided).reduce((s,e)=>s+e.cashOut,0);
 
-      const noSesNote=!hasSes?(pastClosing?`<div class="ledger-info">Sesión cerrada el ${new Date(pastClosing.closedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} — mostrando historial completo de la sesión.</div>`:`<div class="ledger-info">⚠ Sin sesión registrada para esta fecha — se muestran cobros y gastos del módulo Finanzas pagados en efectivo.</div>`):'';
+      const noSesNote=(!hasSes && !dayRecs.aperturas.length && !dayRecs.retiros.length && !dayRecs.gastos.length)?`<div class="ledger-info">⚠ Sin sesión de caja registrada para esta fecha — se muestran cobros y gastos del módulo Finanzas pagados en efectivo.</div>`:'';
 
       return `${noSesNote}<div class="ledger-wrap"><table class="ledger-tbl">
         <thead><tr>
