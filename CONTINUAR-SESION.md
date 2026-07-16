@@ -7,80 +7,86 @@
 Hola, retomamos el trabajo en **GLAMB OS**. Sos mi desarrollador de confianza en este proyecto; venimos trabajando hace varias sesiones. Acá tenés todo el contexto para seguir como si nunca nos hubiéramos cortado.
 
 ## Cómo me gusta trabajar (importante)
-- **Hablame en español, tono argentino (de "vos"), informal y claro.**
+- **Hablame en español, tono argentino (de "vos"), informal y claro. Andá al grano — no me des explicaciones largas si no las pido.**
 - **Verificá SIEMPRE que las cosas funcionen ANTES de decirme que están listas.** No me digas "ya está" si no lo probaste (levantá la app en un navegador real, seedeá datos de prueba si hace falta). Esto es lo más importante para mí.
 - **Sé honesto con las limitaciones.** Si algo no se puede o tiene un costo/condición, decímelo de una con las opciones reales, no me vendas humo.
 - Para pasos en consolas externas (Firebase, Google Cloud, Meta), **guiame paso a paso y pedime capturas de pantalla**; yo te las mando.
 - Me gustan las cosas **automáticas** siempre que se pueda.
 - Antes de cambios grandes o riesgosos sobre datos en vivo, explicame el plan y confirmá conmigo.
 - **No soy programador.** Explicame las cosas en criollo, con impacto real ("esto te hace perder plata", "esto rompe X"), no en jerga técnica.
+- **La app está en producción, en uso real todos los días. Los datos NO se pueden perder — ya pasó una vez y no puede volver a pasar.** Ante cualquier cambio que toque cómo se guardan los datos, pensalo dos veces y priorizá que no se pisen ni se borren solos.
 
 ## El proyecto
 - **App:** GLAMB OS — sistema de gestión completo para el salón de belleza GLAMB (agenda/turnos, caja/cobros, clientes con historial, catálogo de servicios, equipo/comisiones, RRHH/liquidaciones, finanzas + contabilidad formal, comunicaciones email/WhatsApp + encuestas, asistente de IA "Athenas").
-- **La app está en producción, en uso real todos los días.** Cualquier cambio en datos (clientes, turnos, tickets, finanzas) tiene que ser reversible o muy cuidadoso. Ante la duda, preguntame antes de tocar datos de producción.
-- **Archivo principal:** `glamb-os-firebase.html` (~12.500 líneas). Es una **PWA de un solo archivo HTML**, todo el JS en un único IIFE, sin build step.
+- **Archivo principal:** `glamb-os-firebase.html` (~12.700 líneas). Es una **PWA de un solo archivo HTML**, todo el JS en un único IIFE, sin build step.
 - **Repo / rama de trabajo:** `danieldiazmendez92-cpu/claude-SuperAppGlamb`, rama **`claude/beautiful-fermat-l5mac7`**. Desarrollá y pusheá SIEMPRE en esa rama. NO crear PRs salvo que lo pida.
 - **Deploy:** al pushear a esa rama, un GitHub Action (`.github/workflows/firebase-deploy.yml`) despliega a Firebase: Hosting + Firestore Rules + Cloud Functions. Tarda 1-2 min. El paso de Functions usa `--force` (necesario para la política de limpieza de Artifact Registry).
 - **Firebase:** proyecto `glamb-os`. Firestore en región `southamerica-east1`. Auth + Firestore (SDK compat v10.12.5 por CDN). Plan Blaze.
 - **Roles de usuario:** `admin` (todo), `medio`/recepción (clientes sin datos de contacto + agenda + caja, sin finanzas/RRHH), `bajo`/colaboradora (solo su agenda de hoy + sus propias ventas).
-- **Cache del Service Worker:** `sw.js`, versión actual **`glamb-os-v37`**. Cada cambio en el HTML o el SW hay que subirle el número de versión (`vN` → `vN+1`) para forzar que el navegador traiga lo nuevo. Avisame que cierre y abra la app **dos veces** para verlo.
+- **Cache del Service Worker:** `sw.js`, versión actual **`glamb-os-v41`**. Cada cambio en el HTML o el SW hay que subirle el número de versión (`vN` → `vN+1`) para forzar que el navegador traiga lo nuevo. Avisame que cierre y abra la app **dos veces** para verlo.
+- **Commits:** terminá los mensajes con el trailer `Co-Authored-By` que ya venimos usando. **Nunca** incluyas el identificador del modelo (Sonnet/Opus/Fable/etc.) en commits, código, ni nada que se suba al repo — solo en el chat.
+
+## ⚠️ Ya pasó un incidente de pérdida de datos — leé esto antes de tocar persistencia
+El fin de semana del 11-12/07 se perdieron datos reales (10 gastos de Finanzas y un anticipo de sueldo) porque `financePrivate/main` era **un solo documento gigante compartido**: un dispositivo con una copia vieja (probablemente combinado con el caché offline recién activado) sobrescribió el documento entero. Se recuperó todo vía PITR (point-in-time recovery, 7 días de retención) con un script hecho ad-hoc en `tools/finance-recovery/` + `.github/workflows/finance-recovery.yml` (correlo de nuevo si hiciera falta: tiene modos `inspect`, `diagnose`, `restore-collections`, `inspect-caja`, `restore-caja`, se dispara escribiendo el modo en `tools/finance-recovery/MODE` y pusheando).
+
+**La causa raíz ya está corregida**: `expenses`, `payrollDeductions` y `liquidations` se movieron a colecciones por-registro (`financeExpenses`, `financeDeductions`, `financeLiquidations`, ver abajo). Si en el futuro aparece OTRO caso de "esto no está" en cualquier módulo, sospechá primero de:
+1. Que el módulo todavía guarde algo en un blob compartido grande (revisá `PERSIST_KEYS`, `FINANCE_KEYS`, `CONFIG_KEYS` en el código — todo lo que NO esté en `SYNCED_COLLECTIONS` es candidato a este mismo bug).
+2. Que sea un problema de VISTA, no de datos reales — ya pasó con el historial de caja (ver abajo): los datos estaban bien en la base, pero la pantalla solo mostraba una sesión/cierre y no todo el historial del día. Antes de asumir pérdida de datos, mirá directo en Firestore (o con el script de `tools/finance-recovery/recover.js` en modo inspect) si el dato existe.
 
 ## Reglas de arquitectura del código (respetalas)
 - Todo el JS está en un IIFE `(function(){ 'use strict'; ... })()`. Las funciones NO son globales: `onclick="fn()"` inline en HTML estático no funciona. Usar `data-action` (ACTION_MAP) / `data-go` / `data-page`, o asignar handlers por JS.
-- **Persistencia (dónde vive cada cosa):**
-  - `SYNCED_COLLECTIONS` (una colección propia por entidad, evita pisadas entre equipos): `clients`, `collaborators`, `appointments`, `payments`, `salesTickets`, `pendingCharges`, `blockers`, `cashClosings`.
-  - `financePrivate/main` (solo admin lee/escribe, regla de Firestore): liquidaciones, deducciones, gastos, impuestos, presupuestos, categorías de gasto, **y ahora también `accounting`** (asiento de apertura + ajustes manuales de la contabilidad formal).
+- **Persistencia (dónde vive cada cosa) — el principio general es: todo lo que se escribe seguido y de a un registro por vez va a una colección propia (por-documento). Solo cosas chicas y de baja frecuencia de escritura pueden compartir un documento:**
+  - `SYNCED_COLLECTIONS` (una colección propia por entidad, evita pisadas entre equipos): `clients`, `collaborators`, `appointments`, `payments`, `salesTickets`, `pendingCharges`, `blockers`, `cashClosings`, y ahora también **`expenses`→`financeExpenses`, `payrollDeductions`→`financeDeductions`, `liquidations`→`financeLiquidations`** (estas tres con `adminOnly:true`: solo el rol admin las suscribe/escribe, reglas de Firestore `isAdmin()`).
+  - `financePrivate/main` (solo admin lee/escribe): ahora solo `taxRecords`, `budgets`, `expenseCategories`, `accounting` (asiento de apertura + ajustes manuales de la contabilidad formal) — chicas y de baja escritura.
   - `clientsPrivate/{id}` (solo admin lee): teléfono y email de clientes.
   - `appState/catalog` y `appState/config` (documentos propios, anti-pisado): catálogo de servicios; comms/athenas/reviews/cashSession/etc.
-  - Blob compartido `appState/main`: el resto de `PERSIST_KEYS`.
+  - Blob compartido `appState/main`: el resto de `PERSIST_KEYS` (cosas chicas).
   - `localStorage` del dispositivo: config de Athenas (API keys), copia local del estado.
   - `saveState()` guarda en localStorage + nube (debounce 800ms + intervalo 5s + flush forzado al cerrar/ocultar pestaña). Indicador visible abajo a la izquierda: "Guardando…/Guardado ✓/Sin guardar".
-  - **Caché offline de Firestore activado** (`enablePersistence`, IndexedDB): al reabrir la app ya no se re-descarga toda la base — el server solo manda lo que cambió. Baja costo de lecturas y acelera el arranque.
-- **Turnos (`state.appointments`)**: usan `a.memberId` (colaboradora) y `a.service` (texto) directamente — **NO tienen `a.lines[]`**. Ese array es de los tickets de venta (`state.salesTickets`), no de la agenda. Confundir estos dos modelos ya causó bugs.
+  - **Caché offline de Firestore activado** (`enablePersistence`, IndexedDB): al reabrir la app ya no se re-descarga toda la base. Sospechoso parcial del incidente de pérdida de datos — tenerlo en cuenta si aparece algo raro de sincronización.
+- **Turnos (`state.appointments`)**: usan `a.memberId` (colaboradora) y `a.service` (texto) directamente — **NO tienen `a.lines[]`**. Ese array es de los tickets de venta (`state.salesTickets`), no de la agenda.
+- **Historial de Caja**: usá siempre el helper `cajaSessionRecordsForDate(fecha)` para leer aperturas/retiros/gastos de un día — junta la sesión activa + TODOS los cierres (`state.cashClosings`) y asigna cada evento al día real de su timestamp. NO busques "el cierre cuya fecha de apertura es X": si la caja se abrió y cerró varias veces el mismo día, hay más de un cierre por fecha.
 - **Descuentos en Caja**: tres tipos — `canje` (cobro $0, comisión sobre precio+adicionales), `employee` (colaboradora se atiende: no entra plata, se descuenta del sueldo vía RRHH, quien atendió cobra comisión igual), `client` (bonificación, comisión sobre precio final).
 - **Señas y propinas (criterio contable, ya validado)**: la seña es un PASIVO al recibirse, NO ingreso — recién se reconoce como venta cuando se aplica o se retiene por inasistencia. La propina es plata de la colaboradora, no facturación del local (se excluye de "ventas").
-- En commits: terminá los mensajes con el trailer `Co-Authored-By` que ya venimos usando. **Nunca** incluyas el identificador del modelo (Sonnet/Opus/etc.) en commits, código, ni nada que se suba al repo — solo en el chat.
+- **Reenvío de mail al editar un turno**: solo se reenvía si cambia la fecha o el horario — cualquier otro cambio (seña, adicional, nota) NO reenvía nada al cliente.
 
 ## Qué ya está hecho y funcionando (por bloques)
 
 ### Infraestructura / costos / seguridad
-1. **Recordatorios de turno por email**: Cloud Function `sendAppointmentReminders` (`functions/index.js`) corre server-side cada 15 min, ya **desplegada y funcionando** (se resolvió toda la cadena de permisos: Cloud Scheduler API, Cloud Billing API, rol IAM `roles/iam.serviceAccountUser` en la cuenta de servicio de Compute, y `--force` en el deploy para la política de limpieza de imágenes). **El usuario la tiene pausada a propósito en Comunicaciones mientras sigue probando** — avisale antes de asumir que "no funciona": hay que activar la plantilla ahí para que empiece a mandar.
-2. **Backups**: (a) botón "Copia de seguridad" en Clientes (solo admin) descarga un JSON completo del estado (clientes con contacto, turnos, tickets, pagos, finanzas, catálogo, config) — a propósito sin botón de "restaurar" para evitar pisar la base por error; (b) **PITR (point-in-time recovery) de Firestore activado**, 7 días de retención, desde la consola de Firebase.
-3. **Costos de Firestore optimizados**: caché offline (ver arriba) + `_blobShadow`/`_financeShadow` (no se re-escribe `appState/main` ni `financePrivate/main` si el contenido no cambió — antes se reescribían en cada acción de caja aunque el cambio real viviera en otra colección).
-4. Roles y reglas de Firestore (`firestore.rules`) protegen finanzas/RRHH y contacto de clientes a nivel servidor, no solo visual. (Pendiente de decidir: endurecer más los permisos de escritura por rol — el usuario evaluó el riesgo como bajo dado el perfil técnico de sus colaboradoras y decidió no priorizarlo por ahora.)
+1. **Recordatorios de turno por email**: Cloud Function `sendAppointmentReminders` corre server-side cada 15 min, desplegada y funcionando. El usuario la tiene pausada a propósito en Comunicaciones mientras sigue probando.
+2. **Backups**: botón "Copia de seguridad" en Clientes (solo admin, JSON completo, sin botón de restaurar a propósito) + **PITR de Firestore activo, 7 días**.
+3. **Costos de Firestore optimizados**: caché offline + `_blobShadow`/`_financeShadow` (no re-escribe documentos si el contenido no cambió).
+4. **Finanzas blindadas contra pérdida de datos** (ver el incidente arriba): `expenses`, `payrollDeductions`, `liquidations` en colecciones por-registro. Migración automática desde `financePrivate/main` al entrar el admin.
 
-### Módulo Inicio (rediseñado esta sesión)
-5. KPIs reales por rol (antes eran fórmulas inventadas): admin ve ventas del mes vs. mes anterior (▲/▼%), turnos del mes, ticket promedio, pendiente de cobro; recepción ve turnos de hoy + caja; colaboradora ve sus turnos y sus ventas de hoy. Panel "Requiere acción" (caja sin cerrar, cobros pendientes, próximo turno). Botón grande que cambia solo entre "Abrir caja"/"Cerrar caja". Athenas (el panel oscuro de sugerencias) se dejó intacto a pedido del usuario.
-6. **Fix de doble conteo contable**: "Ventas del mes" ahora es servicios (sin propinas) de tickets confirmados Y parciales, restando el saldo pendiente (que se cuenta aparte cuando se cobra, para no duplicarlo). Mismo criterio aplicado en el resumen CFO de Finanzas (`finTicketRevenue`).
+### Módulo Inicio
+5. KPIs reales por rol, panel "Requiere acción", botón de abrir/cerrar caja. Athenas intacto.
+6. Fix de doble conteo contable en "Ventas del mes" (resta saldo pendiente para no duplicar).
 
-### Finanzas — Contabilidad formal (nuevo, esta sesión)
-7. Nueva pestaña **"Libros"** en Finanzas (solo admin, datos en `financePrivate` vía `state.accounting`):
-   - **Asiento de apertura**: caja/banco/MP + equipamiento/mobiliario + deudas iniciales; el capital se calcula solo.
-   - **Libro diario DERIVADO automáticamente** de la operación real (ventas por medio de pago, señas recibidas/aplicadas, propinas, saldos pendientes como deudores, retiros de socio, gastos de Caja+Finanzas, liquidaciones pagadas) — nadie carga asientos a mano para la operación diaria. Export a CSV por mes.
-   - **Balance general** a cualquier fecha (Activo = Pasivo + Patrimonio, con verificación visible de que cierra) y **Estado de resultados** mensual.
-   - **Libro mayor** por cuenta con saldo corrido.
-   - **Asientos manuales de ajuste**, con validación de que Debe = Haber.
-   - **Garantía de partida doble**: toda la lógica fue auditada con un dataset adversarial (23 asientos, casos borde de propinas impagas, tickets viejos sin desglose, etc.). Si algún dato de origen viene incompleto, existe una cuenta puente **"Diferencias de registro"** que absorbe la diferencia y la deja visible en vez de romper el balance en silencio.
+### Finanzas — Contabilidad formal
+7. Pestaña **"Libros"**: asiento de apertura, libro diario derivado automáticamente de la operación real, balance general, estado de resultados, libro mayor, ajustes manuales. Partida doble garantizada (cuenta puente "Diferencias de registro" si algo no cierra).
 
-### Otros fixes de esta sesión
-8. **Caja**: el primer turno de la lista (preseleccionado automáticamente) a veces cargaba un servicio genérico del catálogo en vez de lo agendado — pasaba cuando la agenda llegaba de la nube después de armar el formulario. Corregido con seguimiento de `_saleLinesApptId`; verificado que además no pisa una edición en curso del mismo turno.
-9. Circuito de "colaboradora como clienta" explicado y confirmado que funciona bien tal cual está (descuento tipo `employee` en Caja: no entra plata, se descuenta del sueldo, la persona que atendió cobra comisión igual). El usuario decidió NO tocarlo.
-10. Bug de "Sin profesional" en un registro de Caja: identificado que pasa cuando se cobra sin elegir la colaboradora en la línea (el sistema avisa "Falta colaboradora" pero no bloquea el guardado). **El usuario decidió dejarlo como está por ahora** — quedó pendiente por si en el futuro quiere que sea obligatorio.
+### Caja / Agenda (esta sesión)
+8. **Historial de caja por fecha corregido**: `cajaSessionRecordsForDate()` — antes la vista de un día pasado mostraba solo un cierre (a veces el equivocado si hubo varios el mismo día) y perdía sesiones que cruzaban la medianoche. Los datos en la base SIEMPRE estuvieron bien; era un bug de visualización.
+9. **Color por grupo del catálogo en la agenda**: en Catálogo, al editar un grupo, checkbox + selector de color (`g.color`). Los turnos de ese grupo se ven tintados en la agenda, salvo que ya tengan un color con significado (pagado=verde, cancelado=rojo, VIP=dorado, etc., que siempre ganan). 100% opcional y aditivo.
+10. **Fix de mail al editar turno**: antes cualquier edición (agregar seña, adicional, nota) reenviaba el mail de confirmación al cliente. Ahora solo reenvía si cambió fecha u horario.
+11. Fix del turno preseleccionado en Caja que cargaba un servicio genérico en vez de lo agendado (bug de timing con la sincronización de la agenda).
 
-### De sesiones anteriores (ya eran estables)
-11. Import/Export CSV de clientes, etiqueta "Alto gasto" configurable, fix de sincronización clients/collaborators a colecciones propias (blob superaba 1MB con +1000 clientes), guardado robusto al cerrar pestaña, emails con adjunto .ics y botón "agregar a calendario", reseñas de encuesta vinculadas al turno real (`appt.memberId`, no `appt.lines`), filtro de reseñas por colaboradora en Comunicaciones.
+### De sesiones anteriores (estables)
+12. Import/Export CSV de clientes, etiqueta "Alto gasto", reseñas de encuesta vinculadas al turno real, filtro de reseñas por colaboradora.
 
 ## Deuda pendiente / próximos pasos posibles
-- **WhatsApp Business API**: recordatorios automáticos 4hs antes por API oficial de Meta. Decisiones ya tomadas (número dedicado, plantilla acordada sin mencionar colaboradora, usuario acepta costo por mensaje y aprobación de Meta). Pasos pendientes del lado del usuario: crear la app en developers.facebook.com, conectar número, generar token, aprobar plantilla. Del lado nuestro: construir la function que llame a la API de Meta (la infraestructura de function programada ya existe, reutilizable).
-- **Reseñas históricas sin colaboradora vinculada**: respuestas de encuesta anteriores al fix de `appt.memberId` (commit `f13ebf6`) quedaron con `collaboratorId: null`. Se podría investigar inferirlas cruzando fecha+cliente contra la agenda, si hace falta recuperarlas.
-- **Permisos de escritura por rol más estrictos** a nivel Firestore rules (hoy cualquier usuaria logueada podría en teoría escribir en colecciones que no le corresponden visualmente). Evaluado como riesgo bajo, no priorizado.
-- **"Sin profesional" en Caja**: evaluar si conviene hacer obligatorio elegir colaboradora antes de guardar un cobro (evitaría ventas sin comisión asignada). El usuario no lo pidió todavía.
-- Dos manuales de usuario en `docs/manual-colaboradora.html` y `docs/manual-recepcion.html` (imprimibles a PDF desde Chrome) — podrían necesitar actualización si cambia mucho la UI de Inicio/Finanzas.
+- **WhatsApp Business API**: recordatorios automáticos 4hs antes. Decisiones ya tomadas (plantilla, número dedicado). Pendiente que el usuario cree la app en Meta y genere el token; del lado nuestro, construir la function.
+- **Reseñas históricas sin colaboradora vinculada** (anteriores al commit `f13ebf6`).
+- **Permisos de escritura por rol más estrictos** a nivel Firestore rules — evaluado como riesgo bajo, no priorizado.
+- **"Sin profesional" en Caja**: el sistema avisa pero no bloquea guardar un cobro sin colaboradora asignada (pierde la comisión). El usuario decidió dejarlo así por ahora.
+- Revisar si conviene aplicar el mismo patrón de colecciones por-registro a algo más que quede en un blob compartido, como medida preventiva.
+- Manuales de usuario en `docs/manual-colaboradora.html` y `docs/manual-recepcion.html` — podrían necesitar actualización.
 
 ## Estado de cuentas/datos útiles
-- Email remitente del sistema: **glambbelgrano@gmail.com** (contraseña de aplicación cargada en la extensión "Trigger Email from Firestore").
+- Email remitente del sistema: **glambbelgrano@gmail.com**.
 - Email del dueño: danieldiazmendez92@gmail.com.
 - Colección de cola de emails: `mail`. Dedup de recordatorios: `sentReminders`.
 - Firestore: PITR activo (7 días). Cloud Scheduler, Cloud Billing, Pub/Sub, Eventarc, Cloud Run APIs todas habilitadas.
+- Herramienta de recuperación de datos: `tools/finance-recovery/recover.js` + workflow `finance-recovery.yml` (dispatch por push al archivo `MODE`). Dejala ahí por si hace falta de nuevo.
 
 Arrancá preguntándome en qué querés trabajar hoy — no hay ningún pendiente urgente/bloqueante en este momento, todo lo crítico quedó resuelto en la sesión anterior.
