@@ -12551,31 +12551,59 @@ ${context}`;
       auth.onAuthStateChanged(async (user)=>{
         if(user){
           try{
+            // Instrumentación del arranque: muestra en pantalla cada paso con su
+            // tiempo, para diagnosticar dónde se demora el login. Solo UI/console,
+            // no cambia el orden ni la lógica de carga.
+            const _bt={t0:performance.now(),last:performance.now(),log:[]};
+            const _step=(name)=>{
+              const now=performance.now();
+              if(_bt.log.length) _bt.log[_bt.log.length-1].ms=Math.round(now-_bt.last);
+              _bt.last=now; _bt.log.push({name});
+              const done=_bt.log.slice(0,-1).map(s=>`${s.name} ${(s.ms/1000).toFixed(1)}s`).join(' · ');
+              if($('loginStatus')) $('loginStatus').textContent=(done?done+' · ':'')+'⏳ '+name;
+              console.log('[GLAMB boot] →',name);
+            };
+            const _done=()=>{
+              const now=performance.now();
+              if(_bt.log.length) _bt.log[_bt.log.length-1].ms=Math.round(now-_bt.last);
+              console.log('[GLAMB boot] TOTAL '+Math.round(now-_bt.t0)+'ms',JSON.stringify(_bt.log));
+            };
+            _step('Verificando usuario');
             await ensureUserRole(user);
             if(!curRole() || curRole()==='pending'){
               showToast('Tu usuario todavía no tiene acceso asignado. Pedile a un administrador que te habilite.');
               await auth.signOut(); return;
             }
+            _step('Cargando datos');
             await loadStateFromCloud();
+            _step('Limpieza inicial');
             await clearDemoDataIfNeeded();        // elimina registros demo de Firestore (una sola vez)
+            _step('Preparando colecciones');
             await migrateCollectionsIfNeeded();   // siembra la colección antes de suscribir
+            _step('Preparando catálogo');
             await migrateCatalogIfNeeded();       // catálogo en doc propio (anti-pisado) antes de suscribir
+            _step('Preparando config');
             await migrateConfigIfNeeded();        // config compartida en doc propio (anti-pisado) antes de suscribir
+            _step('Suscribiendo en vivo');
             subscribeStateSync();
             subscribeCollectionsSync();           // turnos en vivo para todos los roles
             subscribeCatalogSync();               // catálogo en vivo para todos los roles
             subscribeConfigSync();                // config en vivo para todos los roles
             if(curRole()==='admin'){
+              _step('Datos privados (admin)');
               subscribeUsersSync();
               subscribeClientsPrivateSync();
               await migrateClientsPrivateIfNeeded();
+              _step('Finanzas (admin)');
               await migrateFinancePrivateIfNeeded();   // sembrar antes de suscribir
               await migrateFinanceCollectionsIfNeeded(); // finanzas por-registro: sembrar antes de suscribir
               subscribeFinancePrivateSync();
               subscribeFinanceCollectionsSync();
               subscribeSurveyResponsesSync();
             }
+            _step('Dibujando pantalla');
             bootAppData();
+            _done();
             if($('loginOverlay')) $('loginOverlay').style.display='none';
             requestNotifPermission(); // solicitar permiso de notificaciones (no bloqueante)
             showPage(permCfg().pages[0]||'command');
