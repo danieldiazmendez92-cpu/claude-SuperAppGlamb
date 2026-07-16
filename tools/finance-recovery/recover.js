@@ -119,8 +119,69 @@ async function restoreCaja() {
   console.log(`RESTAURADO: ${n} cierre(s) de caja. Nada eliminado ni reemplazado.`);
 }
 
+// inspect-commissions: SOLO LECTURA. Diagnóstico del cálculo de comisiones.
+// Vuelca (a) la estructura del catálogo (grupo→servicio→variante con ids),
+// (b) la config de comisiones de cada colaboradora (pct por grupo + overrides
+// por servicio, resolviendo el serviceId a su nombre real), y (c) las líneas
+// de venta cuyo servicio menciona "extensi", mostrando a qué servicio resuelve
+// su variantId — para ver si el override matchea o no. No imprime datos de
+// clientes (solo grupo/servicio/variantId/colaboradora/monto).
+async function inspectCommissions() {
+  const catSnap = await db.collection('appState').doc('catalog').get();
+  const catalog = (catSnap.exists ? (catSnap.data().catalog || catSnap.data()) : {}) || {};
+  const groups = catalog.groups || [];
+  const variantToService = {};   // variantId -> {serviceId, serviceName, groupId, groupName}
+  const serviceById = {};        // serviceId -> {name, groupName}
+  console.log('=== CATÁLOGO: grupos / servicios / variantes ===');
+  groups.forEach(g => {
+    console.log(`GRUPO id=${g.id} "${g.name}"`);
+    (g.services || []).forEach(s => {
+      serviceById[s.id] = { name: s.name, groupName: g.name };
+      console.log(`   SERVICIO id=${s.id} "${s.name}"`);
+      (s.variants || []).forEach(v => {
+        variantToService[v.id] = { serviceId: s.id, serviceName: s.name, groupId: g.id, groupName: g.name };
+        console.log(`      VARIANTE id=${v.id} "${v.name}" $${v.price}`);
+      });
+    });
+  });
+
+  console.log('\n=== COMISIONES CONFIGURADAS POR COLABORADORA ===');
+  const collabs = await db.collection('collaborators').get();
+  collabs.docs.forEach(d => {
+    const c = d.data();
+    const name = ((c.firstName || '') + ' ' + (c.lastName || '')).trim() || c.name || d.id;
+    const comm = (c.payroll && c.payroll.commissions) || [];
+    if (!comm.length) return;
+    console.log(`COLAB id=${d.id} "${name}"`);
+    comm.forEach(gc => {
+      const ovs = (gc.serviceOverrides || []).map(o => {
+        const svc = serviceById[o.serviceId];
+        return `{serviceId=${o.serviceId} → ${svc ? '"' + svc.name + '" (grupo ' + svc.groupName + ')' : 'NO EXISTE EN CATÁLOGO'} pct=${o.pct}}`;
+      });
+      console.log(`   grupo groupId=${gc.groupId} groupName="${gc.groupName}" pct=${gc.pct} overrides=[${ovs.join(', ')}]`);
+    });
+  });
+
+  console.log('\n=== LÍNEAS DE VENTA "extensi*" — resolución de variantId ===');
+  const tickets = await db.collection('salesTickets').get();
+  let count = 0;
+  tickets.docs.forEach(d => {
+    const t = d.data();
+    if (t.status === 'voided') return;
+    (t.lines || []).forEach(l => {
+      const svcTxt = `${l.service || ''} ${l.group || ''}`;
+      if (!/extensi/i.test(svcTxt)) return;
+      count++;
+      const res = variantToService[l.variantId];
+      console.log(`ticket=${d.id.slice(0,8)} fecha=${(t.createdAt || '').slice(0,10)} colab=${l.collaboratorId} group="${l.group}" service="${l.service}" variantId=${l.variantId} → resuelve a: ${res ? 'servicio id=' + res.serviceId + ' "' + res.serviceName + '"' : 'NO RESUELVE (variante inexistente en catálogo actual)'} finalPrice=${l.finalPrice} disc=${l.discountType || 'none'}`);
+    });
+  });
+  if (!count) console.log('(sin líneas de venta que mencionen "extensi")');
+}
+
 (async () => {
   if (MODE === 'inspect') { await inspect(); return; }
+  if (MODE === 'inspect-commissions') { await inspectCommissions(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
 
