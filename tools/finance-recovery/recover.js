@@ -179,9 +179,73 @@ async function inspectCommissions() {
   if (!count) console.log('(sin líneas de venta que mencionen "extensi")');
 }
 
+// simulate-commissions: SOLO LECTURA. Replica EXACTAMENTE la lógica desplegada
+// de getCollaboratorCommission (con fallback por nombre) y calcula, línea por
+// línea, qué % le corresponde a cada colaboradora en julio. Sirve para
+// confirmar del lado del servidor si el fix produce el % correcto, sin navegador
+// ni caché de por medio.
+async function simulateCommissions() {
+  const catSnap = await db.collection('appState').doc('catalog').get();
+  const catalog = (catSnap.exists ? (catSnap.data().catalog || catSnap.data()) : {}) || {};
+  const groups = catalog.groups || [];
+  const getVariantFromId = (variantId) => {
+    for (const g of groups) for (const s of (g.services||[])) {
+      const v = (s.variants||[]).find(x => x.id === variantId);
+      if (v) return { group: g, service: s, variant: v };
+    }
+    return null;
+  };
+  // Réplica literal de la función desplegada en el HTML.
+  const getCollaboratorCommission = (m, groupName, variantId, serviceName) => {
+    if (!m.payroll || !m.payroll.commissions) return { pct: 0, why: 'sin payroll' };
+    const gc = m.payroll.commissions.find(c => c.groupName === groupName || c.groupId === groupName);
+    if (!gc) return { pct: 0, why: 'grupo no configurado' };
+    if (gc.serviceOverrides && gc.serviceOverrides.length) {
+      let serviceId = null, how = '';
+      const vi = variantId ? getVariantFromId(variantId) : null;
+      if (vi) { serviceId = vi.service.id; how = 'por variantId'; }
+      else if (serviceName) {
+        const g = groups.find(x => x.name === groupName || x.id === groupName);
+        if (g) {
+          const s = (g.services||[]).find(s => s.name === serviceName || (s.variants||[]).some(v => v.name === serviceName));
+          if (s) { serviceId = s.id; how = 'por NOMBRE (variante huérfana)'; }
+        }
+      }
+      const ov = gc.serviceOverrides.find(o => (serviceId && o.serviceId === serviceId) || (variantId && o.serviceId === variantId));
+      if (ov) return { pct: ov.pct || 0, why: `override ${how} → serviceId=${serviceId}` };
+      return { pct: gc.pct || 0, why: `sin override (serviceId=${serviceId||'no resuelto'}, ${how||'no resuelto'}) → grupo` };
+    }
+    return { pct: gc.pct || 0, why: 'grupo (sin overrides)' };
+  };
+
+  const collabs = await db.collection('collaborators').get();
+  const byId = {};
+  collabs.docs.forEach(d => { byId[d.id] = d.data(); });
+  const tickets = await db.collection('salesTickets').get();
+  console.log('=== SIMULACIÓN DE COMISIONES (julio, lógica desplegada) ===');
+  const rows = [];
+  tickets.docs.forEach(d => {
+    const t = d.data();
+    if (t.status === 'voided') return;
+    if (!(t.createdAt >= '2026-07-01' && t.createdAt <= '2026-07-31T23:59:59')) return;
+    (t.lines || []).forEach(l => {
+      const m = byId[l.collaboratorId];
+      if (!m) return;
+      const name = ((m.firstName||'')+' '+(m.lastName||'')).trim() || m.name || l.collaboratorId;
+      const r = getCollaboratorCommission(m, l.group, l.variantId, l.service);
+      rows.push({ name, group: l.group, service: l.service, variantId: l.variantId, pct: r.pct, why: r.why });
+    });
+  });
+  // foco en Andrea + cualquier línea de extensiones
+  rows.filter(r => /andrea/i.test(r.name) || /extensi/i.test(`${r.service} ${r.group}`)).forEach(r => {
+    console.log(`${r.name} | ${r.group} | "${r.service}" | ${r.pct}% | ${r.why}`);
+  });
+}
+
 (async () => {
   if (MODE === 'inspect') { await inspect(); return; }
   if (MODE === 'inspect-commissions') { await inspectCommissions(); return; }
+  if (MODE === 'simulate-commissions') { await simulateCommissions(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
 
