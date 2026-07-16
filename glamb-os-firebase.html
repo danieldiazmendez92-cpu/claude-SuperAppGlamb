@@ -9993,12 +9993,11 @@
       if(variantId&&gc.serviceOverrides&&gc.serviceOverrides.length){
         // Los overrides se configuran por servicio (ej. "Lifting de pestañas"), no por variante
         // (ej. "Tensión baja"/"Tensión alta"). Hay que resolver la variante vendida a su servicio padre.
+        // Fallback: matcheamos también por variantId directo por si quedó algún override guardado viejo.
         const vi=getVariantFromId(variantId);
         const serviceId=vi?vi.service.id:null;
-        if(serviceId){
-          const ov=gc.serviceOverrides.find(o=>o.serviceId===serviceId);
-          if(ov!==undefined) return ov.pct || 0;
-        }
+        const ov=gc.serviceOverrides.find(o=>(serviceId&&o.serviceId===serviceId)||o.serviceId===variantId);
+        if(ov) return ov.pct || 0;
       }
       return gc.pct||0;
     }
