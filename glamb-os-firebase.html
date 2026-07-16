@@ -9991,8 +9991,14 @@
       const gc=m.payroll.commissions.find(c=>c.groupName===groupName||c.groupId===groupName);
       if(!gc) return 0;
       if(variantId&&gc.serviceOverrides&&gc.serviceOverrides.length){
-        const ov=gc.serviceOverrides.find(o=>o.serviceId===variantId);
-        if(ov!==undefined) return ov.pct || 0;
+        // Los overrides se configuran por servicio (ej. "Lifting de pestañas"), no por variante
+        // (ej. "Tensión baja"/"Tensión alta"). Hay que resolver la variante vendida a su servicio padre.
+        const vi=getVariantFromId(variantId);
+        const serviceId=vi?vi.service.id:null;
+        if(serviceId){
+          const ov=gc.serviceOverrides.find(o=>o.serviceId===serviceId);
+          if(ov!==undefined) return ov.pct || 0;
+        }
       }
       return gc.pct||0;
     }
