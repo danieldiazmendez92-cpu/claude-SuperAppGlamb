@@ -9986,17 +9986,29 @@
       return match?match.amount:(sorted[sorted.length-1]?.amount||0);
     }
 
-    function getCollaboratorCommission(m,groupName,variantId){
+    function getCollaboratorCommission(m,groupName,variantId,serviceName){
       if(!m.payroll||!m.payroll.commissions) return 0;
       const gc=m.payroll.commissions.find(c=>c.groupName===groupName||c.groupId===groupName);
       if(!gc) return 0;
-      if(variantId&&gc.serviceOverrides&&gc.serviceOverrides.length){
-        // Los overrides se configuran por servicio (ej. "Lifting de pestañas"), no por variante
-        // (ej. "Tensión baja"/"Tensión alta"). Hay que resolver la variante vendida a su servicio padre.
-        // Fallback: matcheamos también por variantId directo por si quedó algún override guardado viejo.
-        const vi=getVariantFromId(variantId);
-        const serviceId=vi?vi.service.id:null;
-        const ov=gc.serviceOverrides.find(o=>(serviceId&&o.serviceId===serviceId)||o.serviceId===variantId);
+      if(gc.serviceOverrides&&gc.serviceOverrides.length){
+        // Los overrides se configuran por SERVICIO (ej. "Extensiones"), no por variante
+        // (ej. "Extensiones Clasicas"/"2D"/"Retiro"). Hay que resolver la venta a su servicio padre.
+        let serviceId=null;
+        const vi=variantId?getVariantFromId(variantId):null;
+        if(vi){
+          serviceId=vi.service.id;
+        } else if(serviceName){
+          // El variantId ya no existe (catálogo recreado → ids viejos huérfanos en
+          // tickets pasados). Caemos a resolver el servicio por el NOMBRE de la
+          // variante/servicio guardado en la línea de venta, dentro del grupo.
+          const g=state.catalog.groups.find(x=>x.name===groupName||x.id===groupName);
+          if(g){
+            const s=g.services.find(s=>s.name===serviceName||(s.variants||[]).some(v=>v.name===serviceName));
+            if(s) serviceId=s.id;
+          }
+        }
+        // Fallback final: match directo por variantId por si quedó algún override viejo.
+        const ov=gc.serviceOverrides.find(o=>(serviceId&&o.serviceId===serviceId)||(variantId&&o.serviceId===variantId));
         if(ov) return ov.pct || 0;
       }
       return gc.pct||0;
@@ -10048,7 +10060,7 @@
       state.salesTickets.filter(t=>t.status!=='voided'&&t.createdAt>=from&&t.createdAt<=to+'T23:59:59').forEach(t=>{
         (t.lines||[]).forEach(l=>{
           if(l.collaboratorId!==memberId) return;
-          const pct=getCollaboratorCommission(m,l.group,l.variantId);
+          const pct=getCollaboratorCommission(m,l.group,l.variantId,l.service);
           // Canje: la clienta no paga, pero la comisión se calcula sobre el precio de catálogo (basePrice).
           const commissionBase = l.discountType==='canje' ? (l.basePrice||0) : (l.finalPrice||0);
           const commAmt=Math.round(commissionBase*pct/100);
