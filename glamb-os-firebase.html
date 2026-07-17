@@ -10123,9 +10123,10 @@
         </section>
         ${liq.status==='paid'?`<div style="background:#E8F5E9;border-radius:12px;padding:12px 16px;font-size:13px;color:#1B5E20;margin-top:8px">✓ Liquidación marcada como pagada</div>`:''}
       `;
+      const _liqExportBtns=`<button class="btn" data-action="exportLiquidationPdf" data-id="${liqId}">📄 PDF</button><button class="btn" data-action="exportLiquidationExcel" data-id="${liqId}">📊 Excel</button>`;
       if($('liqViewFooter')) $('liqViewFooter').innerHTML=liq.status==='paid'
-        ?`<button class="btn" data-close>Cerrar</button>`
-        :`<button class="btn" data-close>Cerrar</button><button class="btn" data-action="deleteLiquidation" data-id="${liqId}">Eliminar borrador</button><button class="btn primary" data-action="confirmLiquidationPaid" data-id="${liqId}">Marcar como pagado</button>`;
+        ?`${_liqExportBtns}<button class="btn" data-close>Cerrar</button>`
+        :`${_liqExportBtns}<button class="btn" data-close>Cerrar</button><button class="btn" data-action="deleteLiquidation" data-id="${liqId}">Eliminar borrador</button><button class="btn primary" data-action="confirmLiquidationPaid" data-id="${liqId}">Marcar como pagado</button>`;
       openDrawer('liquidationViewDrawer');
     }
 
@@ -10159,6 +10160,136 @@
         saveState(); closeDrawers(); renderRrhhLiquidations();
         showToast('Borrador eliminado');
       });
+    }
+
+    // ── Exportar liquidación (PDF imprimible + Excel/CSV) ──────────────
+    // Normaliza los datos de la liquidación a un formato común para ambos exports.
+    const _liqDedLabel={anticipo:'Anticipo',servicio_empleada:'Servicio empleada',otro:'Otro'};
+    function _liqExportData(liq){
+      return {
+        name: liq.collaboratorName||'—',
+        periodLabel: liq.period?.label||'',
+        periodRange: (liq.period?.from||'')+' → '+(liq.period?.to||''),
+        presentismo: liq.presentismo||0,
+        viatico: liq.viatico||0,
+        comm: (liq.commissionLines||[]).map(l=>({
+          fecha:l.ticketDate||'', cliente:l.clientName||'—', servicio:l.service||'',
+          base:l.saleAmount||0, pct:l.pct||0, monto:l.commissionAmt||0, canje:l.discountType==='canje'
+        })),
+        totalComm: liq.totalCommissions||0,
+        deds: (liq.deductions||[]).map(d=>({concepto:(_liqDedLabel[d.type]||d.type)+(d.description?' · '+d.description:''), monto:Number(d.amount)||0})),
+        totalDed: liq.totalDeductions||0,
+        gross: liq.grossPay||0,
+        net: liq.netPay||0,
+        status: liq.status
+      };
+    }
+
+    function exportLiquidationExcel(liqId){
+      const liq=state.liquidations.find(l=>l.id===liqId); if(!liq) return;
+      const r=_liqExportData(liq);
+      const L=[];
+      L.push(['GLAMB — Resumen de liquidación']);
+      L.push(['Colaboradora', r.name]);
+      L.push(['Período a liquidar', r.periodRange]);
+      L.push([]);
+      L.push(['Presentismo', r.presentismo]);
+      L.push(['Viáticos', r.viatico]);
+      L.push([]);
+      L.push(['Servicios']);
+      L.push(['Fecha','Cliente','Servicio','Base','% Comisión','Comisión']);
+      r.comm.forEach(c=>L.push([c.fecha,c.cliente,c.servicio+(c.canje?' (canje)':''),c.base,c.pct+'%',c.monto]));
+      L.push(['','','','','Total comisión', r.totalComm]);
+      L.push([]);
+      L.push(['Descuentos']);
+      if(r.deds.length){
+        r.deds.forEach(d=>L.push([d.concepto,'','','','', -d.monto]));
+        L.push(['','','','','Total descuentos', -r.totalDed]);
+      } else L.push(['Sin descuentos']);
+      L.push([]);
+      L.push(['Bruto (presentismo + viático + comisiones)','','','','', r.gross]);
+      L.push(['TOTAL A COBRAR','','','','', r.net]);
+      const csv='﻿'+L.map(row=>row.map(csvCell).join(',')).join('\r\n'); // BOM: Excel respeta acentos
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url;
+      a.download='liquidacion-'+r.name.replace(/\s+/g,'-').toLowerCase()+'-'+(r.periodLabel||'')+'.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      showToast('Excel (CSV) descargado.');
+    }
+
+    function exportLiquidationPdf(liqId){
+      const liq=state.liquidations.find(l=>l.id===liqId); if(!liq) return;
+      const r=_liqExportData(liq);
+      const biz=(state.comms&&state.comms.bizName)||'GLAMB';
+      const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+      const m=n=>'$'+Number(n||0).toLocaleString('es-AR');
+      const commRows=r.comm.length
+        ? r.comm.map(c=>`<tr><td>${esc(c.fecha)}</td><td>${esc(c.cliente)}</td><td>${esc(c.servicio)}${c.canje?' <span class="tag">canje</span>':''}</td><td class="num">${m(c.base)}</td><td class="num">${c.pct}%</td><td class="num">${m(c.monto)}</td></tr>`).join('')
+        : `<tr><td colspan="6" class="muted">Sin ventas en el período.</td></tr>`;
+      const dedRows=r.deds.length
+        ? r.deds.map(d=>`<tr><td colspan="5">${esc(d.concepto)}</td><td class="num neg">−${m(d.monto)}</td></tr>`).join('')
+        : `<tr><td colspan="6" class="muted">Sin descuentos.</td></tr>`;
+      const html=`<!doctype html><html lang="es"><head><meta charset="utf-8">
+<title>Liquidación · ${esc(r.name)} · ${esc(r.periodLabel)}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;color:#2b2b2b;margin:0;padding:32px 36px;font-size:13px}
+  h1{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:26px;margin:0 0 2px}
+  .sub{color:#888;font-size:12px;margin-bottom:20px}
+  .eyebrow{letter-spacing:.12em;text-transform:uppercase;font-size:10px;color:#b98a6f;font-weight:600;margin-bottom:16px}
+  .meta{margin:0 0 18px}
+  .meta div{margin:2px 0}
+  .meta b{display:inline-block;min-width:150px;color:#555;font-weight:600}
+  .fijos{display:flex;gap:32px;margin:14px 0 22px;padding:12px 0;border-top:1px solid #eee;border-bottom:1px solid #eee}
+  .fijos .k{color:#888;font-size:11px}
+  .fijos .v{font-size:16px;font-weight:600}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#b98a6f;margin:22px 0 8px}
+  table{width:100%;border-collapse:collapse;margin-bottom:6px}
+  th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#999;border-bottom:1.5px solid #ddd;padding:6px 8px}
+  td{padding:7px 8px;border-bottom:1px solid #f0f0f0}
+  .num{text-align:right;white-space:nowrap}
+  .neg{color:#c0392b}
+  .muted{color:#aaa;text-align:center;padding:14px}
+  .tag{background:#f3e9df;color:#b98a6f;border-radius:6px;padding:1px 6px;font-size:9px;text-transform:uppercase}
+  .subtotal td{border-top:1.5px solid #ddd;border-bottom:none;font-weight:600;padding-top:8px}
+  .total{margin-top:24px;background:#faf6f2;border:1.5px solid #e7d8ca;border-radius:12px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center}
+  .total .lbl{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#8a6d57;font-weight:600}
+  .total .amt{font-size:26px;font-weight:700;color:#2b2b2b}
+  .bruto{display:flex;justify-content:space-between;color:#666;font-size:12px;margin-top:14px;padding:0 4px}
+  .foot{margin-top:26px;color:#bbb;font-size:10px;text-align:center}
+  @media print{body{padding:0}@page{margin:16mm}}
+</style></head><body>
+  <div class="eyebrow">${esc(biz)} · Liquidación de sueldo</div>
+  <h1>${esc(r.name)}</h1>
+  <div class="sub">${esc(r.periodLabel)} · ${esc(r.periodRange)}${r.status==='paid'?' · PAGADA':' · Borrador'}</div>
+  <div class="fijos">
+    <div><div class="k">Presentismo</div><div class="v">${m(r.presentismo)}</div></div>
+    <div><div class="k">Viáticos</div><div class="v">${m(r.viatico)}</div></div>
+    <div><div class="k">Comisiones</div><div class="v">${m(r.totalComm)}</div></div>
+  </div>
+  <h2>Servicios</h2>
+  <table>
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th class="num">Base</th><th class="num">% Com.</th><th class="num">Comisión</th></tr></thead>
+    <tbody>${commRows}
+      <tr class="subtotal"><td colspan="5" class="num">Total comisión</td><td class="num">${m(r.totalComm)}</td></tr>
+    </tbody>
+  </table>
+  <h2>Descuentos</h2>
+  <table>
+    <tbody>${dedRows}
+      ${r.deds.length?`<tr class="subtotal"><td colspan="5" class="num">Total descuentos</td><td class="num neg">−${m(r.totalDed)}</td></tr>`:''}
+    </tbody>
+  </table>
+  <div class="bruto"><span>Bruto (presentismo + viático + comisiones)</span><span>${m(r.gross)}</span></div>
+  <div class="total"><span class="lbl">Total a cobrar</span><span class="amt">${m(r.net)}</span></div>
+  <div class="foot">Generado por ${esc(biz)} OS · ${new Date().toLocaleDateString('es-AR')}</div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
+</body></html>`;
+      const w=window.open('','_blank');
+      if(!w){ showToast('Permití las ventanas emergentes para exportar el PDF.'); return; }
+      w.document.write(html); w.document.close();
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -12766,6 +12897,8 @@ ${context}`;
       confirmLiquidationPaid:  el => confirmLiquidationPaid(el.dataset.id),
       deleteDeduction:         el => deleteDeduction(el.dataset.id),
       deleteLiquidation:       el => deleteLiquidation(el.dataset.id),
+      exportLiquidationPdf:    el => exportLiquidationPdf(el.dataset.id),
+      exportLiquidationExcel:  el => exportLiquidationExcel(el.dataset.id),
       deleteExpense:           el => deleteExpense(el.dataset.id),
       deleteServiceGroup:      el => deleteServiceGroup(el.dataset.id),
       editAppointment:         el => editAppointment(el.dataset.id),
