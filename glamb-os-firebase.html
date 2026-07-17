@@ -10140,18 +10140,43 @@
       liq.netPay=liq.grossPay-liq.totalDeductions;
       saveState(); openLiquidationView(liqId); showToast('Liquidación actualizada.');
     }
+    // Pide el medio de pago antes de confirmar el pago de una liquidación,
+    // porque ese pago se va a volcar como gasto real en Finanzas (categoría
+    // "Sueldos fijos") y el medio determina si impacta caja (Efectivo) o no.
+    function askPaymentMethodDialog(msg, onOk){
+      const dlg=document.createElement('dialog');
+      dlg.className='glamb-dialog';
+      dlg.innerHTML=`<p class="glamb-dialog-msg"></p><select class="glamb-dialog-select" style="width:100%;margin-bottom:12px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--radius-sm);font-size:14px;background:var(--surface)"><option>Transferencia</option><option>Efectivo</option></select><div class="glamb-dialog-actions"><button class="btn secondary glamb-dialog-cancel">Cancelar</button><button class="btn primary glamb-dialog-ok">Confirmar</button></div>`;
+      dlg.querySelector('.glamb-dialog-msg').textContent=msg;
+      document.body.appendChild(dlg);
+      dlg.showModal();
+      dlg.querySelector('.glamb-dialog-ok').onclick=()=>{ const v=dlg.querySelector('.glamb-dialog-select').value; dlg.close(); dlg.remove(); onOk&&onOk(v); };
+      dlg.querySelector('.glamb-dialog-cancel').onclick=()=>{ dlg.close(); dlg.remove(); };
+      dlg.addEventListener('cancel',()=>dlg.remove());
+    }
     function confirmLiquidationPaid(liqId){
       const liq=state.liquidations.find(l=>l.id===liqId);
       if(!liq) return;
-      liq.status='paid'; liq.paidAt=new Date().toISOString();
-      // Mark deductions as applied
-      (liq.deductionRefs||[]).forEach(dId=>{
-        const d=state.payrollDeductions.find(x=>x.id===dId);
-        if(d) d.appliedToLiquidationId=liqId;
+      askPaymentMethodDialog('¿Con qué medio se paga el sueldo de '+liq.collaboratorName+'?', (paymentMethod)=>{
+        liq.status='paid'; liq.paidAt=new Date().toISOString();
+        // Mark deductions as applied
+        (liq.deductionRefs||[]).forEach(dId=>{
+          const d=state.payrollDeductions.find(x=>x.id===dId);
+          if(d) d.appliedToLiquidationId=liqId;
+        });
+        // Volcar el pago como gasto real en Finanzas (Sueldos fijos), para que
+        // aparezca en libros/estado de resultados y no haya que cargarlo a mano.
+        // Guardado en liq.expenseId para no duplicar si esto corriera de nuevo.
+        if(!liq.expenseId && liq.netPay>0){
+          const exp=addExpense({date:liq.paidAt.slice(0,10),category:'salaries',
+            description:'Sueldo '+liq.collaboratorName+' · '+(liq.period?.label||''),
+            amount:liq.netPay,paymentMethod});
+          liq.expenseId=exp.id;
+        }
+        saveState(); renderRrhhLiquidations(); renderRrhhDeductions();
+        openLiquidationView(liqId);
+        showToast('Liquidación de '+liq.collaboratorName+' marcada como pagada');
       });
-      saveState(); renderRrhhLiquidations(); renderRrhhDeductions();
-      openLiquidationView(liqId);
-      showToast('Liquidación de '+liq.collaboratorName+' marcada como pagada');
     }
 
     function deleteLiquidation(liqId){
