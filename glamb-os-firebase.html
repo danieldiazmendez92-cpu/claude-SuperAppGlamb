@@ -4456,6 +4456,10 @@
             <label>Servicio realizado</label>
             <input id="deductionServiceName" placeholder="Ej: Plasma · precio catálogo $50.000 · desc. 10%" style="width:100%;padding:10px 12px;border:0.5px solid var(--line);border-radius:10px;font-size:13px;background:var(--surface);font-family:'DM Sans',sans-serif">
           </div>
+          <div class="field" id="deductionPaymentFields">
+            <label>Medio de pago</label>
+            <select id="deductionPaymentMethod"><option>Transferencia</option><option>Efectivo</option></select>
+          </div>
           <div class="field full">
             <label>Descripción / Nota</label>
             <textarea id="deductionDesc" placeholder="Referencia opcional" style="height:60px"></textarea>
@@ -9913,10 +9917,15 @@
       if($('deductionDesc')) $('deductionDesc').value='';
       if($('deductionServiceName')) $('deductionServiceName').value='';
       if($('deductionType')) $('deductionType').value='anticipo';
+      if($('deductionPaymentMethod')) $('deductionPaymentMethod').value='Transferencia';
       if($('deductionServiceFields')) $('deductionServiceFields').style.display='none';
+      if($('deductionPaymentFields')) $('deductionPaymentFields').style.display='';
       if($('deductionType')) $('deductionType').onchange=()=>{
-        const show=$('deductionType').value==='servicio_empleada';
-        if($('deductionServiceFields')) $('deductionServiceFields').style.display=show?'block':'none';
+        const isService=$('deductionType').value==='servicio_empleada';
+        if($('deductionServiceFields')) $('deductionServiceFields').style.display=isService?'block':'none';
+        // "Servicio empleada" no mueve plata (ya se contó como venta en Caja);
+        // anticipo/otro sí, por eso piden medio de pago.
+        if($('deductionPaymentFields')) $('deductionPaymentFields').style.display=isService?'none':'';
       };
       openDrawer('deductionDrawer');
     }
@@ -9930,8 +9939,9 @@
       const desc=$('deductionDesc')?.value||'';
       const date=$('deductionDate')?.value||new Date().toISOString().slice(0,10);
       const serviceName=$('deductionServiceName')?.value||'';
+      const m=member(memberId);
       if(!state.payrollDeductions) state.payrollDeductions=[];
-      addDeduction({
+      const ded={
         id:'ded'+Date.now(),
         collaboratorId:memberId,
         type,amount,description:desc||serviceName,
@@ -9939,13 +9949,29 @@
         serviceRef:type==='servicio_empleada'?{serviceName}:null,
         appliedToLiquidationId:null,
         createdAt:new Date().toISOString()
-      });
+      };
+      // Anticipo/Otro: plata real que sale ahora (se recupera después descontando
+      // del sueldo, no se factura ni se cobra en Caja) → se registra como gasto en
+      // Finanzas en este momento, no en la liquidación. "Servicio empleada" no
+      // mueve plata: ya se contó como venta en Caja al precio con descuento.
+      if(type==='anticipo'||type==='otro'){
+        const paymentMethod=$('deductionPaymentMethod')?.value||'Transferencia';
+        const exp=addExpense({date,category:'salaries',
+          description:(type==='anticipo'?'Anticipo':'Descuento')+' '+fullName(m)+(desc?' · '+desc:''),
+          amount,paymentMethod});
+        ded.expenseId=exp.id;
+      }
+      addDeduction(ded);
       saveState(); closeDrawers(); renderRrhhDeductions();
       showToast('Descuento registrado: '+money(amount));
     }
 
     function deleteDeduction(id){
       showConfirm('¿Eliminar este descuento?', ()=>{
+        const ded=state.payrollDeductions.find(d=>d.id===id);
+        // Si el descuento había generado un gasto en Finanzas (anticipo/otro), lo
+        // borramos también para no dejar un gasto huérfano que ya no corresponde.
+        if(ded&&ded.expenseId) state.expenses=(state.expenses||[]).filter(e=>e.id!==ded.expenseId);
         state.payrollDeductions=state.payrollDeductions.filter(d=>d.id!==id);
         saveState(); renderRrhhDeductions();
         showToast('Descuento eliminado');
