@@ -12778,18 +12778,20 @@ ${context}`;
             subscribeCollectionsSync();           // turnos en vivo para todos los roles
             subscribeCatalogSync();               // catálogo en vivo para todos los roles
             subscribeConfigSync();                // config en vivo para todos los roles
-            if(curRole()==='admin'){
-              _step('Datos privados (admin)');
-              subscribeUsersSync();
-              subscribeClientsPrivateSync();
-              await migrateClientsPrivateIfNeeded();
-              _step('Finanzas (admin)');
-              await migrateFinancePrivateIfNeeded();   // sembrar antes de suscribir
-              await migrateFinanceCollectionsIfNeeded(); // finanzas por-registro: sembrar antes de suscribir
-              subscribeFinancePrivateSync();
-              subscribeFinanceCollectionsSync();
-              subscribeSurveyResponsesSync();
-            }
+            // Mostramos la app YA con lo esencial (agenda, caja, catálogo, clientes).
+            // Los datos SOLO de admin (usuarios, contactos privados, finanzas) se
+            // cargaban acá y BLOQUEABAN el login 25-35s (migración de clientsPrivate
+            // en incógnito + lectura del blob de finanzas). No son necesarios para la
+            // primera pantalla, así que se cargan en segundo plano. Cuando llegan,
+            // sus onSnapshot disparan renderAll y la vista se actualiza sola. El
+            // orden migrar→suscribir se mantiene dentro de la tarea de fondo.
+            // Arrays de finanzas en vacío hasta que llegue la carga de fondo, para
+            // que la primera pantalla nunca lea undefined.
+            if(!state.expenses) state.expenses=[];
+            if(!state.liquidations) state.liquidations=[];
+            if(!state.payrollDeductions) state.payrollDeductions=[];
+            if(!state.systemUsers) state.systemUsers=[];
+            if(!state.clientsPrivate) state.clientsPrivate={};
             _step('Dibujando pantalla');
             bootAppData();
             _done();
@@ -12797,6 +12799,22 @@ ${context}`;
             requestNotifPermission(); // solicitar permiso de notificaciones (no bloqueante)
             showPage(permCfg().pages[0]||'command');
             showToast(`Sesión iniciada: ${state.authUser.name} · ${ROLE_LABELS[state.authUser.role]||state.authUser.role}`);
+            if(curRole()==='admin'){
+              (async()=>{
+                const _t0=performance.now();
+                try{
+                  subscribeUsersSync();
+                  subscribeClientsPrivateSync();
+                  await migrateClientsPrivateIfNeeded();
+                  await migrateFinancePrivateIfNeeded();   // sembrar antes de suscribir
+                  await migrateFinanceCollectionsIfNeeded(); // finanzas por-registro: sembrar antes de suscribir
+                  subscribeFinancePrivateSync();
+                  subscribeFinanceCollectionsSync();
+                  subscribeSurveyResponsesSync();
+                  console.log('[GLAMB boot] datos admin (segundo plano) listos en '+Math.round(performance.now()-_t0)+'ms');
+                }catch(e){ console.error('[GLAMB] carga admin en segundo plano falló:', e); }
+              })();
+            }
           }catch(e){
             if(e && e.code==='user-disabled'){
               if($('loginError')) $('loginError').textContent='Tu cuenta está deshabilitada. Contactá al administrador.';
