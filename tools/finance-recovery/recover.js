@@ -242,10 +242,42 @@ async function simulateCommissions() {
   });
 }
 
+// inspect-liq-finance: SOLO LECTURA. Para (a) diagnosticar el login lento
+// —tamaño y claves del doc financePrivate/main, que se lee al arrancar— y
+// (b) obtener las liquidaciones pagadas y si ya generaron gasto (expenseId),
+// para saber cuál sueldo falta cargar en Finanzas.
+async function inspectLiqFinance() {
+  const fp = await REF.get();
+  const d = fp.exists ? fp.data() : {};
+  const bytes = Buffer.byteLength(JSON.stringify(d), 'utf8');
+  console.log('=== financePrivate/main ===');
+  console.log('tamaño total:', (bytes/1024).toFixed(1), 'KB');
+  Object.keys(d).sort().forEach(k => {
+    const v = d[k];
+    const sz = Buffer.byteLength(JSON.stringify(v), 'utf8');
+    const n = Array.isArray(v) ? v.length + ' items' : (v && typeof v === 'object' ? Object.keys(v).length + ' keys' : typeof v);
+    console.log(`  ${k}: ${(sz/1024).toFixed(1)} KB (${n})`);
+  });
+
+  console.log('\n=== financeLiquidations (todas) ===');
+  const liqs = await db.collection('financeLiquidations').get();
+  console.log('total docs:', liqs.size);
+  liqs.docs.map(x=>x.data()).sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''))).forEach(l => {
+    console.log(`  id=${l.id} · ${l.collaboratorName||'—'} · período=${l.period?.label||''} (${l.period?.from||''}→${l.period?.to||''}) · estado=${l.status} · neto=${l.netPay} · pagadaEl=${(l.paidAt||'').slice(0,10)||'—'} · expenseId=${l.expenseId||'NINGUNO'}`);
+  });
+
+  console.log('\n=== financeExpenses categoría salaries (sueldos ya registrados) ===');
+  const exps = await db.collection('financeExpenses').get();
+  exps.docs.map(x=>x.data()).filter(e=>e.category==='salaries').forEach(e=>{
+    console.log(`  ${e.date} · ${e.description} · ${e.amount} · ${e.paymentMethod||''} · id=${e.id}`);
+  });
+}
+
 (async () => {
   if (MODE === 'inspect') { await inspect(); return; }
   if (MODE === 'inspect-commissions') { await inspectCommissions(); return; }
   if (MODE === 'simulate-commissions') { await simulateCommissions(); return; }
+  if (MODE === 'inspect-liq-finance') { await inspectLiqFinance(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
 
