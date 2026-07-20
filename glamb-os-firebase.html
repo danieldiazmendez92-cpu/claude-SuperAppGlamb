@@ -6774,6 +6774,13 @@
           sel.innerHTML = collaboratorOptions(prev);
           if(prev) sel.value = prev;
         });
+        // Igual para el select de "empleada que recibe el descuento": si el form se
+        // armó antes de que llegaran las colaboradoras, este quedaba vacío para siempre.
+        document.querySelectorAll('.sale-discount-employee').forEach(sel => {
+          const prev = sel.value;
+          sel.innerHTML = '<option value="">Seleccionar…</option>' + collaboratorOptions('');
+          if(prev) sel.value = prev;
+        });
       }
       renderCashKpis();
       renderCashStatus();
