@@ -3510,6 +3510,7 @@
             </div>
             <div class="toolbar-row" id="agendaFiltersRow" style="display:none;">
               <select class="select-like" id="memberFilter"><option value="Todos">Todos los profesionales</option></select>
+              <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;cursor:pointer" title="Oculta las columnas de quien no trabaja el día que estás viendo"><input type="checkbox" id="onlyWorkingTodayChk"> Solo quien trabaja hoy</label>
               <select class="select-like" id="groupFilter">
                 <option value="Todos">Todos los grupos</option>
               </select>
@@ -4684,7 +4685,7 @@
     ],collaborators:[
     ],appointments:[
     ],blockers:[
-    ],agenda:{group:'Todos',member:'Todos',role:'reception',view:'day',showBlockers:true,dragging:null,currentDate:new Date(),colWidth:140},
+    ],agenda:{group:'Todos',member:'Todos',role:'reception',view:'day',showBlockers:true,onlyWorkingToday:false,dragging:null,currentDate:new Date(),colWidth:140},
     payments:[],salesTickets:[],pendingCharges:[],
     cashTab:'register',saleLineSeq:0,paymentLineSeq:0,ledgerDate:'',ledgerSubTab:'efectivo',cashDailyDate:'',cashTicketsDate:'',
     catalog:{
@@ -8046,8 +8047,23 @@
       }
       return html + '</div>';
     }
+    const AGENDA_DAY_NAMES={0:'Domingo',1:'Lunes',2:'Martes',3:'Miércoles',4:'Jueves',5:'Viernes',6:'Sábado'};
     function visibleMembers(){
-      let members = state.collaborators.filter(c=>c.can);
+      const D=dateKey(state.agenda.currentDate);
+      const dayName=AGENDA_DAY_NAMES[state.agenda.currentDate.getDay()];
+      // Quién tiene turnos ESE día concreto: se muestra siempre, aunque ya no
+      // reciba turnos (baja) — así el historial de una fecha pasada sigue visible.
+      const withApptsToday=new Set(state.appointments.filter(a=>!isOrphanAppt(a) && (a.date||'')===D).map(a=>a.memberId));
+      let members = state.collaborators.filter(c=>{
+        if(withApptsToday.has(c.id)) return true;   // tiene trabajo ese día → visible
+        if(!c.can) return false;                     // no recibe turnos / baja → oculto si no tiene turnos ese día
+        // Filtro "solo quien trabaja hoy": ocultar a quien no trabaja ese día de la semana
+        if(state.agenda.onlyWorkingToday){
+          const wd=(c.days||'').split(',').map(d=>d.trim()).filter(Boolean);
+          if(wd.length && !wd.includes(dayName)) return false;
+        }
+        return true;
+      });
       if(state.agenda.role === 'professional') return members.slice(0,1);
       if(state.agenda.member !== 'Todos') members = members.filter(m=>m.id===state.agenda.member);
       return members;
@@ -8081,6 +8097,7 @@
       state.agenda.member = $('memberFilter')?.value || 'Todos';
       state.agenda.role = $('roleView')?.value || 'reception';
       state.agenda.view = $('agendaView')?.value || 'day';
+      if($('onlyWorkingTodayChk')) state.agenda.onlyWorkingToday = $('onlyWorkingTodayChk').checked;
       refreshAgendaFilters();
       const members=visibleMembers();
       if(state.agenda.view === 'list'){
@@ -12454,7 +12471,7 @@ ${context}`;
     let _dpViewDate = null;
     let _dpMode = 'days';
     window.addEventListener('resize', ()=>{ clearTimeout(_agendaResizeT); _agendaResizeT=setTimeout(()=>{ if($('page-agenda')?.classList.contains('active')) renderAgenda(); }, 180); });
-    ['groupFilter','memberFilter','roleView','agendaView'].forEach(id=>{ if($(id)) $(id).onchange=()=>renderAgenda(); });
+    ['groupFilter','memberFilter','roleView','agendaView','onlyWorkingTodayChk'].forEach(id=>{ if($(id)) $(id).onchange=()=>renderAgenda(); });
     if($('toggleBlockers')) $('toggleBlockers').onclick=()=>{state.agenda.showBlockers=!state.agenda.showBlockers;renderAgenda();};
 
     // ── Blocker drawer ──────────────────────────────────────────────
