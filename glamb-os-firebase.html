@@ -8076,7 +8076,9 @@
       const dayName=AGENDA_DAY_NAMES[state.agenda.currentDate.getDay()];
       // Quién tiene turnos ESE día concreto: se muestra siempre, aunque ya no
       // reciba turnos (baja) — así el historial de una fecha pasada sigue visible.
-      const withApptsToday=new Set(state.appointments.filter(a=>!isOrphanAppt(a) && (a.date||'')===D).map(a=>a.memberId));
+      // Set de clientes armado UNA vez (no isOrphanAppt por turno, que era O(clientes) c/u).
+      const clientIds=new Set((state.clients||[]).map(c=>c.id));
+      const withApptsToday=new Set(state.appointments.filter(a=>(a.date||'')===D && !(a.clientId && !clientIds.has(a.clientId))).map(a=>a.memberId));
       let members = state.collaborators.filter(c=>{
         if(withApptsToday.has(c.id)) return true;   // tiene trabajo ese día → visible
         if(!c.can) return false;                     // no recibe turnos / baja → oculto si no tiene turnos ese día
@@ -8093,7 +8095,17 @@
       return members;
     }
     function visibleAppointments(){
-      return state.appointments.filter(a => !isOrphanAppt(a) && (!a.date || a.date===dateKey(state.agenda.currentDate)) && (state.agenda.group==='Todos' || a.group===state.agenda.group) && visibleMembers().some(m=>m.id===a.memberId));
+      // Sets calculados UNA sola vez (no por cada turno): antes esto era O(turnos²)
+      // porque llamaba a visibleMembers()/isOrphanAppt() dentro del filtro por turno.
+      const D=dateKey(state.agenda.currentDate);
+      const vmIds=new Set(visibleMembers().map(m=>m.id));
+      const clientIds=new Set((state.clients||[]).map(c=>c.id));
+      return state.appointments.filter(a =>
+        a.memberId!=null && vmIds.has(a.memberId) &&
+        (!a.date || a.date===D) &&
+        (state.agenda.group==='Todos' || a.group===state.agenda.group) &&
+        !(a.clientId && !clientIds.has(a.clientId)) // excluir huérfanos (cliente borrado)
+      );
     }
     function refreshAgendaFilters(){
       const current = state.agenda.member;
