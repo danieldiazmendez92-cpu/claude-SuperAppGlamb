@@ -4967,7 +4967,11 @@
       saveConfig();
       return p;
     }
+    // Índice de clientes (historial agrupado por cliente) — declarado acá arriba
+    // para que saveState pueda invalidarlo sin problemas de orden de inicialización.
+    let _ciDirty=true, _ciTickets=new Map(), _ciAppts=new Map(), _ciSalonAvg=0;
     function saveState(){
+      _ciDirty=true; // cualquier cambio de datos invalida el índice de clientes
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(serializeState())); }catch(e){}
       if(fbReady && auth && auth.currentUser && !_applyingRemote){
         _pendingCloud=true;
@@ -5825,21 +5829,38 @@
     function nextClientCode(){ return `GL-${String(state.clients.length+1).padStart(6,'0')}`; }
 
     // ── Insights comerciales automáticos por cliente ──────────────────
+    // ÍNDICE: antes cada clientInsights recorría TODOS los tickets y turnos, y se
+    // llamaba por cada cliente en renderCommand/renderClients → O(clientes × historial)
+    // en cada renderAll. Ahora se agrupa el historial por cliente UNA sola vez por
+    // dibujado (_ciDirty se marca al inicio de renderAll) y cada cliente lee su grupo.
+    // (Las variables _ci* se declaran más arriba, antes de saveState.)
+    function _buildClientIndex(){
+      _ciTickets=new Map(); _ciAppts=new Map(); let sum=0,n=0;
+      for(const t of (state.salesTickets||[])){
+        if(t.status==='voided') continue;
+        if(t.clientId){ let a=_ciTickets.get(t.clientId); if(!a){a=[];_ciTickets.set(t.clientId,a);} a.push(t); }
+        sum+=Number(t.grossTotal||0); n++;
+      }
+      for(const a of (state.appointments||[])){
+        if(!a.clientId) continue;
+        let arr=_ciAppts.get(a.clientId); if(!arr){arr=[];_ciAppts.set(a.clientId,arr);} arr.push(a);
+      }
+      _ciSalonAvg = n ? sum/n : 0;
+    }
+    function ensureClientIndex(){ if(_ciDirty){ _buildClientIndex(); _ciDirty=false; } }
     function clientVisitDays(clientId){
+      ensureClientIndex();
       const days = new Set();
-      state.salesTickets.forEach(t=>{
-        if(t.clientId===clientId && t.status!=='voided' && t.createdAt) days.add(t.createdAt.slice(0,10));
-      });
+      (_ciTickets.get(clientId)||[]).forEach(t=>{ if(t.createdAt) days.add(t.createdAt.slice(0,10)); });
       const today = dateKey(new Date());
-      state.appointments.forEach(a=>{
-        if(a.clientId===clientId && !['cancelled','cancelado','voided'].includes(a.status) && a.date && a.date<=today) days.add(a.date);
-      });
+      (_ciAppts.get(clientId)||[]).forEach(a=>{ if(!['cancelled','cancelado','voided'].includes(a.status) && a.date && a.date<=today) days.add(a.date); });
       return [...days].sort();
     }
     function clientInsights(clientId){
+      ensureClientIndex();
       const days = clientVisitDays(clientId);
       const visits = days.length;
-      const tickets = state.salesTickets.filter(t=>t.clientId===clientId && t.status!=='voided');
+      const tickets = _ciTickets.get(clientId)||[];
       const totalSpent = tickets.reduce((s,t)=>s+Number(t.grossTotal||0),0);
       const avgTicket = tickets.length ? Math.round(totalSpent/tickets.length) : 0;
       const msDay = 86400000;
@@ -5850,8 +5871,7 @@
         frequency = Math.round(gaps.reduce((a,b)=>a+b,0)/gaps.length);
       }
       const daysSinceLast = visits ? Math.round((new Date(dateKey(new Date()))-new Date(days[days.length-1]))/msDay) : null;
-      const allTickets = state.salesTickets.filter(t=>t.status!=='voided');
-      const salonAvg = allTickets.length ? allTickets.reduce((s,t)=>s+Number(t.grossTotal||0),0)/allTickets.length : 0;
+      const salonAvg = _ciSalonAvg;
       const tags = [];
       if(visits===0) tags.push({label:'Sin historial',cls:'neutral'});
       else if(visits===1) tags.push({label:'Nueva',cls:'neutral'});
@@ -5889,6 +5909,10 @@
       if(bkBtn) bkBtn.style.display = curRole()==='admin' ? '' : 'none';
       const dupBtn=$('detectDuplicatesBtn');
       if(dupBtn) dupBtn.style.display = curRole()==='admin' ? '' : 'none';
+      // La lista de clientes puede ser grande (miles). No la reconstruimos en cada
+      // renderAll si no estás en esa pantalla: al entrar, showPage llama a renderAll
+      // y se dibuja fresca. Evita trabajo inútil en cada sincronización de fondo.
+      if(state.page!=='clients') return;
       const q=state.clientSearch.toLowerCase();
       const list=state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c),...c.tags].join(' ').toLowerCase().includes(q));
       $('clientsList').innerHTML=list.map(c=>{
@@ -12602,7 +12626,7 @@ ${context}`;
     }
     // ── FIN ATHENAS ───────────────────────────────────────────────────────────
 
-    function renderAll(){applyPermissions();renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();try{renderComms();}catch(e){console.error('[GLAMB] renderComms error:',e);}renderAthenas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
+    function renderAll(){_ciDirty=true;applyPermissions();renderCommand();renderClients();renderTeam();renderCash();renderAgenda();renderCatalog();renderRRHH();renderFinanzas();try{renderComms();}catch(e){console.error('[GLAMB] renderComms error:',e);}renderAthenas();updateDateTitle();updateAgendaZoomLabel();updateServiceGroupFromCatalog();saveState()}
     if($('slotInterval')) $('slotInterval').onchange=()=>{renderAgenda(); showToast(`Agenda en intervalos de ${$('slotInterval').value} minutos`)};
     if($('agendaZoomOut')) $('agendaZoomOut').onclick=()=>updateAgendaZoom(-1);
     if($('agendaZoomIn')) $('agendaZoomIn').onclick=()=>updateAgendaZoom(1);
