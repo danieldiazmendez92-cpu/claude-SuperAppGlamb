@@ -6954,8 +6954,9 @@
         const collabId = $('tipCollaboratorSelect')?.value;
         if(!collabId) return showToast('Seleccioná la colaboradora que recibe la propina.');
         const collabName = fullName(member(collabId));
-        addPayment({id:uid('tipin'), amount, method:'Transf', type:'tip_in', reference:`Propina transf. para ${collabName}`, note: $('withdrawalNote')?.value || '', collaboratorId:collabId, createdAt:new Date().toISOString()});
-        addWithdrawal({id:'with'+Date.now(), amount, reason:'Propina', note:`Para ${collabName}. ${$('withdrawalNote')?.value||''}`.trim(), collaboratorId:collabId, createdAt:new Date().toISOString(), createdBy, isTipWithdrawal:true});
+        const tipPayId = uid('tipin');
+        addPayment({id:tipPayId, amount, method:'Transf', type:'tip_in', reference:`Propina transf. para ${collabName}`, note: $('withdrawalNote')?.value || '', collaboratorId:collabId, createdAt:new Date().toISOString()});
+        addWithdrawal({id:'with'+Date.now(), amount, reason:'Propina', note:`Para ${collabName}. ${$('withdrawalNote')?.value||''}`.trim(), collaboratorId:collabId, createdAt:new Date().toISOString(), createdBy, isTipWithdrawal:true, linkedPaymentId:tipPayId});
       } else {
         addWithdrawal({id:'with'+Date.now(), amount, reason, note:$('withdrawalNote')?.value || '', createdAt:new Date().toISOString(), createdBy});
       }
@@ -7095,6 +7096,35 @@
       closeDrawers();
       renderAll();
       showToast('Gasto registrado');
+    }
+    // Anular retiro/gasto de la caja ABIERTA (no toca días ya cerrados). Solo admin.
+    function voidCashWithdrawal(id){
+      if(!isCashAdmin()) return showToast('Solo admin caja puede anular retiros.');
+      const w=(state.cashSession.withdrawals||[]).find(x=>x.id===id);
+      if(!w) return showToast('Ese retiro no es de la caja abierta (los días cerrados no se anulan acá).');
+      showConfirm(`¿Anular retiro de ${money(w.amount)} · ${w.reason}? Se devuelve al efectivo esperado.`, ()=>{
+        // Propina: revertir también la entrada de banco vinculada
+        const linkedId=w.linkedPaymentId;
+        let p=linkedId?state.payments.find(x=>x.id===linkedId):null;
+        if(!p && w.isTipWithdrawal && w.collaboratorId) // compat: registros viejos sin link
+          p=state.payments.find(x=>x.type==='tip_in' && x.collaboratorId===w.collaboratorId && Number(x.amount)===Number(w.amount) && !x.voided);
+        if(p){ p.voided=true; p.voidReason='Retiro de propina anulado'; p.voidedAt=new Date().toISOString(); p.voidedBy=cashActorName(); }
+        state.cashSession.withdrawals=(state.cashSession.withdrawals||[]).filter(x=>x.id!==id);
+        saveState(); try{ if(_blobReady) flushCloudNow(); }catch(e){}
+        renderAll();
+        showToast('Retiro anulado ✓');
+      });
+    }
+    function voidCashExpense(id){
+      if(!isCashAdmin()) return showToast('Solo admin caja puede anular gastos.');
+      const ex=(state.cashSession.expenses||[]).find(x=>x.id===id);
+      if(!ex) return showToast('Ese gasto no es de la caja abierta (los días cerrados no se anulan acá).');
+      showConfirm(`¿Anular gasto de ${money(ex.amount)} · ${ex.category}? Se devuelve al efectivo esperado.`, ()=>{
+        state.cashSession.expenses=(state.cashSession.expenses||[]).filter(x=>x.id!==id);
+        saveState(); try{ if(_blobReady) flushCloudNow(); }catch(e){}
+        renderAll();
+        showToast('Gasto anulado ✓');
+      });
     }
     function setCashTab(tab){
       state.cashTab = tab;
@@ -7677,10 +7707,24 @@
         const total = state.payments.filter(p=>p.method===m&&(p.type==='service'||p.type==='deposit_received')&&!p.voided&&todayP(p)).reduce((s,p)=>s+Number(p.amount||0),0);
         return total > 0 ? `<div class="mini-row"><strong>${m}</strong><span>${money(total)}</span></div>` : '';
       }).join('') || '<div class="mini-row"><strong>Sin cobros</strong><span>—</span></div>';
-      // Retiros
-      if($('cashWithdrawals')){ const wl=cajaSessionRecordsForDate(selDate).retiros; $('cashWithdrawals').innerHTML = wl.length ? wl.map(w=>`<div class="mini-row"><strong>${money(w.amount)} · ${w.reason}</strong><span>${new Date(w.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · ${w.createdBy||'—'}</span></div>`).join('') : '<div class="mini-row"><strong>Sin retiros</strong><span>—</span></div>'; }
-      // Gastos
-      if($('cashExpenses')){ const el2=cajaSessionRecordsForDate(selDate).gastos; $('cashExpenses').innerHTML = el2.length ? el2.map(e=>`<div class="mini-row"><strong>${money(e.amount)} · ${e.category}</strong><span>${e.method} · ${e.note||'—'} · ${new Date(e.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span></div>`).join('') : '<div class="mini-row"><strong>Sin gastos</strong><span>—</span></div>'; }
+      // Retiros (con opción de anular, solo los de la caja abierta y para admin)
+      if($('cashWithdrawals')){
+        const wl=cajaSessionRecordsForDate(selDate).retiros;
+        const activeW=new Set(state.cashSession.isOpen?(state.cashSession.withdrawals||[]).map(w=>w.id):[]);
+        $('cashWithdrawals').innerHTML = wl.length ? wl.map(w=>{
+          const canVoid=isCashAdmin()&&activeW.has(w.id);
+          return `<div class="mini-row"><strong>${money(w.amount)} · ${w.reason}</strong><span>${new Date(w.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})} · ${w.createdBy||'—'}</span>${canVoid?`<div style="margin-top:6px"><button class="small-btn danger" data-action="voidCashWithdrawal" data-id="${w.id}">Anular retiro</button></div>`:''}</div>`;
+        }).join('') : '<div class="mini-row"><strong>Sin retiros</strong><span>—</span></div>';
+      }
+      // Gastos (con opción de anular, solo los de la caja abierta y para admin)
+      if($('cashExpenses')){
+        const el2=cajaSessionRecordsForDate(selDate).gastos;
+        const activeE=new Set(state.cashSession.isOpen?(state.cashSession.expenses||[]).map(e=>e.id):[]);
+        $('cashExpenses').innerHTML = el2.length ? el2.map(e=>{
+          const canVoid=isCashAdmin()&&activeE.has(e.id);
+          return `<div class="mini-row"><strong>${money(e.amount)} · ${e.category}</strong><span>${e.method} · ${e.note||'—'} · ${new Date(e.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span>${canVoid?`<div style="margin-top:6px"><button class="small-btn danger" data-action="voidCashExpense" data-id="${e.id}">Anular gasto</button></div>`:''}</div>`;
+        }).join('') : '<div class="mini-row"><strong>Sin gastos</strong><span>—</span></div>';
+      }
     }
     function renderTickets(){
       if(!$('ticketsList')) return;
@@ -13030,6 +13074,8 @@ ${context}`;
       exportLiquidationExcel:  el => exportLiquidationExcel(el.dataset.id),
       moveCollabUp:            el => moveCollaborator(el.dataset.id, -1),
       moveCollabDown:          el => moveCollaborator(el.dataset.id, 1),
+      voidCashWithdrawal:      el => voidCashWithdrawal(el.dataset.id),
+      voidCashExpense:         el => voidCashExpense(el.dataset.id),
       deleteExpense:           el => deleteExpense(el.dataset.id),
       deleteServiceGroup:      el => deleteServiceGroup(el.dataset.id),
       editAppointment:         el => editAppointment(el.dataset.id),
