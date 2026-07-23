@@ -2217,6 +2217,12 @@
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .ap-client-chip-sub { font-size:11px; color:var(--text-muted); margin-top:2px;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ap-client-context { margin-top:8px; padding:10px 14px; background:var(--surface-2);
+      border:0.5px solid var(--line); border-radius:12px; font-size:12px; }
+    .apctx-row { display:flex; gap:10px; margin:3px 0; align-items:flex-start; }
+    .apctx-k { color:var(--text-muted); min-width:104px; flex-shrink:0; }
+    .apctx-v { color:var(--text); font-weight:500; }
+    .apctx-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:6px; }
 
     .ap-blocker-shortcut { display:flex; align-items:center; justify-content:space-between;
       gap:10px; padding:10px 14px; margin-bottom:14px; background:var(--surface-2);
@@ -4310,6 +4316,7 @@
           </div>
           <button class="link-btn" id="apClientChipChange" type="button">cambiar</button>
         </div>
+        <div id="apClientContext" class="ap-client-context" style="display:none;"></div>
       </section>
       <section class="form-card">
         <h3>Fecha y horario</h3>
@@ -8922,6 +8929,54 @@
     function appointmentServiceOptions(selected=''){
       return allServices().map(x=>`<option value="${x.service}" ${x.service===selected?'selected':''}>${x.service}</option>`).join('');
     }
+    // Último servicio real de la clienta: la fecha más reciente entre ventas
+    // (tickets) y turnos pasados no cancelados. Devuelve {date, service} o null.
+    function clientLastService(clientId){
+      const today=dateKey(new Date());
+      let best=null;
+      state.salesTickets.filter(t=>t.clientId===clientId && t.status!=='voided').forEach(t=>{
+        const d=(t.createdAt||'').slice(0,10);
+        (t.lines||[]).forEach(l=>{ if(l.service && d && (!best||d>best.date)) best={date:d, service:l.service}; });
+      });
+      state.appointments.filter(a=>a.clientId===clientId && a.service && (a.date||'')<=today && !['cancelled','cancelado','voided','no_show'].includes(a.status)).forEach(a=>{
+        const d=a.date||'';
+        if(d && (!best||d>best.date)) best={date:d, service:a.service};
+      });
+      return best;
+    }
+    function apClientContextHtml(c){
+      const ins=clientInsights(c.id);
+      const last=clientLastService(c.id);
+      const rows=[];
+      if(last){
+        const days=Math.round((new Date(dateKey(new Date()))-new Date(last.date))/86400000);
+        const when=days<=0?'hoy':days===1?'ayer':`hace ${days} días`;
+        rows.push(`<div class="apctx-row"><span class="apctx-k">Último servicio</span><span class="apctx-v">${esc(last.service)} · ${when}</span></div>`);
+      } else {
+        rows.push(`<div class="apctx-row"><span class="apctx-k">Último servicio</span><span class="apctx-v" style="color:var(--text-muted);font-weight:400">Sin historial</span></div>`);
+      }
+      const note=(c.note && c.note!=='Sin nota clave.') ? c.note.trim() : '';
+      if(note){
+        const LIMIT=70;
+        if(note.length>LIMIT){
+          const short=esc(note.slice(0,LIMIT).trim());
+          rows.push(`<div class="apctx-row"><span class="apctx-k">📝 Nota</span><span class="apctx-v"><span class="apctx-note"><span class="apnote-short">${short}… <button type="button" class="link-btn" data-action="toggleApNote" style="font-size:11px">más</button></span><span class="apnote-full" style="display:none">${esc(note)} <button type="button" class="link-btn" data-action="toggleApNote" style="font-size:11px">menos</button></span></span></span></div>`);
+        } else {
+          rows.push(`<div class="apctx-row"><span class="apctx-k">📝 Nota</span><span class="apctx-v">${esc(note)}</span></div>`);
+        }
+      }
+      const manualTags=(c.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+      const tagsHtml=manualTags+insightTagsHtml(ins);
+      if(tagsHtml) rows.push(`<div class="apctx-tags">${tagsHtml}</div>`);
+      return rows.join('');
+    }
+    function toggleApNote(el){
+      const w=el.closest('.apctx-note'); if(!w) return;
+      const s=w.querySelector('.apnote-short'), f=w.querySelector('.apnote-full');
+      if(!s||!f) return;
+      const showFull=f.style.display==='none';
+      f.style.display=showFull?'':'none'; s.style.display=showFull?'none':'';
+    }
     function showApClientChip(c){
       const chip = $('apClientChip');
       const wrap = $('apClientSearchWrap');
@@ -8931,6 +8986,8 @@
       $('apClientChipSub').textContent = [c.phone, c.email].filter(Boolean).join(' · ');
       chip.style.display = 'flex';
       wrap.style.display = 'none';
+      const ctx=$('apClientContext');
+      if(ctx){ ctx.innerHTML=apClientContextHtml(c); ctx.style.display='block'; }
     }
     function hideApClientChip(){
       const chip = $('apClientChip');
@@ -8938,6 +8995,8 @@
       if(chip) chip.style.display = 'none';
       if(wrap) wrap.style.display = '';
       if($('apClientSearch')) $('apClientSearch').value = '';
+      const ctx=$('apClientContext');
+      if(ctx){ ctx.style.display='none'; ctx.innerHTML=''; }
       state.appointmentClient = {clientId:null, clientName:''};
     }
     function initAppointmentClientSearch(){
@@ -13076,6 +13135,7 @@ ${context}`;
       moveCollabDown:          el => moveCollaborator(el.dataset.id, 1),
       voidCashWithdrawal:      el => voidCashWithdrawal(el.dataset.id),
       voidCashExpense:         el => voidCashExpense(el.dataset.id),
+      toggleApNote:            el => toggleApNote(el),
       deleteExpense:           el => deleteExpense(el.dataset.id),
       deleteServiceGroup:      el => deleteServiceGroup(el.dataset.id),
       editAppointment:         el => editAppointment(el.dataset.id),
