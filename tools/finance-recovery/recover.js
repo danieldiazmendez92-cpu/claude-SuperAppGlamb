@@ -273,10 +273,62 @@ async function inspectLiqFinance() {
   });
 }
 
+// inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
+// "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
+// de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
+async function inspectReportes() {
+  const PERIOD_FROM = process.env.REP_FROM || '2026-07-01';
+  const PERIOD_TO   = process.env.REP_TO   || '2026-07-31';
+  const ticketsSnap = await db.collection('salesTickets').get();
+  const paysSnap = await db.collection('payments').get();
+  const tickets = ticketsSnap.docs.map(d => d.data());
+  const payments = paysSnap.docs.map(d => d.data());
+  const finTicketDay = t => t.date || (t.createdAt ? t.createdAt.slice(0,10) : '');
+  const reservationCharged = key => !!key && tickets.some(tk => tk.reservationId===key && (tk.status==='confirmed'||tk.status==='partial'));
+  const _lineDiscount = l => { if(!l||!l.discountType||l.discountType==='none') return 0; const base=Number(l.basePrice!=null?l.basePrice:l.finalPrice||0); return Math.max(0,base-Number(l.finalPrice||0)); };
+
+  // Servicios
+  const inR = t => finTicketDay(t)>=PERIOD_FROM && finTicketDay(t)<=PERIOD_TO;
+  const svcT = tickets.filter(t => t.status!=='voided' && inR(t));
+  let facturado=0, conDesc=0, sinServicesTotal=0; const svcMetodo={};
+  svcT.forEach(t=>{ const lines=t.lines||[]; const total=t.servicesTotal!=null?Number(t.servicesTotal):lines.reduce((s,l)=>s+Number(l.finalPrice||0),0); if(t.servicesTotal==null) sinServicesTotal++; facturado+=total; if(lines.some(l=>l.discountType&&l.discountType!=='none')) conDesc++; payments.filter(p=>p.ticketId===t.id&&!p.voided&&(p.type==='service'||p.type==='deposit_applied')).forEach(p=>{const m=p.method||'—'; svcMetodo[m]=(svcMetodo[m]||0)+Number(p.amount||0);}); });
+
+  // Recaudación
+  const inRP = p => { const d=(p.createdAt||'').slice(0,10); return d>=PERIOD_FROM && d<=PERIOD_TO; };
+  const rpays = payments.filter(p=>!p.voided && (p.type==='service'||p.type==='deposit_received') && inRP(p));
+  let recTotal=0; const recMetodo={};
+  rpays.forEach(p=>{ recTotal+=Number(p.amount||0); const m=p.method||'—'; recMetodo[m]=(recMetodo[m]||0)+Number(p.amount||0); });
+  const recibidas = payments.filter(p=>!p.voided && p.type==='deposit_received' && inRP(p));
+  const senasCobradas = recibidas.reduce((s,p)=>s+Number(p.amount||0),0);
+  const senasPend = recibidas.filter(p=>!(p.bookingId&&reservationCharged(p.bookingId))).reduce((s,p)=>s+Number(p.amount||0),0);
+  const recibidasSinBooking = recibidas.filter(p=>!p.bookingId).length;
+
+  console.log(`=== PERÍODO ${PERIOD_FROM} → ${PERIOD_TO} ===`);
+  console.log('\n--- REPORTE 1: Servicios ---');
+  console.log('ventas (tickets no anulados):', svcT.length);
+  console.log('total facturado (sin propina):', facturado);
+  console.log('ventas con descuento:', conDesc);
+  console.log('total por medio de pago:', JSON.stringify(svcMetodo));
+  console.log('CHEQUEO tickets sin servicesTotal (usan fallback finalPrice):', sinServicesTotal, '/', svcT.length);
+  console.log('\n--- REPORTE 2: Recaudación ---');
+  console.log('ingresos (service+seña recibida):', rpays.length);
+  console.log('total recaudado:', recTotal);
+  console.log('recaudación por método:', JSON.stringify(recMetodo));
+  console.log('señas cobradas:', senasCobradas);
+  console.log('señas pendientes de aplicación:', senasPend);
+  console.log('CHEQUEO señas pendientes ≤ cobradas:', senasPend<=senasCobradas ? 'OK' : '⚠️ FALLA');
+  console.log('CHEQUEO señas recibidas sin bookingId (se cuentan siempre pendientes):', recibidasSinBooking, '/', recibidas.length);
+  const tipsInRange = payments.filter(p=>!p.voided && p.type==='tip_in' && inRP(p));
+  console.log('CHEQUEO propinas excluidas del período:', tipsInRange.length, '(no deben sumar a recaudación)');
+  const appliedInRange = payments.filter(p=>!p.voided && p.type==='deposit_applied' && inRP(p));
+  console.log('CHEQUEO señas aplicadas excluidas de recaudación:', appliedInRange.length, 'movimientos por', appliedInRange.reduce((s,p)=>s+Number(p.amount||0),0));
+}
+
 (async () => {
   if (MODE === 'inspect') { await inspect(); return; }
   if (MODE === 'inspect-commissions') { await inspectCommissions(); return; }
   if (MODE === 'simulate-commissions') { await simulateCommissions(); return; }
+  if (MODE === 'inspect-reportes') { await inspectReportes(); return; }
   if (MODE === 'inspect-liq-finance') { await inspectLiqFinance(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
