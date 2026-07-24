@@ -11039,6 +11039,14 @@
       const to=state.reporteTo||today;
       return {from,to};
     }
+    // Normaliza el nombre del medio de pago: en los datos conviven "Transf" y
+    // "Transferencia" (los cobros de caja usan una, las señas la otra). Se unifican
+    // para que el resumen por método no parta las transferencias en dos.
+    function normMethod(m){
+      const s=(m||'').trim().toLowerCase();
+      if(s==='transf'||s==='transferencia') return 'Transferencia';
+      return (m||'—').trim()||'—';
+    }
     // Descuento de una línea: precio de catálogo (basePrice) menos lo cobrado
     // (finalPrice). Para 'canje' da el precio completo (fue gratis). 'none' → 0.
     function _lineDiscount(l){
@@ -11061,12 +11069,12 @@
         const total=t.servicesTotal!=null?Number(t.servicesTotal):lines.reduce((s,l)=>s+Number(l.finalPrice||0),0);
         // Medios con que se saldó la venta: pagos service + anticipo aplicado del ticket
         const pays=state.payments.filter(p=>p.ticketId===t.id && !p.voided && (p.type==='service'||p.type==='deposit_applied'));
-        const metodos=[...new Set(pays.map(p=>p.method).filter(Boolean))].join(', ')||'—';
+        const metodos=[...new Set(pays.map(p=>normMethod(p.method)).filter(Boolean))].join(', ')||'—';
         return {fecha:finTicketDay(t), cliente:t.clientNameSnapshot||fullName(client(t.clientId)), servicio, sena, restante, descuento, conDescuento, total, metodos, pays};
       });
       // Resumen: por método sumamos los pagos reales (service + anticipo) de estas ventas.
       const porMetodo={};
-      rows.forEach(r=>r.pays.forEach(p=>{ const m=p.method||'—'; porMetodo[m]=(porMetodo[m]||0)+Number(p.amount||0); }));
+      rows.forEach(r=>r.pays.forEach(p=>{ const m=normMethod(p.method); porMetodo[m]=(porMetodo[m]||0)+Number(p.amount||0); }));
       const resumen={
         cantidad:rows.length,
         totalFacturado:rows.reduce((s,r)=>s+r.total,0),
@@ -11088,7 +11096,7 @@
         cliente:p.clientId?fullName(client(p.clientId)):'—',
         motivo:p.type==='service'?'Cobro de servicio':'Seña recibida',
         monto:Number(p.amount||0),
-        metodo:p.method||'—'
+        metodo:normMethod(p.method)
       }));
       const porMetodo={};
       rows.forEach(r=>{ porMetodo[r.metodo]=(porMetodo[r.metodo]||0)+r.monto; });
