@@ -303,6 +303,12 @@ async function inspectReportes() {
   const senasPend = recibidas.filter(p=>!(p.bookingId&&reservationCharged(p.bookingId))).reduce((s,p)=>s+Number(p.amount||0),0);
   const recibidasSinBooking = recibidas.filter(p=>!p.bookingId).length;
 
+  // CHEQUEO nombres de cliente en recaudación (con fallback al ticket)
+  const ticketById = new Map(tickets.map(t=>[t.id,t]));
+  const nombreOk = p => { if(p.clientId) return true; const t=p.ticketId?ticketById.get(p.ticketId):null; return !!(t && (t.clientNameSnapshot || t.clientId)); };
+  const sinNombreAntes = rpays.filter(p=>!p.clientId).length;
+  const sinNombreAhora = rpays.filter(p=>!nombreOk(p)).length;
+
   console.log(`=== PERÍODO ${PERIOD_FROM} → ${PERIOD_TO} ===`);
   console.log('\n--- REPORTE 1: Servicios ---');
   console.log('ventas (tickets no anulados):', svcT.length);
@@ -322,6 +328,7 @@ async function inspectReportes() {
   console.log('CHEQUEO propinas excluidas del período:', tipsInRange.length, '(no deben sumar a recaudación)');
   const appliedInRange = payments.filter(p=>!p.voided && p.type==='deposit_applied' && inRP(p));
   console.log('CHEQUEO señas aplicadas excluidas de recaudación:', appliedInRange.length, 'movimientos por', appliedInRange.reduce((s,p)=>s+Number(p.amount||0),0));
+  console.log('CHEQUEO recaudación sin nombre — ANTES:', sinNombreAntes, '→ AHORA (con fallback ticket):', sinNombreAhora, '/', rpays.length);
 }
 
 (async () => {
