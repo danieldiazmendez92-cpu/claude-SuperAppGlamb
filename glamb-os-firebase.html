@@ -3236,6 +3236,19 @@
     .finanzas-tab-btn.active{color:var(--accent);border-bottom-color:var(--accent)}
     .finanzas-panel{display:none;padding:24px;overflow-y:auto;height:calc(100% - 90px)}
     .finanzas-panel.active{display:block}
+    .finrep-tab{padding:7px 14px;border:0.5px solid var(--line-strong);background:var(--surface);color:var(--text-muted);border-radius:8px;font-size:13px;cursor:pointer;margin-right:6px}
+    .finrep-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .finrep-lbl{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em}
+    .finrep-date{padding:7px 10px;border:0.5px solid var(--line);border-radius:8px;font-size:13px;background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif}
+    .rep-tbl{width:100%;border-collapse:collapse;margin:14px 0;font-size:13px}
+    .rep-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);border-bottom:1.5px solid var(--line);padding:7px 8px;white-space:nowrap}
+    .rep-tbl td{padding:7px 8px;border-bottom:0.5px solid var(--line);vertical-align:top}
+    .rep-tbl .num{text-align:right;white-space:nowrap}
+    .rep-muted{color:var(--text-muted);text-align:center;padding:16px}
+    .rep-resumen{margin-top:16px;padding:14px 16px;background:var(--surface-2);border-radius:12px;font-size:13px;display:flex;flex-wrap:wrap;gap:8px 28px}
+    .rep-resumen .rep-r-k{color:var(--text-muted);font-size:12px}
+    .rep-resumen .rep-r-v{font-weight:600}
+    .rep-chip{display:inline-block;background:#f3e9df;color:#b98a6f;border-radius:6px;padding:1px 7px;font-size:11px}
     .fin-section{margin-bottom:28px}
     .fin-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
     .fin-badge{background:var(--accent);color:#fff;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
@@ -3941,11 +3954,13 @@
           <button class="finanzas-tab-btn" data-tab="contador" data-action="showFinanzasTab" data-tab="contador">Contador</button>
           <button class="finanzas-tab-btn" data-tab="analista" data-action="showFinanzasTab" data-tab="analista">Analista</button>
           <button class="finanzas-tab-btn" data-tab="libros" data-action="showFinanzasTab" data-tab="libros">Libros</button>
+          <button class="finanzas-tab-btn" data-tab="reportes" data-action="showFinanzasTab" data-tab="reportes">Reportes</button>
         </div>
         <div id="finanzas-cfo" class="finanzas-panel active"></div>
         <div id="finanzas-contador" class="finanzas-panel"></div>
         <div id="finanzas-analista" class="finanzas-panel"></div>
         <div id="finanzas-libros" class="finanzas-panel"></div>
+        <div id="finanzas-reportes" class="finanzas-panel"></div>
       </section>
 
       <section class="page" id="page-comms">
@@ -11012,6 +11027,219 @@
       else if(tab==='contador') renderFinanzasContador();
       else if(tab==='analista') renderFinanzasAnalista();
       else if(tab==='libros') renderFinanzasLibros();
+      else if(tab==='reportes') renderFinanzasReportes();
+    }
+
+    // ═══ REPORTES EXPORTABLES (Servicios del mes / Recaudación) ═════════════
+    // Rango del reporte: por defecto el mes en curso. Guardado en state para que
+    // sobreviva a los redibujos.
+    function reporteRange(){
+      const today=dateKey(new Date());
+      const from=state.reporteFrom||(today.slice(0,8)+'01');
+      const to=state.reporteTo||today;
+      return {from,to};
+    }
+    // Descuento de una línea: precio de catálogo (basePrice) menos lo cobrado
+    // (finalPrice). Para 'canje' da el precio completo (fue gratis). 'none' → 0.
+    function _lineDiscount(l){
+      if(!l || !l.discountType || l.discountType==='none') return 0;
+      const base=Number(l.basePrice!=null?l.basePrice:l.finalPrice||0);
+      return Math.max(0, base - Number(l.finalPrice||0));
+    }
+    // REPORTE 1 — Servicios del período: una fila por venta (ticket).
+    function buildServiciosReport(from,to){
+      const tickets=state.salesTickets
+        .filter(t=>t.status!=='voided' && finTicketDay(t)>=from && finTicketDay(t)<=to)
+        .sort((a,b)=>String(finTicketDay(a)+ (a.createdAt||'')).localeCompare(finTicketDay(b)+(b.createdAt||'')));
+      const rows=tickets.map(t=>{
+        const lines=t.lines||[];
+        const servicio=lines.map(l=>l.service).filter(Boolean).join(' + ')||'—';
+        const sena=Number(t.depositAppliedTotal||0);
+        const restante=Number(t.pendingBalance||0);
+        const descuento=lines.reduce((s,l)=>s+_lineDiscount(l),0);
+        const conDescuento=lines.some(l=>l.discountType && l.discountType!=='none');
+        const total=t.servicesTotal!=null?Number(t.servicesTotal):lines.reduce((s,l)=>s+Number(l.finalPrice||0),0);
+        // Medios con que se saldó la venta: pagos service + anticipo aplicado del ticket
+        const pays=state.payments.filter(p=>p.ticketId===t.id && !p.voided && (p.type==='service'||p.type==='deposit_applied'));
+        const metodos=[...new Set(pays.map(p=>p.method).filter(Boolean))].join(', ')||'—';
+        return {fecha:finTicketDay(t), cliente:t.clientNameSnapshot||fullName(client(t.clientId)), servicio, sena, restante, descuento, conDescuento, total, metodos, pays};
+      });
+      // Resumen: por método sumamos los pagos reales (service + anticipo) de estas ventas.
+      const porMetodo={};
+      rows.forEach(r=>r.pays.forEach(p=>{ const m=p.method||'—'; porMetodo[m]=(porMetodo[m]||0)+Number(p.amount||0); }));
+      const resumen={
+        cantidad:rows.length,
+        totalFacturado:rows.reduce((s,r)=>s+r.total,0),
+        porMetodo,
+        conDescuento:rows.filter(r=>r.conDescuento).length
+      };
+      return {rows,resumen};
+    }
+    // REPORTE 2 — Recaudación en el período: una fila por ingreso de dinero.
+    // Cuenta plata REAL que entró: cobro de servicio + seña recibida. Excluye la
+    // seña aplicada (no es plata nueva) y las propinas (son de la colaboradora).
+    function buildRecaudacionReport(from,to){
+      const inRange=p=>{ const d=(p.createdAt||'').slice(0,10); return d>=from && d<=to; };
+      const pays=state.payments
+        .filter(p=>!p.voided && (p.type==='service'||p.type==='deposit_received') && inRange(p))
+        .sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+      const rows=pays.map(p=>({
+        fecha:(p.createdAt||'').slice(0,10),
+        cliente:p.clientId?fullName(client(p.clientId)):'—',
+        motivo:p.type==='service'?'Cobro de servicio':'Seña recibida',
+        monto:Number(p.amount||0),
+        metodo:p.method||'—'
+      }));
+      const porMetodo={};
+      rows.forEach(r=>{ porMetodo[r.metodo]=(porMetodo[r.metodo]||0)+r.monto; });
+      const senasCobradas=pays.filter(p=>p.type==='deposit_received').reduce((s,p)=>s+Number(p.amount||0),0);
+      // Señas pendientes: de las recibidas en el período, las que todavía NO se
+      // aplicaron (su reserva no fue cobrada). Sin reserva asociada → pendiente.
+      const senasPendientes=pays.filter(p=>p.type==='deposit_received' && !(p.bookingId && reservationCharged(p.bookingId)))
+        .reduce((s,p)=>s+Number(p.amount||0),0);
+      const resumen={
+        total:rows.reduce((s,r)=>s+r.monto,0),
+        porMetodo, senasCobradas, senasPendientes,
+        cantidad:rows.length
+      };
+      return {rows,resumen};
+    }
+
+    // HTML del cuerpo de un reporte (tabla + resumen). Se reusa en pantalla y PDF.
+    function reporteBodyHtml(tipo,from,to){
+      const M=n=>'$'+Number(n||0).toLocaleString('es-AR');
+      const metodoResumen=obj=>{ const e=Object.entries(obj); return e.length?e.map(([m,v])=>`<span><span class="rep-r-k">${esc(m)}:</span> <span class="rep-r-v">${M(v)}</span></span>`).join(''):'<span class="rep-r-k">—</span>'; };
+      if(tipo==='recaudacion'){
+        const {rows,resumen}=buildRecaudacionReport(from,to);
+        const trs=rows.length?rows.map(r=>`<tr><td>${r.fecha}</td><td>${esc(r.cliente)}</td><td>${esc(r.motivo)}</td><td class="num">${M(r.monto)}</td><td>${esc(r.metodo)}</td></tr>`).join('')
+          :`<tr><td colspan="5" class="rep-muted">Sin ingresos en el período.</td></tr>`;
+        return `<table class="rep-tbl"><thead><tr><th>Fecha</th><th>Cliente</th><th>Motivo del ingreso</th><th class="num">Monto</th><th>Método</th></tr></thead><tbody>${trs}</tbody></table>
+          <div class="rep-resumen">
+            <span><span class="rep-r-k">Ingresos:</span> <span class="rep-r-v">${resumen.cantidad}</span></span>
+            <span><span class="rep-r-k">Total recaudado:</span> <span class="rep-r-v">${M(resumen.total)}</span></span>
+            <span><span class="rep-r-k">Señas cobradas:</span> <span class="rep-r-v">${M(resumen.senasCobradas)}</span></span>
+            <span><span class="rep-r-k">Señas pendientes de aplicación:</span> <span class="rep-r-v">${M(resumen.senasPendientes)}</span></span>
+            <span style="flex-basis:100%;height:0"></span>
+            <span class="rep-r-k">Recaudación por método:</span> ${metodoResumen(resumen.porMetodo)}
+          </div>`;
+      }
+      // servicios (default)
+      const {rows,resumen}=buildServiciosReport(from,to);
+      const trs=rows.length?rows.map(r=>`<tr><td>${r.fecha}</td><td>${esc(r.cliente)}</td><td>${esc(r.servicio)}</td><td class="num">${r.sena?M(r.sena):'—'}</td><td class="num">${r.restante?M(r.restante):'—'}</td><td class="num">${r.conDescuento?M(r.descuento)+' <span class="rep-chip">desc</span>':'—'}</td><td class="num">${M(r.total)}</td><td>${esc(r.metodos)}</td></tr>`).join('')
+        :`<tr><td colspan="8" class="rep-muted">Sin ventas en el período.</td></tr>`;
+      return `<table class="rep-tbl"><thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th class="num">Seña</th><th class="num">Restante</th><th class="num">Descuento</th><th class="num">Total</th><th>Medio de pago</th></tr></thead><tbody>${trs}</tbody></table>
+        <div class="rep-resumen">
+          <span><span class="rep-r-k">Ventas:</span> <span class="rep-r-v">${resumen.cantidad}</span></span>
+          <span><span class="rep-r-k">Total facturado:</span> <span class="rep-r-v">${M(resumen.totalFacturado)}</span></span>
+          <span><span class="rep-r-k">Ventas con descuento:</span> <span class="rep-r-v">${resumen.conDescuento}</span></span>
+          <span style="flex-basis:100%;height:0"></span>
+          <span class="rep-r-k">Total por medio de pago:</span> ${metodoResumen(resumen.porMetodo)}
+        </div>`;
+    }
+    function renderFinanzasReportes(){
+      const panel=$('finanzas-reportes'); if(!panel) return;
+      const {from,to}=reporteRange();
+      const tipo=state.reporteTipo||'servicios';
+      const titulo=tipo==='recaudacion'?'Recaudación en el período':'Servicios del período';
+      panel.innerHTML=`
+        <div class="fin-section">
+          <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;margin-bottom:8px">
+            <div>
+              <div class="finrep-lbl" style="margin-bottom:4px">Reporte</div>
+              <button class="finrep-tab ${tipo==='servicios'?'active':''}" data-rep="servicios">Servicios</button>
+              <button class="finrep-tab ${tipo==='recaudacion'?'active':''}" data-rep="recaudacion">Recaudación</button>
+            </div>
+            <div><div class="finrep-lbl">Desde</div><input type="date" id="repFrom" class="finrep-date" value="${from}"></div>
+            <div><div class="finrep-lbl">Hasta</div><input type="date" id="repTo" class="finrep-date" value="${to}"></div>
+            <div style="flex:1"></div>
+            <button class="btn" id="repPdfBtn">📄 PDF</button>
+            <button class="btn" id="repXlsBtn">📊 Excel</button>
+          </div>
+          <div class="fin-section-title" style="margin-top:6px">${titulo} · ${from} → ${to}</div>
+          <div id="reporteContent">${reporteBodyHtml(tipo,from,to)}</div>
+        </div>`;
+      panel.querySelectorAll('[data-rep]').forEach(b=>b.onclick=()=>{ state.reporteTipo=b.dataset.rep; renderFinanzasReportes(); });
+      const rf=$('repFrom'), rt=$('repTo');
+      if(rf) rf.onchange=()=>{ state.reporteFrom=rf.value; renderFinanzasReportes(); };
+      if(rt) rt.onchange=()=>{ state.reporteTo=rt.value; renderFinanzasReportes(); };
+      if($('repPdfBtn')) $('repPdfBtn').onclick=exportReportePdf;
+      if($('repXlsBtn')) $('repXlsBtn').onclick=exportReporteExcel;
+    }
+    function exportReportePdf(){
+      const {from,to}=reporteRange();
+      const tipo=state.reporteTipo||'servicios';
+      const titulo=tipo==='recaudacion'?'Recaudación en el período':'Servicios del período';
+      const biz=(state.comms&&state.comms.bizName)||'GLAMB';
+      const body=reporteBodyHtml(tipo,from,to);
+      const html=`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(titulo)} · ${from}→${to}</title>
+<style>
+  *{box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;color:#2b2b2b;margin:0;padding:28px 32px;font-size:12px}
+  .eyebrow{letter-spacing:.12em;text-transform:uppercase;font-size:10px;color:#b98a6f;font-weight:600}
+  h1{font-family:Georgia,serif;font-weight:400;font-size:24px;margin:2px 0 2px}
+  .sub{color:#888;font-size:12px;margin-bottom:14px}
+  .rep-tbl{width:100%;border-collapse:collapse;margin:10px 0;font-size:11.5px}
+  .rep-tbl th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:#999;border-bottom:1.5px solid #ddd;padding:6px 7px}
+  .rep-tbl td{padding:6px 7px;border-bottom:0.5px solid #eee;vertical-align:top}
+  .rep-tbl .num{text-align:right;white-space:nowrap}
+  .rep-muted{color:#aaa;text-align:center;padding:14px}
+  .rep-chip{display:inline-block;background:#f3e9df;color:#b98a6f;border-radius:6px;padding:0 6px;font-size:9px}
+  .rep-resumen{margin-top:14px;padding:12px 14px;background:#faf6f2;border:1px solid #e7d8ca;border-radius:10px;display:flex;flex-wrap:wrap;gap:6px 24px;font-size:12px}
+  .rep-r-k{color:#8a6d57}.rep-r-v{font-weight:700}
+  .foot{margin-top:20px;color:#bbb;font-size:10px;text-align:center}
+  @media print{body{padding:0}@page{margin:12mm;size:landscape}}
+</style></head><body>
+  <div class="eyebrow">${esc(biz)} · Reporte de finanzas</div>
+  <h1>${esc(titulo)}</h1>
+  <div class="sub">Período ${from} → ${to} · generado ${new Date().toLocaleDateString('es-AR')}</div>
+  ${body}
+  <div class="foot">Generado por ${esc(biz)} OS</div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
+</body></html>`;
+      const w=window.open('','_blank');
+      if(!w){ showToast('Permití las ventanas emergentes para exportar el PDF.'); return; }
+      w.document.write(html); w.document.close();
+    }
+    function exportReporteExcel(){
+      const {from,to}=reporteRange();
+      const tipo=state.reporteTipo||'servicios';
+      const L=[];
+      if(tipo==='recaudacion'){
+        const {rows,resumen}=buildRecaudacionReport(from,to);
+        L.push(['GLAMB — Recaudación en el período']);
+        L.push(['Período',from+' a '+to]);
+        L.push([]);
+        L.push(['Fecha','Cliente','Motivo del ingreso','Monto','Método']);
+        rows.forEach(r=>L.push([r.fecha,r.cliente,r.motivo,r.monto,r.metodo]));
+        L.push([]);
+        L.push(['Total recaudado','','', resumen.total]);
+        L.push(['Señas cobradas','','', resumen.senasCobradas]);
+        L.push(['Señas pendientes de aplicación','','', resumen.senasPendientes]);
+        L.push([]);
+        L.push(['Recaudación por método']);
+        Object.entries(resumen.porMetodo).forEach(([m,v])=>L.push([m,'','',v]));
+      } else {
+        const {rows,resumen}=buildServiciosReport(from,to);
+        L.push(['GLAMB — Servicios del período']);
+        L.push(['Período',from+' a '+to]);
+        L.push([]);
+        L.push(['Fecha','Cliente','Servicio','Seña','Restante','Descuento','Hubo descuento','Total','Medio de pago']);
+        rows.forEach(r=>L.push([r.fecha,r.cliente,r.servicio,r.sena,r.restante,r.descuento,r.conDescuento?'Sí':'',r.total,r.metodos]));
+        L.push([]);
+        L.push(['Ventas',rows.length]);
+        L.push(['Total facturado','','','','','','', resumen.totalFacturado]);
+        L.push(['Ventas con descuento', resumen.conDescuento]);
+        L.push([]);
+        L.push(['Total por medio de pago']);
+        Object.entries(resumen.porMetodo).forEach(([m,v])=>L.push([m,'','','','','','',v]));
+      }
+      const csv='﻿'+L.map(row=>row.map(csvCell).join(',')).join('\r\n');
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url;
+      a.download=(tipo==='recaudacion'?'recaudacion':'servicios')+'-'+from+'_'+to+'.csv';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      showToast('Excel (CSV) descargado.');
     }
     function renderFinanzasCFO(){
       const panel=$('finanzas-cfo'); if(!panel) return;
