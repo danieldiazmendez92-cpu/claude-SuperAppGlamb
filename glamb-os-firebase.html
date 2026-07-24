@@ -8954,17 +8954,17 @@
       return allServices().map(x=>`<option value="${x.service}" ${x.service===selected?'selected':''}>${x.service}</option>`).join('');
     }
     // Último servicio real de la clienta: la fecha más reciente entre ventas
-    // (tickets) y turnos pasados no cancelados. Devuelve {date, service} o null.
+    // (tickets) y turnos pasados no cancelados. Devuelve {date, service, memberId} o null.
     function clientLastService(clientId){
       const today=dateKey(new Date());
       let best=null;
       state.salesTickets.filter(t=>t.clientId===clientId && t.status!=='voided').forEach(t=>{
         const d=(t.createdAt||'').slice(0,10);
-        (t.lines||[]).forEach(l=>{ if(l.service && d && (!best||d>best.date)) best={date:d, service:l.service}; });
+        (t.lines||[]).forEach(l=>{ if(l.service && d && (!best||d>best.date)) best={date:d, service:l.service, memberId:l.collaboratorId||null}; });
       });
       state.appointments.filter(a=>a.clientId===clientId && a.service && (a.date||'')<=today && !['cancelled','cancelado','voided','no_show'].includes(a.status)).forEach(a=>{
         const d=a.date||'';
-        if(d && (!best||d>best.date)) best={date:d, service:a.service};
+        if(d && (!best||d>best.date)) best={date:d, service:a.service, memberId:a.memberId||null};
       });
       return best;
     }
@@ -8975,7 +8975,9 @@
       if(last){
         const days=Math.round((new Date(dateKey(new Date()))-new Date(last.date))/86400000);
         const when=days<=0?'hoy':days===1?'ayer':`hace ${days} días`;
-        rows.push(`<div class="apctx-row"><span class="apctx-k">Último servicio</span><span class="apctx-v">${esc(last.service)} · ${when}</span></div>`);
+        const m=last.memberId?member(last.memberId):null;
+        const withWho=(m&&m.id)?` · con ${esc(fullName(m))}`:'';
+        rows.push(`<div class="apctx-row"><span class="apctx-k">Último servicio</span><span class="apctx-v">${esc(last.service)} · ${when}${withWho}</span></div>`);
       } else {
         rows.push(`<div class="apctx-row"><span class="apctx-k">Último servicio</span><span class="apctx-v" style="color:var(--text-muted);font-weight:400">Sin historial</span></div>`);
       }
