@@ -10097,7 +10097,12 @@
       const el=$('rrhh-deductions');
       if(!el) return;
       const items=[...state.payrollDeductions].sort((a,b)=>b.date.localeCompare(a.date));
-      if(!items.length){el.innerHTML='<div class="mini-row"><strong>Sin descuentos registrados</strong><span>Los anticipos y servicios empleada aparecerán aquí.</span></div>';return;}
+      if(!items.length){
+        el.innerHTML = (curRole()==='admin' && !_syncInit['payrollDeductions'])
+          ? '<div class="mini-row"><strong>Cargando descuentos…</strong><span>Estamos trayendo los datos de RRHH. Aguardá unos segundos.</span></div>'
+          : '<div class="mini-row"><strong>Sin descuentos registrados</strong><span>Los anticipos y servicios empleada aparecerán aquí.</span></div>';
+        return;
+      }
       el.innerHTML=items.map(d=>{
         const m=member(d.collaboratorId);
         const typeLabel={anticipo:'Anticipo',servicio_empleada:'Servicio empleada',otro:'Otro'}[d.type]||d.type;
@@ -10188,7 +10193,14 @@
       if(!el) return;
       if(!state.liquidations) state.liquidations=[];
       const items=[...state.liquidations].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-      if(!items.length){el.innerHTML='<div class="mini-row"><strong>Sin liquidaciones</strong><span>Usá "Nueva liquidación" para calcular el sueldo de una colaboradora.</span></div>';return;}
+      // Distinguir "todavía no llegaron los datos" de "no hay ninguna": mostrar
+      // "Sin liquidaciones" mientras carga hace pensar que se borraron.
+      if(!items.length){
+        el.innerHTML = (curRole()==='admin' && !_syncInit['liquidations'])
+          ? '<div class="mini-row"><strong>Cargando liquidaciones…</strong><span>Estamos trayendo los datos de RRHH. Aguardá unos segundos.</span></div>'
+          : '<div class="mini-row"><strong>Sin liquidaciones</strong><span>Usá "Nueva liquidación" para calcular el sueldo de una colaboradora.</span></div>';
+        return;
+      }
       el.innerHTML=items.map(liq=>{
         const statusLabel=liq.status==='paid'?'Pagado':'Borrador';
         const statusCls=liq.status==='paid'?'liq-status-paid':'liq-status-draft';
@@ -13304,17 +13316,24 @@ ${context}`;
             if(curRole()==='admin'){
               (async()=>{
                 const _t0=performance.now();
+                // Cada migración va en su propio try: son siembras de una sola vez y
+                // NO deben poder impedir que se suscriban las colecciones. Antes, si
+                // una fallaba o se colgaba (típico en celular/incógnito, donde se
+                // re-migran los contactos), nunca se llegaba a suscribir finanzas y
+                // RRHH quedaba vacío ("Sin liquidaciones") aunque los datos existieran.
+                const paso=async(nombre,fn)=>{ try{ await fn(); }catch(e){ console.error('[GLAMB] '+nombre+' falló:',e); } };
+                try{ subscribeUsersSync(); subscribeClientsPrivateSync(); }
+                catch(e){ console.error('[GLAMB] suscripción usuarios/contactos falló:',e); }
+                await paso('migración contactos privados', migrateClientsPrivateIfNeeded);
+                await paso('migración financePrivate',     migrateFinancePrivateIfNeeded);
+                await paso('migración finanzas por-registro', migrateFinanceCollectionsIfNeeded);
+                // Las suscripciones van SIEMPRE, hayan fallado o no las migraciones.
                 try{
-                  subscribeUsersSync();
-                  subscribeClientsPrivateSync();
-                  await migrateClientsPrivateIfNeeded();
-                  await migrateFinancePrivateIfNeeded();   // sembrar antes de suscribir
-                  await migrateFinanceCollectionsIfNeeded(); // finanzas por-registro: sembrar antes de suscribir
                   subscribeFinancePrivateSync();
                   subscribeFinanceCollectionsSync();
                   subscribeSurveyResponsesSync();
-                  console.log('[GLAMB boot] datos admin (segundo plano) listos en '+Math.round(performance.now()-_t0)+'ms');
-                }catch(e){ console.error('[GLAMB] carga admin en segundo plano falló:', e); }
+                }catch(e){ console.error('[GLAMB] suscripción finanzas falló:', e); }
+                console.log('[GLAMB boot] datos admin (segundo plano) listos en '+Math.round(performance.now()-_t0)+'ms');
               })();
             }
           }catch(e){
