@@ -10307,6 +10307,7 @@
         id:liqId,collaboratorId:memberId,collaboratorName:fullName(m),
         period:{type:p.period||'monthly',from,to,label:periodYYMM},
         presentismo,viatico,
+        extras:[],totalExtras:0,   // bonos, vacaciones, otros servicios (se cargan a mano)
         commissionLines,totalCommissions,
         deductionRefs:pendingDeds.map(d=>d.id),
         deductions:pendingDeds.map(d=>({type:d.type,description:d.description,amount:d.amount})),
@@ -10330,12 +10331,33 @@
       const deductHtml=liq.deductions.length
         ?liq.deductions.map(d=>`<div class="liq-fixed-row"><span>${{anticipo:'Anticipo',servicio_empleada:'Servicio empleada',otro:'Otro'}[d.type]||d.type} · ${d.description||''}</span><strong style="color:#c46a6a">−${money(d.amount)}</strong></div>`).join('')
         :'<div style="font-size:13px;color:var(--text-muted);padding:8px 0">Sin descuentos.</div>';
+      // Conceptos adicionales (bono, vacaciones, otros servicios). Se cargan a mano
+      // en cada liquidación porque son de un período puntual, no montos fijos mensuales.
+      const extras=liq.extras||[];
+      const totalExtras=extras.reduce((s,e)=>s+Number(e.amount||0),0);
+      const extrasHtml=liq.status==='paid'
+        ? (extras.length
+            ? extras.map(e=>`<div class="liq-fixed-row"><span>${LIQ_EXTRA_LABELS[e.type]||e.type}${e.description?' · '+esc(e.description):''}</span><strong>${money(e.amount)}</strong></div>`).join('')
+            : '<div style="font-size:13px;color:var(--text-muted);padding:8px 0">Sin conceptos adicionales.</div>')
+        : `<div id="liqExtrasList">${extras.map((e,i)=>`
+            <div class="liq-extra-row" style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+              <select class="lx-type input-like" style="flex:0 0 130px;padding:4px 6px;font-size:12px">${Object.entries(LIQ_EXTRA_LABELS).map(([k,v])=>`<option value="${k}"${e.type===k?' selected':''}>${v}</option>`).join('')}</select>
+              <input class="lx-desc input-like" type="text" placeholder="Detalle (opcional)" value="${esc(e.description||'')}" style="flex:1;min-width:0;padding:4px 8px;font-size:12px">
+              <input class="lx-amount input-like" type="number" value="${Number(e.amount||0)}" style="flex:0 0 100px;text-align:right;padding:4px 8px;font-size:12px">
+              <button class="small-btn danger" data-action="removeLiqExtra" data-id="${liqId}" data-idx="${i}" style="flex:0 0 auto;padding:3px 8px">×</button>
+            </div>`).join('')}</div>
+          <button class="small-btn" style="margin-top:4px" data-action="addLiqExtra" data-id="${liqId}">＋ Agregar concepto</button>`;
       if($('liqViewBody')) $('liqViewBody').innerHTML=`
         <section class="form-card liq-section">
           <h4>Fijos del período${liq.status!=='paid'?` <span style="font-size:10px;color:var(--text-muted);text-transform:none;font-weight:400">— editables</span>`:''}</h4>
           <div class="liq-fixed-row"><span>Presentismo</span>${liq.status==='paid'?`<strong>${money(liq.presentismo)}</strong>`:`<input id="liqEditPresentismo" type="number" value="${liq.presentismo}" class="input-like" style="width:120px;text-align:right;padding:4px 8px;font-size:13px">`}</div>
           <div class="liq-fixed-row"><span>Viático</span>${liq.status==='paid'?`<strong>${money(liq.viatico)}</strong>`:`<input id="liqEditViatico" type="number" value="${liq.viatico}" class="input-like" style="width:120px;text-align:right;padding:4px 8px;font-size:13px">`}</div>
           ${liq.status!=='paid'?`<button class="small-btn primary" style="margin-top:10px" data-action="saveLiqFixedEdit" data-id="${liqId}">Guardar cambios</button>`:''}
+        </section>
+        <section class="form-card liq-section">
+          <h4>Conceptos adicionales${liq.status!=='paid'?` <span style="font-size:10px;color:var(--text-muted);text-transform:none;font-weight:400">— bono, vacaciones, otros</span>`:''}</h4>
+          ${extrasHtml}
+          <div class="liq-total-row"><span>Total adicionales</span><span>${money(totalExtras)}</span></div>
         </section>
         <section class="form-card liq-section">
           <h4>Comisiones (${liq.commissionLines.length} servicio${liq.commissionLines.length!==1?'s':''})</h4>
@@ -10348,7 +10370,7 @@
           <div class="liq-total-row"><span>Total descuentos</span><span style="color:#c46a6a">−${money(liq.totalDeductions)}</span></div>
         </section>
         <section class="form-card">
-          <div class="liq-fixed-row"><span>Bruto (presentismo + viático + comisiones)</span><strong>${money(liq.grossPay)}</strong></div>
+          <div class="liq-fixed-row"><span>Bruto (presentismo + viático + adicionales + comisiones)</span><strong>${money(liq.grossPay)}</strong></div>
           <div class="liq-net-row"><span>Neto a cobrar</span><strong>${money(liq.netPay)}</strong></div>
         </section>
         ${liq.status==='paid'?`<div style="background:#E8F5E9;border-radius:12px;padding:12px 16px;font-size:13px;color:#1B5E20;margin-top:8px">✓ Liquidación marcada como pagada</div>`:''}
@@ -10360,15 +10382,52 @@
       openDrawer('liquidationViewDrawer');
     }
 
+    // Conceptos adicionales de una liquidación (pagos extra del período).
+    const LIQ_EXTRA_LABELS={bono:'Bono',vacaciones:'Vacaciones',servicio:'Otro servicio',otro:'Otro'};
+    // Lee las filas de conceptos adicionales del formulario abierto.
+    function _readLiqExtrasFromDom(){
+      return Array.from(document.querySelectorAll('#liqExtrasList .liq-extra-row')).map(r=>({
+        type:r.querySelector('.lx-type')?.value||'otro',
+        description:(r.querySelector('.lx-desc')?.value||'').trim(),
+        amount:Number(r.querySelector('.lx-amount')?.value||0)
+      }));
+    }
+    // Recalcula bruto y neto a partir de las partes. Única fuente de verdad del total.
+    function _recalcLiqTotals(liq){
+      liq.totalExtras=(liq.extras||[]).reduce((s,e)=>s+Number(e.amount||0),0);
+      liq.grossPay=Number(liq.presentismo||0)+Number(liq.viatico||0)+liq.totalExtras+Number(liq.totalCommissions||0);
+      liq.netPay=liq.grossPay-Number(liq.totalDeductions||0);
+    }
     function saveLiqFixedEdit(liqId){
       const liq=state.liquidations.find(l=>l.id===liqId);
       if(!liq||liq.status==='paid') return;
-      const p=Number($('liqEditPresentismo')?.value||0);
-      const v=Number($('liqEditViatico')?.value||0);
-      liq.presentismo=p; liq.viatico=v;
-      liq.grossPay=p+v+liq.totalCommissions;
-      liq.netPay=liq.grossPay-liq.totalDeductions;
+      liq.presentismo=Number($('liqEditPresentismo')?.value||0);
+      liq.viatico=Number($('liqEditViatico')?.value||0);
+      liq.extras=_readLiqExtrasFromDom();
+      _recalcLiqTotals(liq);
       saveState(); openLiquidationView(liqId); showToast('Liquidación actualizada.');
+    }
+    // Agregar/quitar concepto: primero se conserva lo que ya está escrito en pantalla
+    // (para no perder ediciones sin guardar) y recién ahí se modifica la lista.
+    function addLiqExtra(liqId){
+      const liq=state.liquidations.find(l=>l.id===liqId);
+      if(!liq||liq.status==='paid') return;
+      liq.presentismo=Number($('liqEditPresentismo')?.value||liq.presentismo||0);
+      liq.viatico=Number($('liqEditViatico')?.value||liq.viatico||0);
+      liq.extras=[..._readLiqExtrasFromDom(),{type:'bono',description:'',amount:0}];
+      _recalcLiqTotals(liq);
+      saveState(); openLiquidationView(liqId);
+    }
+    function removeLiqExtra(liqId,idx){
+      const liq=state.liquidations.find(l=>l.id===liqId);
+      if(!liq||liq.status==='paid') return;
+      liq.presentismo=Number($('liqEditPresentismo')?.value||liq.presentismo||0);
+      liq.viatico=Number($('liqEditViatico')?.value||liq.viatico||0);
+      const arr=_readLiqExtrasFromDom();
+      arr.splice(idx,1);
+      liq.extras=arr;
+      _recalcLiqTotals(liq);
+      saveState(); openLiquidationView(liqId); showToast('Concepto eliminado.');
     }
     // Pide el medio de pago antes de confirmar el pago de una liquidación,
     // porque ese pago se va a volcar como gasto real en Finanzas (categoría
@@ -10427,6 +10486,8 @@
         periodRange: (liq.period?.from||'')+' → '+(liq.period?.to||''),
         presentismo: liq.presentismo||0,
         viatico: liq.viatico||0,
+        extras: (liq.extras||[]).map(e=>({concepto:(LIQ_EXTRA_LABELS[e.type]||e.type)+(e.description?' · '+e.description:''), monto:Number(e.amount)||0})),
+        totalExtras: (liq.extras||[]).reduce((s,e)=>s+Number(e.amount||0),0),
         comm: (liq.commissionLines||[]).map(l=>({
           fecha:l.ticketDate||'', cliente:l.clientName||'—', servicio:l.service||'',
           base:l.saleAmount||0, pct:l.pct||0, monto:l.commissionAmt||0, canje:l.discountType==='canje'
@@ -10450,6 +10511,12 @@
       L.push([]);
       L.push(['Presentismo', r.presentismo]);
       L.push(['Viáticos', r.viatico]);
+      if(r.extras.length){
+        L.push([]);
+        L.push(['Conceptos adicionales']);
+        r.extras.forEach(e=>L.push([e.concepto,'','','','', e.monto]));
+        L.push(['','','','','Total adicionales', r.totalExtras]);
+      }
       L.push([]);
       L.push(['Servicios']);
       L.push(['Fecha','Cliente','Servicio','Base','% Comisión','Comisión']);
@@ -10522,8 +10589,15 @@
   <div class="fijos">
     <div><div class="k">Presentismo</div><div class="v">${m(r.presentismo)}</div></div>
     <div><div class="k">Viáticos</div><div class="v">${m(r.viatico)}</div></div>
+    ${r.extras.length?`<div><div class="k">Adicionales</div><div class="v">${m(r.totalExtras)}</div></div>`:''}
     <div><div class="k">Comisiones</div><div class="v">${m(r.totalComm)}</div></div>
   </div>
+  ${r.extras.length?`<h2>Conceptos adicionales</h2>
+  <table>
+    <tbody>${r.extras.map(e=>`<tr><td colspan="5">${esc(e.concepto)}</td><td class="num">${m(e.monto)}</td></tr>`).join('')}
+      <tr class="subtotal"><td colspan="5" class="num">Total adicionales</td><td class="num">${m(r.totalExtras)}</td></tr>
+    </tbody>
+  </table>`:''}
   <h2>Servicios</h2>
   <table>
     <thead><tr><th>Fecha</th><th>Cliente</th><th>Servicio</th><th class="num">Base</th><th class="num">% Com.</th><th class="num">Comisión</th></tr></thead>
@@ -10537,7 +10611,7 @@
       ${r.deds.length?`<tr class="subtotal"><td colspan="5" class="num">Total descuentos</td><td class="num neg">−${m(r.totalDed)}</td></tr>`:''}
     </tbody>
   </table>
-  <div class="bruto"><span>Bruto (presentismo + viático + comisiones)</span><span>${m(r.gross)}</span></div>
+  <div class="bruto"><span>Bruto (presentismo + viático${r.extras.length?' + adicionales':''} + comisiones)</span><span>${m(r.gross)}</span></div>
   <div class="total"><span class="lbl">Total a cobrar</span><span class="amt">${m(r.net)}</span></div>
   <div class="foot">Generado por ${esc(biz)} OS · ${new Date().toLocaleDateString('es-AR')}</div>
   <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
@@ -13414,6 +13488,8 @@ ${context}`;
       editCollaborator:        el => editCollaborator(el.dataset.id),
       deleteCollaborator:      el => deleteCollaborator(el.dataset.id),
       saveLiqFixedEdit:        el => saveLiqFixedEdit(el.dataset.id),
+      addLiqExtra:             el => addLiqExtra(el.dataset.id),
+      removeLiqExtra:          el => removeLiqExtra(el.dataset.id, parseInt(el.dataset.idx)),
       editBudget:              el => editBudget(el.dataset.cat),
       injectPending:           el => injectPending(el.dataset.id),
       openClientProfile:       el => openClientProfile(el.dataset.id),
