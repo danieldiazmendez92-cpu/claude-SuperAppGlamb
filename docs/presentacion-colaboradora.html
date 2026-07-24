@@ -70,7 +70,7 @@
   .tip{background:var(--tip);border-left:4px solid var(--tip-bd)}
   .warn{background:var(--warn);border-left:4px solid var(--warn-bd)}
   .info{background:var(--surface-2);border-left:4px solid var(--brown-soft)}
-  .tip strong,.warn strong,.info strong{display:block;margin-bottom:3px;color:var(--brown-deep)}
+  .tip strong:first-child,.warn strong:first-child,.info strong:first-child{display:block;margin-bottom:3px;color:var(--brown-deep)}
 
   table{width:100%;border-collapse:collapse;font-size:13.5px;margin:12px 0}
   th{background:var(--surface-2);color:var(--brown-deep);padding:9px 12px;text-align:left;font-weight:600;font-size:11px;letter-spacing:.5px;text-transform:uppercase}
@@ -101,6 +101,12 @@
   .m-appt.a-done{background:#e6f0e6;border-left:3px solid #86b184}
   .m-appt b{display:block;color:var(--text)}
   .m-appt span{color:var(--gray)}
+  .m-cols{display:flex;gap:7px}
+  .m-col{flex:1;min-width:0}
+  .m-col-name{font-size:9px;color:var(--brown-deep);font-weight:700;margin-bottom:5px;text-transform:uppercase;letter-spacing:.3px}
+  .m-appt.small{padding:6px 7px;font-size:9px;margin-bottom:6px}
+  .m-note-badge{display:inline-block;background:var(--warn);border:1px solid var(--warn-bd);color:var(--brown-deep);font-size:8px;padding:1.5px 5px;border-radius:5px;margin-top:4px;font-weight:600}
+  .m-note-badge.match{background:#f6e0df;border-color:#d99a97}
 
   /* caja mock */
   .m-ticket{background:#fff;border:1px dashed var(--brown-soft);border-radius:12px;padding:14px}
@@ -225,51 +231,78 @@
     <table>
       <thead><tr><th>Sección</th><th>Para qué sirve</th></tr></thead>
       <tbody>
-        <tr><td><strong>◆ Inicio</strong></td><td>Un resumen rápido: cuántos turnos tenés hoy y cuánto llevás vendido.</td></tr>
-        <tr><td><strong>◷ Agenda</strong></td><td>Tus turnos <strong>del día de hoy</strong>. Acá marcás en qué estado va cada uno.</td></tr>
+        <tr><td><strong>◆ Inicio</strong></td><td>Un resumen rápido: cuántos turnos hay hoy y cuánto llevás vendido vos.</td></tr>
+        <tr><td><strong>◷ Agenda</strong></td><td>La agenda <strong>del día de hoy</strong>, con las columnas de todas las colaboradoras.</td></tr>
         <tr><td><strong>◈ Caja</strong></td><td>Registrás el cobro de tus servicios y ves tus tickets del día.</td></tr>
       </tbody>
     </table>
 
     <div class="info">
-      <strong>Ves solo lo tuyo</strong>
-      Tus turnos y tus ventas. Los totales del salón, la apertura/cierre de caja y las finanzas son de recepción y administración. El teléfono y mail de las clientas tampoco se ven desde tu perfil.
+      <strong>Lo que sí y lo que no ves</strong>
+      Tus <strong>ventas</strong> son solo tuyas. Pero la <strong>agenda del día la ves completa</strong>, con las columnas de todas tus compañeras — así podés ubicarte y coordinar. El teléfono y mail de las clientas no se ven desde tu perfil, y los totales/finanzas del salón son de recepción y administración.
     </div>
 
-    <h3>La agenda del día</h3>
-    <p class="lead">Tus turnos aparecen en tu columna con el nombre de la clienta, el servicio y la hora. El color muestra el estado:</p>
+    <h3>La agenda del día — se ve todo el equipo</h3>
+    <p class="lead">Vas a ver <strong>las columnas de todas las colaboradoras</strong>, no solo la tuya. Es útil para ubicarte vos, pero también para <strong>estar atenta</strong>: a veces una misma clienta tiene turnos combinados con más de una compañera el mismo día (por ejemplo, cejas con vos y color con otra). Fijate quién más la atiende para coordinar los tiempos.</p>
     <div class="shots">
       <div>
         <div class="phone"><div class="phone-scr"><div class="phone-notch"></div>
           <div class="scr-pad">
             <div class="m-daybar"><span>‹</span><span>Hoy · Lun 20 jul</span><span>›</span></div>
-            <div class="m-col-h">TU COLUMNA</div>
-            <div class="m-appt a-prog"><b>Camila Pérez</b><span>Lifting + tinte · 10:00</span></div>
-            <div class="m-appt a-conf"><b>Sofía Gómez</b><span>Perfilado de cejas · 11:30</span></div>
-            <div class="m-appt a-done"><b>Ana Ruiz</b><span>Extensiones · 09:00</span></div>
+            <div class="m-cols">
+              <div class="m-col">
+                <div class="m-col-name">Vos</div>
+                <div class="m-appt a-conf small"><b>Camila Pérez</b><span>Perfilado · 10:00</span><div class="m-note-badge match">📝 turno combinado</div></div>
+                <div class="m-appt a-conf small"><b>Ana Ruiz</b><span>Extensiones · 11:30</span></div>
+              </div>
+              <div class="m-col">
+                <div class="m-col-name">Bea R.</div>
+                <div class="m-appt a-conf small"><b>Camila Pérez</b><span>Color · 10:30</span><div class="m-note-badge match">📝 turno combinado</div></div>
+                <div class="m-appt a-conf small"><b>Sofía Gómez</b><span>Lifting · 12:00</span></div>
+              </div>
+            </div>
           </div>
         </div></div>
-        <div class="shot-cap">Agenda del día (ilustrativa)</div>
+        <div class="shot-cap">Agenda con todas las columnas (ilustrativa)</div>
       </div>
       <div style="flex:1;min-width:240px">
-        <table style="margin-top:0">
-          <thead><tr><th>Estado</th><th>Significado</th></tr></thead>
-          <tbody>
-            <tr><td><span class="dot" style="background:#7fa6c2"></span>Confirmado</td><td>Agendado, la clienta viene.</td></tr>
-            <tr><td><span class="dot" style="background:#d4b24c"></span>En curso</td><td>Lo estás atendiendo ahora.</td></tr>
-            <tr><td><span class="dot" style="background:#86b184"></span>Completado</td><td>El servicio terminó.</td></tr>
-            <tr><td><span class="dot" style="background:#c98b8b"></span>Cancelado / No vino</td><td>Canceló o no se presentó.</td></tr>
-          </tbody>
-        </table>
-        <div class="tip">
-          <strong>Cómo cambiar el estado</strong>
-          Tocá el turno → en la ficha usá los botones <span class="btn-v soft">En curso</span> <span class="btn-v soft">Completado</span> <span class="btn-v soft">No vino</span>. Se guarda solo.
+        <div class="warn">
+          <strong>Ojo con las clientas combinadas</strong>
+          Si ves el mismo nombre de clienta en dos columnas el mismo día, probablemente tiene dos servicios encadenados con distintas compañeras. Coordinen los horarios para que no se atrase.
         </div>
       </div>
     </div>
-    <div class="tip">
-      <strong>Consejo del día</strong>
-      Marcá <strong>En curso</strong> cuando empezás y <strong>Completado</strong> al terminar. Así recepción sabe en tiempo real cómo viene el salón.
+  </section>
+
+  <!-- ══ 3B · COMENTARIOS Y NOTAS ══ -->
+  <section id="notas">
+    <div class="eyebrow">Muy importante</div>
+    <h2>Prestá atención a los comentarios</h2>
+    <p class="lead">Tanto la <strong>clienta</strong> como el <strong>turno</strong> o el <strong>ticket</strong> pueden tener una nota cargada por recepción o por otra compañera. Ahí suele estar la info clave para que el servicio salga bien: un gusto particular, una alergia, un detalle a tener en cuenta.</p>
+    <div class="shots">
+      <div>
+        <div class="phone"><div class="phone-scr"><div class="phone-notch"></div>
+          <div class="scr-pad">
+            <div class="m-appt a-conf" style="margin-top:16px">
+              <b>Camila Pérez</b><span>Lifting + tinte · 10:00</span>
+              <div class="m-note-badge" style="display:block;margin-top:8px;font-size:9.5px;padding:6px 8px;line-height:1.4">📝 <strong>Nota:</strong> prefiere tono cobrizo, no rubio. Alérgica al amoníaco.</div>
+            </div>
+          </div>
+        </div></div>
+        <div class="shot-cap">Nota dentro de un turno (ilustrativa)</div>
+      </div>
+      <div style="flex:1;min-width:240px">
+        <p><strong>¿Dónde puede aparecer una nota?</strong></p>
+        <ul style="margin-left:18px;margin-bottom:12px">
+          <li>En la ficha del turno, al tocarlo en la agenda.</li>
+          <li>En el perfil de la clienta (si podés acceder a él).</li>
+          <li>En el ticket, si quedó un comentario de una venta anterior.</li>
+        </ul>
+        <div class="tip">
+          <strong>Antes de empezar un servicio</strong>
+          Tocá el turno y fijate si tiene una nota cargada. Puede ahorrarte una situación incómoda con la clienta.
+        </div>
+      </div>
     </div>
   </section>
 
@@ -345,9 +378,9 @@
     <div class="eyebrow">Para tener siempre presente</div>
     <h2>Reglas de oro</h2>
     <ul class="rules">
-      <li><div class="r-ico">💛</div><div>Marcá tus turnos <strong>En curso</strong> y <strong>Completado</strong> — es lo que mantiene al salón coordinado.</div></li>
+      <li><div class="r-ico">📝</div><div>Antes de atender, <strong>fijate si el turno tiene una nota</strong>: gustos, alergias o detalles a considerar.</div></li>
+      <li><div class="r-ico">👥</div><div>La agenda del día se ve <strong>completa</strong>: revisá si una clienta tiene turno combinado con otra compañera.</div></li>
       <li><div class="r-ico">🔒</div><div>No compartas tu usuario ni contraseña. Todo queda a tu nombre.</div></li>
-      <li><div class="r-ico">👀</div><div>Ves <strong>solo lo tuyo</strong>: tus turnos y tus ventas. Es normal no ver los totales del salón.</div></li>
       <li><div class="r-ico">🚫</div><div>No abrís ni cerrás la caja, ni cargás gastos/retiros: eso es de recepción.</div></li>
       <li><div class="r-ico">↺</div><div>¿La app no muestra un cambio? Cerrala del todo y volvé a abrirla.</div></li>
     </ul>
@@ -363,9 +396,7 @@
       <h3>¿Por qué no puedo abrir o cerrar la caja?</h3>
       <p style="margin-bottom:16px">La apertura, cierre, retiros y gastos son tareas de recepción/administración.</p>
       <h3>Me equivoqué en un cobro, ¿qué hago?</h3>
-      <p style="margin-bottom:16px">Anulá el ticket en la pestaña <strong>Tickets</strong> (solo del día de hoy). Si fue otro día, avisá a administración.</p>
-      <h3>¿Cómo sé cuánto gané de comisión?</h3>
-      <p style="margin-bottom:0">Las comisiones las calcula y comunica administración en las liquidaciones. Consultá con recepción.</p>
+      <p style="margin-bottom:0">Anulá el ticket en la pestaña <strong>Tickets</strong> (solo del día de hoy). Si fue otro día, avisá a administración.</p>
     </div>
     <div class="tip" style="margin-top:20px">
       <strong>¿Algo no te cierra?</strong>
