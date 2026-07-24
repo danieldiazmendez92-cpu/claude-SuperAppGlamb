@@ -11063,10 +11063,11 @@
         const lines=t.lines||[];
         const servicio=lines.map(l=>l.service).filter(Boolean).join(' + ')||'—';
         const sena=Number(t.depositAppliedTotal||0);
-        const restante=Number(t.pendingBalance||0);
         const descuento=lines.reduce((s,l)=>s+_lineDiscount(l),0);
         const conDescuento=lines.some(l=>l.discountType && l.discountType!=='none');
         const total=t.servicesTotal!=null?Number(t.servicesTotal):lines.reduce((s,l)=>s+Number(l.finalPrice||0),0);
+        // Restante = lo que restaba pagar después de la seña (Seña + Restante = Total).
+        const restante=Math.max(0, total - sena);
         // Medios con que se saldó la venta: pagos service + anticipo aplicado del ticket
         const pays=state.payments.filter(p=>p.ticketId===t.id && !p.voided && (p.type==='service'||p.type==='deposit_applied'));
         const metodos=[...new Set(pays.map(p=>normMethod(p.method)).filter(Boolean))].join(', ')||'—';
@@ -11091,9 +11092,18 @@
       const pays=state.payments
         .filter(p=>!p.voided && (p.type==='service'||p.type==='deposit_received') && inRange(p))
         .sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
+      // Los cobros de servicio NO guardan el cliente en el pago (lo tiene el ticket).
+      // Índice ticketId→ticket armado una vez para resolver el nombre sin recorrer todo.
+      const ticketById=new Map(state.salesTickets.map(t=>[t.id,t]));
+      const nombreCliente=p=>{
+        if(p.clientId) return fullName(client(p.clientId));
+        const t=p.ticketId?ticketById.get(p.ticketId):null;
+        if(t) return t.clientNameSnapshot||fullName(client(t.clientId));
+        return '—';
+      };
       const rows=pays.map(p=>({
         fecha:(p.createdAt||'').slice(0,10),
-        cliente:p.clientId?fullName(client(p.clientId)):'—',
+        cliente:nombreCliente(p),
         motivo:p.type==='service'?'Cobro de servicio':'Seña recibida',
         monto:Number(p.amount||0),
         metodo:normMethod(p.method)
