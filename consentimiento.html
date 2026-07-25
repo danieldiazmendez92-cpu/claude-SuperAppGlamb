@@ -145,7 +145,10 @@
     (snap.sections||[]).forEach((sec,si)=>{
       html += `<section><div class="sec-title">${esc(sec.title||'')}</div>`;
       (sec.questions||[]).forEach(q=>{
-        html += `<div class="card"><div class="q">${esc(q.label||'')}</div>`;
+        // showIf: la pregunta solo aparece si otra tiene cierta respuesta
+        // (ej. "¿hace cuánto?" solo si dijo que ya se hizo el tratamiento).
+        const cond = q.showIf ? ` data-showif-q="${esc(q.showIf.q)}" data-showif-v="${esc(q.showIf.v)}" style="display:none"` : '';
+        html += `<div class="card" data-qcard="${esc(q.id)}"${cond}><div class="q">${esc(q.label||'')}</div>`;
         if(q.type==='text'){
           html += `<textarea data-text="${esc(q.id)}" placeholder="${esc(q.placeholder||'')}"></textarea>`;
         } else if(q.type==='date'){
@@ -217,6 +220,7 @@
           // Nota de riesgo: se muestra si hay alguna opción de riesgo elegida
           const note = app.querySelector(`[data-risknote="${qid}"]`);
           if(note) note.classList.toggle('show', !!box.querySelector('.chip.on[data-risk="1"]'));
+          applyConditionals();
         };
       });
     });
@@ -250,9 +254,20 @@
     const acc = app.querySelector('#acceptBox');
     acc.onclick = ()=>{ accepted=!accepted; acc.classList.toggle('on',accepted); };
 
+    applyConditionals();
     initSignature();
     app.querySelector('#submitBtn').onclick = submit;
   }
+
+  // Muestra u oculta las preguntas condicionales según lo ya respondido.
+  function applyConditionals(){
+    app.querySelectorAll('[data-showif-q]').forEach(card=>{
+      const dep=answers[card.dataset.showifQ], want=card.dataset.showifV;
+      const match=Array.isArray(dep)?dep.includes(want):dep===want;
+      card.style.display = match ? '' : 'none';
+    });
+  }
+  const isHidden = qid => { const c=app.querySelector(`[data-qcard="${qid}"]`); return !!(c && c.style.display==='none'); };
 
   // ── Firma con el dedo ──
   let ctx, canvas;
@@ -312,6 +327,7 @@
     for(const sec of (snap.sections||[])){
       for(const q of (sec.questions||[])){
         if(q.optional || q.type==='text' || q.type==='date') continue;
+        if(isHidden(q.id)) continue;   // pregunta condicional no visible: no se exige
         const v = answers[q.id];
         if(v===undefined || (Array.isArray(v) && !v.length)) return showErr('Falta responder: "'+(q.label||'')+'".');
       }
