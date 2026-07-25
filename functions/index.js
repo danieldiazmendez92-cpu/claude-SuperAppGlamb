@@ -136,3 +136,124 @@ exports.sendAppointmentReminders = onSchedule(
     console.log(`Recordatorios por email enviados: ${sent}`);
   }
 );
+
+/**
+ * Copia del consentimiento firmado por email.
+ *
+ * Se dispara cuando un documento de `consentForms` pasa a estado "signed".
+ * Corre en el servidor a propósito: la página pública (consentimiento.html) NO
+ * tiene permiso para escribir en la colección `mail`, así nadie puede usar el
+ * link para mandar correos desde el dominio del salón. El email de la clienta
+ * se busca acá (vive en `clientsPrivate`, que solo lee el admin).
+ *
+ * Idempotente: marca `emailCopySent` para no reenviar si el documento se toca
+ * de nuevo.
+ */
+const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+
+const RISK_MARK = " ⚠";
+
+function labelOf(question, value) {
+  const opt = (question.options || []).find((o) => o.v === value);
+  return opt ? opt.label : value;
+}
+function isRisk(question, value) {
+  const opt = (question.options || []).find((o) => o.v === value);
+  return !!(opt && opt.risk);
+}
+
+// Arma el cuerpo del email desde el SNAPSHOT guardado (no desde la plantilla
+// actual): la copia refleja exactamente lo que la clienta aceptó ese día.
+function buildConsentEmail(data) {
+  const snap = data.snapshot || {};
+  const answers = data.answers || {};
+  const esc = (s) => String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  let rows = "";
+  (snap.sections || []).forEach((sec) => {
+    rows += `<tr><td colspan="2" style="padding:14px 0 4px;font-weight:700;color:#7a6350">${esc(sec.title || "")}</td></tr>`;
+    (sec.questions || []).forEach((q) => {
+      const v = answers[q.id];
+      let val = "—";
+      let risky = false;
+      if (Array.isArray(v)) {
+        val = v.map((x) => {
+          if (isRisk(q, x)) risky = true;
+          return esc(labelOf(q, x));
+        }).join(", ") || "—";
+      } else if (v !== undefined && v !== "") {
+        risky = isRisk(q, v);
+        val = esc(labelOf(q, v));
+      }
+      rows += `<tr><td style="padding:6px 10px 6px 0;color:#666;border-bottom:1px solid #eee">${esc(q.label || "")}</td>` +
+        `<td style="padding:6px 0;text-align:right;font-weight:600;border-bottom:1px solid #eee;${risky ? "color:#c0392b" : ""}">${val}${risky ? RISK_MARK : ""}</td></tr>`;
+    });
+  });
+
+  const rep = data.representante;
+  const minorBlock = data.isMinor && rep ?
+    `<div style="background:#f6e2e0;border-radius:10px;padding:12px 14px;margin:14px 0;font-size:13px">
+       <b>Menor de edad — firmó su representante legal</b><br>
+       ${esc(rep.nombre || "")} · DNI ${esc(rep.dni || "")} · ${esc(rep.vinculo || "")}
+     </div>` : "";
+
+  const firmado = data.signedAt ? new Date(data.signedAt).toLocaleString("es-AR") : "";
+
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2521;max-width:620px;line-height:1.6">
+    <div style="text-align:center;padding:18px 0;border-bottom:1px solid #e6dccd">
+      <div style="font-size:26px;letter-spacing:7px;color:#2a2521">GLAMB</div>
+      <div style="font-size:10px;letter-spacing:3px;color:#9c8266;text-transform:uppercase">Belgrano</div>
+    </div>
+    <h2 style="font-weight:400;font-size:19px;margin:18px 0 4px">${esc(snap.title || "Consentimiento informado")}</h2>
+    <div style="font-size:12px;color:#888;margin-bottom:6px">${esc(data.clientName || "")}${data.clientDni ? " · DNI " + esc(data.clientDni) : ""} · Firmado el ${esc(firmado)}</div>
+    ${minorBlock}
+    <table style="width:100%;border-collapse:collapse;font-size:13px">${rows}</table>
+    <h3 style="font-size:14px;margin:20px 0 6px;color:#7a6350">Texto aceptado</h3>
+    <div style="font-size:12.5px;color:#5d564e;white-space:pre-line;background:#f6f1ea;border-radius:10px;padding:14px">${esc(snap.consentText || "")}</div>
+    <h3 style="font-size:14px;margin:20px 0 6px;color:#7a6350">Firma</h3>
+    ${data.signature ? `<img src="${data.signature}" alt="Firma" style="max-width:280px;border:1px solid #e6dccd;border-radius:8px;background:#fff">` : ""}
+    <div style="font-size:11px;color:#888;margin-top:4px">${esc(data.signerName || "")} · ${esc(firmado)}</div>
+    <p style="font-size:11px;color:#aaa;margin-top:24px;border-top:1px solid #e6dccd;padding-top:12px">
+      Esta es tu copia del consentimiento que firmaste. Guardala. Ante cualquier duda, escribinos.
+    </p>
+  </div>`;
+
+  const text = `${snap.title || "Consentimiento"} — firmado el ${firmado} por ${data.signerName || ""}. ` +
+    "Esta es tu copia. Ante cualquier duda, escribinos.";
+
+  return {subject: `GLAMB · Copia de tu ${snap.title || "consentimiento"}`, html, text};
+}
+
+exports.sendConsentCopy = onDocumentUpdated(
+    {document: "consentForms/{id}", region: "southamerica-east1"},
+    async (event) => {
+      const before = event.data.before.data() || {};
+      const after = event.data.after.data() || {};
+      // Solo al pasar a firmado, y una sola vez.
+      if (before.status === "signed" || after.status !== "signed") return;
+      if (after.emailCopySent) return;
+
+      let email = "";
+      try {
+        const priv = await db.collection("clientsPrivate").doc(String(after.clientId)).get();
+        email = (priv.exists && priv.data().email) || "";
+      } catch (e) {
+        console.error("No se pudo leer el email de la clienta:", e);
+      }
+      if (!email) {
+        console.log(`Consentimiento ${event.params.id} firmado, pero la clienta no tiene email cargado.`);
+        await event.data.after.ref.set({emailCopySent: false, emailCopyError: "sin email"}, {merge: true});
+        return;
+      }
+
+      const msg = buildConsentEmail(after);
+      await db.collection("mail").add({
+        to: [email],
+        message: msg,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      await event.data.after.ref.set({emailCopySent: true}, {merge: true});
+      console.log(`Copia del consentimiento ${event.params.id} enviada a ${email}`);
+    },
+);

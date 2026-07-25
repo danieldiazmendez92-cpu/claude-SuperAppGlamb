@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>GLAMB · Consentimiento</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap');
+  :root{
+    --bg:#f6f1ea; --surface:#fff; --surface-2:#efe7db;
+    --brown:#9c8266; --brown-deep:#7a6350; --brown-soft:#cbb9a4;
+    --gray:#8b847b; --line:#e6dccd; --text:#2a2521;
+    --alert:#f6e2e0; --alert-bd:#cf8b83;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:'Inter',sans-serif;font-size:15px;line-height:1.6;color:var(--text);background:var(--bg)}
+  .cover{text-align:center;padding:30px 20px 22px;background:linear-gradient(160deg,#efe7db 0%,#f6f1ea 60%,#eee2d2 100%);border-bottom:1px solid var(--line)}
+  .cover-logo{font-family:'Cormorant Garamond',serif;font-size:32px;font-weight:300;letter-spacing:7px;text-transform:uppercase}
+  .cover-sub{font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--brown);margin-top:3px}
+  .cover-title{font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:400;margin-top:12px;color:var(--brown-deep)}
+  .cover-meta{margin-top:8px;font-size:11.5px;color:var(--gray)}
+  .wrap{max-width:520px;margin:0 auto;padding:0 16px 40px}
+  section{margin-top:20px}
+  .sec-title{font-family:'Cormorant Garamond',serif;font-size:19px;font-weight:400;margin-bottom:8px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:8px}
+  .q{font-size:13.5px;font-weight:600;margin-bottom:9px;color:var(--brown-deep)}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{padding:8px 14px;border-radius:20px;font-size:12.5px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);cursor:pointer;user-select:none}
+  .chip.on{background:var(--brown);color:#fff;border-color:var(--brown)}
+  .chip.on.risk{background:#c0716a;border-color:#c0716a}
+  .flag{margin-top:11px;padding:10px 13px;border-radius:10px;background:var(--alert);border-left:4px solid var(--alert-bd);font-size:12.5px;display:none}
+  .flag.show{display:block}
+  .flag b{color:#8a3b34}
+  input[type=text],input[type=date],textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:15px;font-family:inherit;background:var(--surface);color:var(--text)}
+  textarea{min-height:70px;resize:vertical}
+  .mini-label{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--gray);margin-bottom:5px}
+  .field{margin-bottom:12px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:420px){.row2{grid-template-columns:1fr}}
+  .consent-box{background:var(--surface-2);border-radius:14px;padding:15px 16px;font-size:12.5px;color:#5d564e;line-height:1.7;white-space:pre-line}
+  .accept{margin-top:12px;display:flex;align-items:center;gap:10px;padding:13px 14px;background:var(--surface);border:1.5px solid var(--line);border-radius:12px;cursor:pointer}
+  .accept.on{border-color:var(--brown)}
+  .accept .box{width:22px;height:22px;border-radius:6px;border:1.5px solid var(--brown-soft);display:flex;align-items:center;justify-content:center;font-size:13px;color:transparent;flex-shrink:0}
+  .accept.on .box{background:var(--brown);border-color:var(--brown);color:#fff}
+  .accept span{font-size:13.5px;font-weight:600}
+  .sign-wrap{margin-top:8px;position:relative}
+  canvas#sign{width:100%;height:150px;background:var(--surface);border:1.5px dashed var(--brown-soft);border-radius:12px;touch-action:none;display:block}
+  .sign-hint{position:absolute;top:50%;left:0;right:0;transform:translateY(-50%);text-align:center;color:var(--gray);font-size:12px;pointer-events:none}
+  .sign-hint.hide{display:none}
+  .sign-clear{margin-top:6px;font-size:12px;color:var(--brown);background:none;border:none;text-decoration:underline;cursor:pointer;padding:0}
+  .submit{width:100%;margin-top:22px;background:var(--brown);color:#fff;border:none;border-radius:14px;padding:16px;font-size:16px;font-weight:600;cursor:pointer;font-family:inherit}
+  .submit:disabled{opacity:.5}
+  .msg{max-width:440px;margin:60px auto;background:var(--surface);border-radius:18px;padding:32px 26px;text-align:center;border:1px solid var(--line)}
+  .msg .ico{font-size:44px;margin-bottom:10px}
+  .msg h3{font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:400;margin-bottom:8px}
+  .msg p{font-size:13.5px;color:var(--gray)}
+  .err{color:#8a3b34;font-size:12.5px;margin-top:10px;display:none}
+  .err.show{display:block}
+  .foot{text-align:center;font-size:11px;color:var(--gray);margin-top:26px}
+</style>
+</head>
+<body>
+<div id="app"><div class="msg"><div class="ico">⏳</div><h3>Cargando…</h3><p>Un momento por favor.</p></div></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  'use strict';
+  const firebaseConfig = {
+    apiKey: "AIzaSyAkTmM7r_Srfh0ccco4Dhf2PX1KZOTfPaI",
+    authDomain: "glamb-os.firebaseapp.com",
+    projectId: "glamb-os",
+    storageBucket: "glamb-os.firebasestorage.app",
+    messagingSenderId: "733109093638",
+    appId: "1:733109093638:web:720da3c212b9da24a9ca87"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  const app = document.getElementById('app');
+  const esc = s => String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const showMsg = (ico,title,text) => { app.innerHTML = `<div class="msg"><div class="ico">${ico}</div><h3>${esc(title)}</h3><p>${esc(text)}</p></div>`; };
+
+  const token = new URLSearchParams(location.search).get('t');
+  if(!token){ showMsg('🔗','Enlace inválido','Este enlace no es válido. Pedile al salón que te envíe uno nuevo.'); return; }
+
+  // Estado del formulario en memoria (respuestas de la clienta)
+  const answers = {};      // questionId -> valor (string) o array (multi)
+  let isMinor = false, accepted = false, sigDirty = false, doc = null, snap = null;
+
+  db.collection('consentForms').doc(token).get().then(d=>{
+    if(!d.exists){ showMsg('🔗','Enlace inválido','Este enlace no existe o fue dado de baja. Pedile al salón uno nuevo.'); return; }
+    doc = d.data();
+    if(doc.status === 'signed'){ showMsg('✅','Ya está firmado','Este formulario ya fue completado y firmado. Te enviamos una copia por mail.'); return; }
+    if(doc.expiresAtMs && Date.now() > doc.expiresAtMs){ showMsg('⌛','Enlace vencido','Este enlace ya venció. Pedile al salón que te envíe uno nuevo.'); return; }
+    snap = doc.snapshot || {};
+    render();
+  }).catch(e=>{
+    console.error(e);
+    showMsg('⚠️','No pudimos abrir el formulario','Revisá tu conexión e intentá de nuevo. Si el problema sigue, avisale al salón.');
+  });
+
+  function render(){
+    const fecha = new Date().toLocaleDateString('es-AR');
+    let html = `
+      <div class="cover">
+        <div class="cover-logo">GLAMB</div>
+        <div class="cover-sub">Belgrano</div>
+        <div class="cover-title">${esc(snap.title||'Consentimiento informado')}</div>
+        <div class="cover-meta">${esc(doc.clientName||'')} · ${fecha}</div>
+      </div>
+      <div class="wrap">`;
+
+    // ── Menor de edad ──
+    if(snap.minorBlock){
+      html += `<section>
+        <div class="sec-title">Antes de empezar</div>
+        <div class="card">
+          <div class="q">¿La persona que se atiende es menor de edad?</div>
+          <div class="chips" data-minor>
+            <div class="chip" data-minor-v="no">No</div>
+            <div class="chip" data-minor-v="si">Sí</div>
+          </div>
+          <div class="flag" id="minorFlag"><b>Requiere representante legal.</b> Un menor no puede prestar consentimiento por sí mismo: completá los datos del padre, madre o tutor, que es quien firma al final y debe estar presente en el turno.</div>
+        </div>
+        <div class="card" id="minorFields" style="display:none">
+          <div class="q">Datos del representante legal</div>
+          <div class="row2">
+            <div class="field"><div class="mini-label">Nombre y apellido</div><input type="text" id="repName" autocomplete="name"></div>
+            <div class="field"><div class="mini-label">DNI</div><input type="text" id="repDni" inputmode="numeric"></div>
+          </div>
+          <div class="field"><div class="mini-label">Vínculo con el/la menor</div>
+            <div class="chips" data-rel>
+              <div class="chip" data-rel-v="Madre">Madre</div>
+              <div class="chip" data-rel-v="Padre">Padre</div>
+              <div class="chip" data-rel-v="Tutor/a">Tutor/a</div>
+            </div>
+          </div>
+          <div class="field"><div class="mini-label">Teléfono de contacto</div><input type="text" id="repPhone" inputmode="tel"></div>
+        </div>
+      </section>`;
+    }
+
+    // ── Secciones del formulario ──
+    (snap.sections||[]).forEach((sec,si)=>{
+      html += `<section><div class="sec-title">${esc(sec.title||'')}</div>`;
+      (sec.questions||[]).forEach(q=>{
+        html += `<div class="card"><div class="q">${esc(q.label||'')}</div>`;
+        if(q.type==='text'){
+          html += `<textarea data-text="${esc(q.id)}" placeholder="${esc(q.placeholder||'')}"></textarea>`;
+        } else if(q.type==='date'){
+          html += `<input type="date" data-date="${esc(q.id)}">`;
+        } else {
+          html += `<div class="chips" data-q="${esc(q.id)}" data-type="${esc(q.type||'single')}">`;
+          (q.options||[]).forEach(o=>{
+            html += `<div class="chip" data-v="${esc(o.v)}"${o.risk?' data-risk="1"':''}${o.none?' data-none="1"':''}>${esc(o.label)}</div>`;
+          });
+          html += `</div>`;
+          if(q.riskNote) html += `<div class="flag" data-risknote="${esc(q.id)}"><b>Atención.</b> ${esc(q.riskNote)}</div>`;
+        }
+        html += `</div>`;
+      });
+      html += `</section>`;
+    });
+
+    // ── DNI de quien firma (si aplica) ──
+    if(snap.askDni){
+      html += `<section><div class="sec-title">Tus datos</div><div class="card">
+        <div class="field"><div class="mini-label">DNI de la persona que se atiende</div><input type="text" id="clientDni" inputmode="numeric"></div>
+      </div></section>`;
+    }
+
+    // ── Consentimiento + firma ──
+    html += `<section>
+      <div class="sec-title">Consentimiento</div>
+      <div class="consent-box">${esc(snap.consentText||'')}</div>
+      <div class="accept" id="acceptBox"><div class="box">✓</div><span>Leí y acepto — firmo a continuación</span></div>
+    </section>
+    <section>
+      <div class="sec-title" id="signTitle">Firma</div>
+      <div class="sign-wrap">
+        <canvas id="sign"></canvas>
+        <div class="sign-hint" id="signHint">Firmá con el dedo acá</div>
+      </div>
+      <button class="sign-clear" id="signClear" type="button">Borrar firma</button>
+    </section>
+    <div class="err" id="err"></div>
+    <button class="submit" id="submitBtn">Firmar y enviar</button>
+    <div class="foot">Vas a recibir una copia por mail · GLAMB Belgrano</div>
+    </div>`;
+
+    app.innerHTML = html;
+    bind();
+  }
+
+  function bind(){
+    // Chips genéricos (single / multi con opción "Ninguna")
+    app.querySelectorAll('[data-q]').forEach(box=>{
+      const qid = box.dataset.q, type = box.dataset.type;
+      box.querySelectorAll('.chip').forEach(chip=>{
+        chip.onclick = ()=>{
+          if(type==='multi'){
+            const isNone = chip.dataset.none==='1';
+            if(isNone){ box.querySelectorAll('.chip').forEach(c=>c.classList.remove('on','risk')); chip.classList.add('on'); }
+            else{
+              box.querySelectorAll('.chip[data-none="1"]').forEach(c=>c.classList.remove('on'));
+              chip.classList.toggle('on');
+              if(chip.dataset.risk==='1') chip.classList.toggle('risk', chip.classList.contains('on'));
+            }
+            answers[qid] = Array.from(box.querySelectorAll('.chip.on')).map(c=>c.dataset.v);
+          } else {
+            box.querySelectorAll('.chip').forEach(c=>c.classList.remove('on','risk'));
+            chip.classList.add('on');
+            if(chip.dataset.risk==='1') chip.classList.add('risk');
+            answers[qid] = chip.dataset.v;
+          }
+          // Nota de riesgo: se muestra si hay alguna opción de riesgo elegida
+          const note = app.querySelector(`[data-risknote="${qid}"]`);
+          if(note) note.classList.toggle('show', !!box.querySelector('.chip.on[data-risk="1"]'));
+        };
+      });
+    });
+    app.querySelectorAll('[data-text]').forEach(t=>{ t.oninput=()=>{ answers[t.dataset.text]=t.value; }; });
+    app.querySelectorAll('[data-date]').forEach(t=>{ t.onchange=()=>{ answers[t.dataset.date]=t.value; }; });
+
+    // Menor de edad
+    const minorBox = app.querySelector('[data-minor]');
+    if(minorBox){
+      minorBox.querySelectorAll('.chip').forEach(chip=>{
+        chip.onclick=()=>{
+          minorBox.querySelectorAll('.chip').forEach(c=>c.classList.remove('on','risk'));
+          chip.classList.add('on');
+          isMinor = chip.dataset.minorV==='si';
+          if(isMinor) chip.classList.add('risk');
+          app.querySelector('#minorFlag').classList.toggle('show', isMinor);
+          app.querySelector('#minorFields').style.display = isMinor ? '' : 'none';
+          const st = app.querySelector('#signTitle');
+          if(st) st.textContent = isMinor ? 'Firma del representante legal' : 'Firma';
+        };
+      });
+    }
+    const relBox = app.querySelector('[data-rel]');
+    if(relBox){
+      relBox.querySelectorAll('.chip').forEach(chip=>{
+        chip.onclick=()=>{ relBox.querySelectorAll('.chip').forEach(c=>c.classList.remove('on')); chip.classList.add('on'); };
+      });
+    }
+
+    // Aceptación
+    const acc = app.querySelector('#acceptBox');
+    acc.onclick = ()=>{ accepted=!accepted; acc.classList.toggle('on',accepted); };
+
+    initSignature();
+    app.querySelector('#submitBtn').onclick = submit;
+  }
+
+  // ── Firma con el dedo ──
+  let ctx, canvas;
+  function initSignature(){
+    canvas = app.querySelector('#sign');
+    const ratio = window.devicePixelRatio||1;
+    const r = canvas.getBoundingClientRect();
+    canvas.width = r.width*ratio; canvas.height = r.height*ratio;
+    ctx = canvas.getContext('2d');
+    ctx.scale(ratio,ratio);
+    ctx.lineWidth = 2.2; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='#2a2521';
+    let drawing=false, last=null;
+    const pos = e => { const b=canvas.getBoundingClientRect(); return {x:e.clientX-b.left, y:e.clientY-b.top}; };
+    canvas.addEventListener('pointerdown', e=>{
+      drawing=true; last=pos(e); sigDirty=true;
+      app.querySelector('#signHint').classList.add('hide');
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', e=>{
+      if(!drawing) return;
+      const p=pos(e);
+      ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke();
+      last=p;
+    });
+    const end = ()=>{ drawing=false; };
+    canvas.addEventListener('pointerup', end);
+    canvas.addEventListener('pointercancel', end);
+    canvas.addEventListener('pointerleave', end);
+    app.querySelector('#signClear').onclick = ()=>{
+      ctx.clearRect(0,0,canvas.width,canvas.height); sigDirty=false;
+      app.querySelector('#signHint').classList.remove('hide');
+    };
+  }
+
+  function showErr(msg){
+    const e = app.querySelector('#err');
+    e.textContent = msg; e.classList.add('show');
+    e.scrollIntoView({behavior:'smooth',block:'center'});
+  }
+
+  function submit(){
+    const btn = app.querySelector('#submitBtn');
+    app.querySelector('#err').classList.remove('show');
+
+    // Validaciones
+    if(snap.minorBlock && !app.querySelector('[data-minor] .chip.on')) return showErr('Indicá si la persona que se atiende es menor de edad.');
+    let representante = null;
+    if(isMinor){
+      const n=(app.querySelector('#repName')?.value||'').trim();
+      const d=(app.querySelector('#repDni')?.value||'').trim();
+      const rel=app.querySelector('[data-rel] .chip.on')?.dataset.relV||'';
+      const ph=(app.querySelector('#repPhone')?.value||'').trim();
+      if(!n||!d||!rel) return showErr('Completá nombre, DNI y vínculo del representante legal.');
+      representante = {nombre:n, dni:d, vinculo:rel, telefono:ph};
+    }
+    // Preguntas obligatorias (todas las de tipo chip, salvo que el snapshot diga optional)
+    for(const sec of (snap.sections||[])){
+      for(const q of (sec.questions||[])){
+        if(q.optional || q.type==='text' || q.type==='date') continue;
+        const v = answers[q.id];
+        if(v===undefined || (Array.isArray(v) && !v.length)) return showErr('Falta responder: "'+(q.label||'')+'".');
+      }
+    }
+    const clientDni = (app.querySelector('#clientDni')?.value||'').trim();
+    if(snap.askDni && !isMinor && !clientDni) return showErr('Ingresá el DNI de la persona que se atiende.');
+    if(!accepted) return showErr('Tenés que aceptar el consentimiento para continuar.');
+    if(!sigDirty) return showErr('Falta tu firma.');
+
+    btn.disabled = true; btn.textContent = 'Enviando…';
+    let signature='';
+    try{ signature = canvas.toDataURL('image/png'); }catch(e){}
+
+    db.collection('consentForms').doc(token).update({
+      status: 'signed',
+      answers: answers,
+      isMinor: isMinor,
+      representante: representante,
+      clientDni: clientDni || (representante ? '' : ''),
+      signature: signature,
+      signerName: representante ? representante.nombre : (doc.clientName||''),
+      signedAt: new Date().toISOString()
+      // No se reenvían snapshot/clientId/expiresAtMs: las reglas solo permiten
+      // tocar los campos de la firma, así el texto aceptado queda inalterable.
+    }).then(()=>{
+      showMsg('✅','¡Listo, gracias!','Tu formulario quedó firmado y enviado. Te mandamos una copia por mail.');
+    }).catch(err=>{
+      console.error(err);
+      btn.disabled=false; btn.textContent='Firmar y enviar';
+      showErr('No pudimos guardar el formulario. Revisá tu conexión e intentá de nuevo.');
+    });
+  }
+})();
+</script>
+</body>
+</html>
