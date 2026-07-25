@@ -92,11 +92,17 @@ service cloud.firestore {
     //  - `update` público: solo una vez (pendiente → firmado), sin vencer, y sin
     //    poder alterar a qué clienta pertenece ni el texto que se le mostró
     //    (snapshot inmutable: es la prueba de qué aceptó exactamente).
+    //  - Recepción y colaboradoras pueden ENVIAR formularios, pero solo listan
+    //    los que ellas mismas enviaron (la consulta debe filtrar por
+    //    createdByUid, si no Firestore la rechaza). Así una colaboradora no
+    //    puede descargar las fichas de salud de todas las clientas del salón.
     match /consentForms/{id} {
       allow get:    if true;
-      allow list:   if isAdmin();
-      allow create: if isAdmin();
-      allow delete: if isAdmin();
+      allow list:   if isAdmin() || (hasAccess() && resource.data.createdByUid == request.auth.uid);
+      allow create: if isAdmin() || (hasAccess() && request.resource.data.createdByUid == request.auth.uid
+                                     && request.resource.data.status == 'pending');
+      allow delete: if isAdmin() || (hasAccess() && resource.data.createdByUid == request.auth.uid
+                                     && resource.data.status == 'pending');
       // El público solo puede tocar los campos de la firma: el snapshot, la
       // clienta y el vencimiento quedan blindados (cualquier intento de
       // modificarlos rechaza la escritura entera).

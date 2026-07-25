@@ -257,3 +257,76 @@ exports.sendConsentCopy = onDocumentUpdated(
       console.log(`Copia del consentimiento ${event.params.id} enviada a ${email}`);
     },
 );
+
+/**
+ * Invitación por email al crear un consentimiento.
+ *
+ * Corre en el servidor para que CUALQUIER rol pueda enviar el formulario sin
+ * tener acceso al email de la clienta: el email vive en `clientsPrivate`, que
+ * solo lee el admin. La colaboradora crea el documento con
+ * `sendEmailOnCreate: true` y esta función busca el email y envía el link.
+ *
+ * Si la clienta no tiene email cargado, marca `inviteStatus: 'no_email'` para
+ * que la app avise que hay que pasar el link por WhatsApp.
+ */
+const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+
+const CONSENT_BASE_URL = "https://glamb-os.web.app/consentimiento.html";
+
+exports.sendConsentInvite = onDocumentCreated(
+    {document: "consentForms/{id}", region: "southamerica-east1"},
+    async (event) => {
+      const snapDoc = event.data;
+      if (!snapDoc) return;
+      const data = snapDoc.data() || {};
+      if (!data.sendEmailOnCreate) return;
+      if (data.inviteStatus) return; // ya procesado
+
+      const esc = (s) => String(s == null ? "" : s)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+      let email = "";
+      try {
+        const priv = await db.collection("clientsPrivate").doc(String(data.clientId)).get();
+        email = (priv.exists && priv.data().email) || "";
+      } catch (e) {
+        console.error("No se pudo leer el email de la clienta:", e);
+      }
+      if (!email) {
+        await snapDoc.ref.set({inviteStatus: "no_email"}, {merge: true});
+        console.log(`Consentimiento ${event.params.id}: la clienta no tiene email cargado.`);
+        return;
+      }
+
+      const url = `${CONSENT_BASE_URL}?t=${encodeURIComponent(event.params.id)}`;
+      const nombre = String(data.clientName || "").split(" ")[0];
+      const titulo = data.templateTitle || "Consentimiento";
+      const html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#2a2521;line-height:1.6;max-width:560px">
+        <div style="text-align:center;padding:16px 0;border-bottom:1px solid #e6dccd">
+          <div style="font-size:24px;letter-spacing:7px">GLAMB</div>
+          <div style="font-size:10px;letter-spacing:3px;color:#9c8266;text-transform:uppercase">Belgrano</div>
+        </div>
+        <p>Hola ${esc(nombre)},</p>
+        <p>Antes de tu turno necesitamos que completes y firmes este formulario. Te lleva 2 minutos desde el celular:</p>
+        <p style="text-align:center;margin:22px 0">
+          <a href="${url}" style="background:#9c8266;color:#fff;padding:13px 26px;border-radius:10px;text-decoration:none;display:inline-block;font-weight:600">Completar y firmar</a>
+        </p>
+        <p style="font-size:12px;color:#777">Si el botón no funciona, copiá este enlace:<br>${url}</p>
+        <p style="font-size:12px;color:#777">El enlace vence en 30 días.</p>
+        <p>¡Gracias!<br>GLAMB Belgrano</p>
+      </div>`;
+
+      await db.collection("mail").add({
+        to: [email],
+        message: {
+          subject: `GLAMB · ${titulo}`,
+          html,
+          text: `Hola ${nombre}, completá y firmá tu formulario antes del turno: ${url}`,
+        },
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      await snapDoc.ref.set({inviteStatus: "sent"}, {merge: true});
+      console.log(`Invitación de consentimiento ${event.params.id} enviada a ${email}`);
+    },
+);

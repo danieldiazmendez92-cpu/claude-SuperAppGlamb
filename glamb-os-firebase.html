@@ -3968,7 +3968,7 @@
           <div>
             <div class="eyebrow">GLAMB OS</div>
             <h1>Comunicaciones</h1>
-            <p class="subtitle">Recordatorios automáticos por email y WhatsApp con plantillas personalizables.</p>
+            <p class="subtitle" id="commsSubtitle">Recordatorios automáticos por email y WhatsApp con plantillas personalizables.</p>
           </div>
         </div>
         <div class="comms-tabs">
@@ -5552,9 +5552,13 @@
     // REAL (filtrado server-side por rol) llega con Firebase Auth + security
     // rules. NO usar con datos reales sensibles hasta completar esa etapa.
     const PERMISSIONS = {
-      admin: { pages:['command','clients','agenda','cash','catalog','team','rrhh','finanzas','comms','athenas'], agenda:'all',   clientData:'full',   cash:'full',  command:'full'   },
-      medio: { pages:['command','clients','agenda','cash'],                                                       agenda:'today', clientData:'masked', cash:'full',  command:'simple' },
-      bajo:  { pages:['command','agenda','cash'],                                                                 agenda:'today', clientData:'masked', cash:'sales', command:'min'    }
+      // commsTabs: qué pestañas de Comunicaciones ve cada rol. Recepción y
+      // colaboradoras entran SOLO a "Consentimientos" (para poder enviarle el
+      // formulario a la clienta); plantillas, configuración, historial y reseñas
+      // siguen siendo exclusivas del admin.
+      admin: { pages:['command','clients','agenda','cash','catalog','team','rrhh','finanzas','comms','athenas'], agenda:'all',   clientData:'full',   cash:'full',  command:'full',   commsTabs:'all' },
+      medio: { pages:['command','clients','agenda','cash','comms'],                                              agenda:'today', clientData:'masked', cash:'full',  command:'simple', commsTabs:['consents'] },
+      bajo:  { pages:['command','agenda','cash','comms'],                                                        agenda:'today', clientData:'masked', cash:'sales', command:'min',    commsTabs:['consents'] }
     };
     const ROLE_LABELS={admin:'Administrador',medio:'Recepción',bajo:'Colaboradora'};
     function curUser(){ return state.authUser || null; }
@@ -12542,26 +12546,38 @@
       return 'ct'+Date.now().toString(36)+Math.random().toString(36).slice(2,12)+Math.random().toString(36).slice(2,12);
     }
     async function loadConsents(force){
-      if(!fbReady||!db||curRole()!=='admin') return;
+      if(!fbReady||!db||!curUser()) return;
       if(_consents&&!force) return;
       if(_consentsLoading) return;
       _consentsLoading=true;
       try{
         // limit(): nunca traemos toda la colección de una, para acotar lecturas.
-        const snap=await db.collection('consentForms').orderBy('createdAt','desc').limit(60).get();
-        _consents=snap.docs.map(d=>({id:d.id,...d.data()}));
+        // El admin ve todo; recepción/colaboradora solo los que ELLAS enviaron
+        // (las reglas exigen ese filtro: sin él, Firestore rechaza la consulta).
+        // Se filtra sin orderBy para no requerir un índice compuesto; el orden
+        // se resuelve en memoria.
+        let snap;
+        if(curRole()==='admin'){
+          snap=await db.collection('consentForms').orderBy('createdAt','desc').limit(60).get();
+        } else {
+          snap=await db.collection('consentForms').where('createdByUid','==',curUser().uid).limit(60).get();
+        }
+        _consents=snap.docs.map(d=>({id:d.id,...d.data()}))
+          .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
       }catch(e){ console.error('[GLAMB] carga de consentimientos falló:',e); _consents=_consents||[]; }
       finally{ _consentsLoading=false; renderCommsConsentsInto(); }
     }
     function renderCommsConsents(){
+      const isAdm=curRole()==='admin';
       const opts=Object.values(CONSENT_TEMPLATES).map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('');
       const pend=(_consents||[]).filter(c=>c.status==='pending');
       const firm=(_consents||[]).filter(c=>c.status==='signed');
       const fecha=s=>s?new Date(s).toLocaleDateString('es-AR'):'—';
-      const rowsPend=pend.length?pend.map(c=>`<div class="mini-row"><strong>${esc(c.clientName||'—')}</strong><span>${esc(c.templateTitle||'')} · enviado ${fecha(c.createdAt)}</span>
+      const rowsPend=pend.length?pend.map(c=>`<div class="mini-row"><strong>${esc(c.clientName||'—')}</strong><span>${esc(c.templateTitle||'')} · enviado ${fecha(c.createdAt)}${c.createdBy&&isAdm?' por '+esc(c.createdBy):''}</span>
+          ${c.inviteStatus==='no_email'?'<span style="color:#c0392b">⚠ La clienta no tiene mail cargado — pasale el link por WhatsApp.</span>':''}
           <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
             <button class="small-btn" data-action="copyConsentLink" data-id="${c.id}">Copiar link</button>
-            <button class="small-btn" data-action="waConsentLink" data-id="${c.id}">WhatsApp</button>
+            ${isAdm?`<button class="small-btn" data-action="waConsentLink" data-id="${c.id}">WhatsApp</button>`:''}
             <button class="small-btn danger" data-action="deleteConsent" data-id="${c.id}">Anular</button>
           </div></div>`).join(''):'<div class="mini-row"><strong>Sin envíos pendientes</strong><span>Los formularios enviados y aún no firmados aparecen acá.</span></div>';
       const rowsFirm=firm.length?firm.map(c=>`<div class="mini-row"><strong>${esc(c.clientName||'—')} ${c.isMinor?'<span class="tag" style="font-size:10px">menor</span>':''}</strong><span>${esc(c.templateTitle||'')} · firmado ${fecha(c.signedAt)}${c.signerName&&c.signerName!==c.clientName?' por '+esc(c.signerName):''}</span>
@@ -12579,9 +12595,10 @@
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
             <button class="btn primary" data-action="sendConsentMail">✉ Enviar por mail</button>
-            <button class="btn" data-action="sendConsentWA">WhatsApp</button>
+            ${isAdm?'<button class="btn" data-action="sendConsentWA">WhatsApp</button>':''}
             <button class="btn" data-action="sendConsentCopy">Copiar link</button>
           </div>
+          ${isAdm?'':'<p style="font-size:11.5px;color:var(--text-muted);margin-top:10px">El mail de la clienta lo maneja administración: el envío por mail sale automático sin que vos lo veas. Si preferís mandarlo por WhatsApp, usá "Copiar link".</p>'}
         </section>
         <section class="form-card"><h3>Pendientes de firma (${pend.length})</h3>${rowsPend}</section>
         <section class="form-card"><h3>Firmados (${firm.length})</h3>${rowsFirm}</section>
@@ -12614,8 +12631,9 @@
       };
     }
     // Crea el documento (solo el admin puede) con la foto del texto y devuelve el link.
-    async function _createConsentDoc(){
-      if(curRole()!=='admin') { showToast('Solo el administrador puede enviar consentimientos.'); return null; }
+    async function _createConsentDoc(opts){
+      opts=opts||{};
+      if(!curUser()||curRole()==='pending'){ showToast('No tenés permiso para enviar consentimientos.'); return null; }
       if(!_consentClient){ showToast('Elegí una clienta primero.'); return null; }
       const tplId=$('consentTemplate')?.value||'laser';
       const tpl=CONSENT_TEMPLATES[tplId];
@@ -12626,7 +12644,12 @@
         id:token, clientId:_consentClient.id, clientName:fullName(_consentClient),
         templateId:tpl.id, templateTitle:tpl.title, templateVersion:tpl.version,
         snapshot:JSON.parse(JSON.stringify(tpl)),   // foto congelada del texto
-        status:'pending', createdAt:new Date().toISOString(), createdBy:(curUser()&&curUser().name)||'admin',
+        status:'pending', createdAt:new Date().toISOString(),
+        createdBy:(curUser()&&curUser().name)||'', createdByUid:(curUser()&&curUser().uid)||'',
+        // El mail de invitación lo manda una Cloud Function: así una colaboradora
+        // puede enviarlo sin tener (ni ver) el email de la clienta, que está
+        // reservado al admin.
+        sendEmailOnCreate: !!opts.sendEmail,
         expiresAtMs: Date.now()+DIAS_VALIDEZ*86400000
       };
       try{
@@ -12636,22 +12659,19 @@
       }catch(e){ console.error('[GLAMB] crear consentimiento falló:',e); showToast('No se pudo generar el formulario.'); return null; }
     }
     async function sendConsentMail(){
-      const r=await _createConsentDoc(); if(!r) return;
-      const email=_consentClient.email;
-      if(!email){ showToast('Esa clienta no tiene email cargado. Usá WhatsApp o copiá el link.'); renderCommsConsentsInto(); return; }
-      const biz=(state.comms&&state.comms.bizName)||'GLAMB';
-      const html=`<div style="font-family:Arial,sans-serif;color:#2a2521;line-height:1.6"><p>Hola ${esc(_consentClient.first||'')},</p>
-        <p>Antes de tu turno necesitamos que completes y firmes este formulario. Te lleva 2 minutos desde el celular:</p>
-        <p><a href="${r.url}" style="background:#9c8266;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;display:inline-block">Completar y firmar</a></p>
-        <p style="font-size:12px;color:#777">Si el botón no funciona, copiá este link:<br>${r.url}</p>
-        <p style="font-size:12px;color:#777">El enlace vence en 30 días.</p><p>¡Gracias!<br>${esc(biz)}</p></div>`;
-      try{
-        await db.collection('mail').add({to:[email],message:{subject:`${biz} · ${r.rec.templateTitle}`,html,text:`Completá y firmá tu formulario: ${r.url}`},createdAt:firebase.firestore.FieldValue.serverTimestamp()});
-        showToast('Formulario enviado por mail a '+email);
-      }catch(e){ console.error(e); showToast('No se pudo enviar el mail. El link quedó generado igual.'); }
+      // El admin sí ve el email: avisamos antes si falta, para no generar un envío
+      // que no va a llegar. Los demás roles no lo ven; la función marca el estado.
+      if(curRole()==='admin' && _consentClient && !_consentClient.email){
+        showToast('Esa clienta no tiene email cargado. Usá WhatsApp o copiá el link.'); return;
+      }
+      const r=await _createConsentDoc({sendEmail:true}); if(!r) return;
+      showToast('Formulario enviado por mail.');
       renderCommsConsentsInto();
+      setTimeout(()=>loadConsents(true),4000); // refrescar para ver si quedó "sin email"
     }
     async function sendConsentWA(){
+      // El teléfono solo lo tiene el admin (los demás roles lo tienen enmascarado).
+      if(!_consentClient||!_consentClient.phone){ showToast('No tenés el teléfono de la clienta. Usá "Copiar link".'); return; }
       const r=await _createConsentDoc(); if(!r) return;
       const msg=`Hola ${_consentClient.first||''} 👋 Antes de tu turno necesitamos que completes y firmes este formulario (te lleva 2 minutos): ${r.url}`;
       renderCommsConsentsInto();
@@ -12730,13 +12750,29 @@
     function renderComms(){
       const tpl=$('comms-templates'),cfg=$('comms-config'),pnd=$('comms-pending'),log=$('comms-log');
       if(!tpl) return;
+      // Pestañas permitidas por rol: recepción/colaboradora solo ven Consentimientos.
+      const allowedTabs=permCfg().commsTabs;
+      const tabOk=t=>allowedTabs==='all'||!allowedTabs||allowedTabs.includes(t);
+      document.querySelectorAll('.comms-tab-btn').forEach(b=>{ b.style.display = tabOk(b.dataset.commsTab)?'':'none'; });
+      if($('commsSubtitle')) $('commsSubtitle').textContent = tabOk('templates')
+        ? 'Recordatorios automáticos por email y WhatsApp con plantillas personalizables.'
+        : 'Enviá a tus clientas los formularios de consentimiento para que los firmen desde el celular.';
+      if(!tabOk(state.commsTab)) state.commsTab = (allowedTabs&&allowedTabs!=='all'&&allowedTabs[0]) || 'templates';
       const currentTab=state.commsTab||'templates';
-      tpl.innerHTML=renderCommsTemplates();
-      cfg.innerHTML=renderCommsConfig();
-      pnd.innerHTML=renderCommsPending();
-      log.innerHTML=renderCommsLog();
+      // Los paneles que el rol no puede ver no se renderizan (ni quedan en el DOM).
+      if(tabOk('templates')){
+        tpl.innerHTML=renderCommsTemplates();
+        cfg.innerHTML=renderCommsConfig();
+        pnd.innerHTML=renderCommsPending();
+        log.innerHTML=renderCommsLog();
+      } else {
+        tpl.innerHTML=''; cfg.innerHTML=''; pnd.innerHTML=''; log.innerHTML='';
+      }
       const rvPanel=$('comms-reviews');
-      if(rvPanel){ rvPanel.innerHTML=renderCommsReviews(); bindSurveyHandlers(); }
+      if(rvPanel){
+        if(tabOk('reviews')){ rvPanel.innerHTML=renderCommsReviews(); bindSurveyHandlers(); }
+        else rvPanel.innerHTML='';
+      }
       // Consentimientos: se dibuja solo si la pestaña está abierta, y la carga
       // desde Firestore ocurre a demanda (nunca en el arranque de la app).
       // Solo se dibuja si el panel está vacío: renderComms corre en cada
