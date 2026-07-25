@@ -82,6 +82,35 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // Consentimientos informados (consentimiento.html, página pública por link).
+    // Modelo de seguridad y de COSTO:
+    //  - El documento lo CREA el salón al enviar el link (nunca el público), así
+    //    nadie puede generar documentos ilimitados ni inflar la factura.
+    //  - `get` público: el link lleva un token aleatorio que ES la credencial
+    //    (mismo modelo que la encuesta). `list` queda solo para admin: sin esto
+    //    cualquiera podría enumerar y descargar TODAS las fichas de salud.
+    //  - `update` público: solo una vez (pendiente → firmado), sin vencer, y sin
+    //    poder alterar a qué clienta pertenece ni el texto que se le mostró
+    //    (snapshot inmutable: es la prueba de qué aceptó exactamente).
+    match /consentForms/{id} {
+      allow get:    if true;
+      allow list:   if isAdmin();
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+      // El público solo puede tocar los campos de la firma: el snapshot, la
+      // clienta y el vencimiento quedan blindados (cualquier intento de
+      // modificarlos rechaza la escritura entera).
+      allow update: if isAdmin() || (
+                      resource.data.status == 'pending' &&
+                      request.resource.data.status == 'signed' &&
+                      request.time.toMillis() < resource.data.expiresAtMs &&
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                        'status','answers','isMinor','representante','clientDni',
+                        'signature','signerName','signedAt'
+                      ])
+                    );
+    }
+
     // Todo lo demás: denegado
     match /{document=**} {
       allow read, write: if false;

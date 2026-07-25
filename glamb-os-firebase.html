@@ -3977,12 +3977,14 @@
           <button class="comms-tab-btn" data-comms-tab="pending">Pendientes <span class="comms-badge" id="commsWABadge" style="display:none"></span></button>
           <button class="comms-tab-btn" data-comms-tab="log">Historial</button>
           <button class="comms-tab-btn" data-comms-tab="reviews">Reseñas</button>
+          <button class="comms-tab-btn" data-comms-tab="consents">Consentimientos</button>
         </div>
         <div class="comms-panel active" id="comms-templates"></div>
         <div class="comms-panel" id="comms-config"></div>
         <div class="comms-panel" id="comms-pending"></div>
         <div class="comms-panel" id="comms-log"></div>
         <div class="comms-panel" id="comms-reviews"></div>
+        <div class="comms-panel" id="comms-consents"></div>
       </section>
 
       <section class="page" id="page-athenas">
@@ -12454,6 +12456,277 @@
       dlg.showModal();
     }
 
+    // ═══ CONSENTIMIENTOS INFORMADOS ════════════════════════════════════════
+    // Plantillas fijas en código (no en Firestore): cero costo de lectura y no se
+    // pueden romper por accidente. Al enviar, se copia una FOTO del texto dentro
+    // del documento (snapshot) — así el registro histórico conserva exactamente lo
+    // que la clienta aceptó, aunque después se edite la plantilla.
+    const CONSENT_TEMPLATES={
+      laser:{
+        id:'laser', version:'1.0', minorBlock:true, askDni:true,
+        title:'Depilación láser — Ficha de evaluación y consentimiento',
+        sections:[
+          {title:'Estado de salud', questions:[
+            {id:'embarazo',type:'single',label:'¿Está embarazada o en período de lactancia?',
+             options:[{v:'si',label:'Sí',risk:true},{v:'no',label:'No'}],
+             riskNote:'Durante el embarazo o la lactancia no se realiza el tratamiento. La profesional lo va a evaluar antes de la sesión.'},
+            {id:'condiciones',type:'multi',label:'¿Padece alguna de estas condiciones?',
+             options:[{v:'diabetes',label:'Diabetes'},{v:'epilepsia',label:'Epilepsia',risk:true},{v:'autoinmune',label:'Enf. autoinmunes'},
+                      {v:'hormonal',label:'Trastornos hormonales'},{v:'cancer_piel',label:'Cáncer de piel',risk:true},
+                      {v:'marcapasos',label:'Marcapasos / implante',risk:true},{v:'ninguna',label:'Ninguna',none:true}]},
+            {id:'medicacion',type:'multi',label:'¿Toma alguno de estos medicamentos?',
+             options:[{v:'isotretinoina',label:'Isotretinoína (Roaccutan)',risk:true},{v:'antibioticos',label:'Antibióticos'},
+                      {v:'corticoides',label:'Corticoides'},{v:'anticoagulantes',label:'Anticoagulantes',risk:true},
+                      {v:'fotosensible',label:'Medicación fotosensible',risk:true},{v:'ninguno',label:'Ninguno',none:true}],
+             riskNote:'Algunos medicamentos requieren esperar antes de hacer láser (la isotretinoína suele requerir 6 meses). La profesional lo va a verificar.'},
+            {id:'otras_condiciones',type:'text',label:'Otra condición o medicación que quieras informar',placeholder:'Opcional',optional:true},
+          ]},
+          {title:'Piel y hábitos recientes', questions:[
+            {id:'piel',type:'multi',label:'¿Presenta actualmente algo en la piel de la zona a tratar?',
+             options:[{v:'heridas',label:'Heridas'},{v:'irritacion',label:'Irritación'},{v:'quemadura',label:'Quemadura solar',risk:true},
+                      {v:'infeccion',label:'Infección',risk:true},{v:'herpes',label:'Herpes activo',risk:true},
+                      {v:'dermatitis',label:'Dermatitis / psoriasis'},{v:'ninguna',label:'Ninguna',none:true}]},
+            {id:'sol',type:'multi',label:'En los últimos 30 días:',
+             options:[{v:'sol',label:'Tomé sol',risk:true},{v:'cama',label:'Cama solar',risk:true},
+                      {v:'autobronceante',label:'Autobronceante',risk:true},{v:'ninguna',label:'Ninguna',none:true}],
+             riskNote:'La piel bronceada aumenta el riesgo de quemadura. Puede ser necesario reprogramar la sesión.'},
+            {id:'depilacion',type:'single',label:'¿Cómo eliminaste el vello por última vez?',
+             options:[{v:'rasurado',label:'Rasurado'},{v:'cera',label:'Cera',risk:true},{v:'pinza',label:'Pinza',risk:true},
+                      {v:'maquina',label:'Máquina eléctrica'},{v:'crema',label:'Crema depilatoria'}],
+             riskNote:'Cera y pinza arrancan el vello de raíz: el láser necesita el folleto presente. Puede requerir esperar.'},
+          ]},
+        ],
+        consentText:'Declaro que la información brindada es verdadera y completa.\n\nComprendo que los resultados dependen de factores individuales y que el tratamiento requiere varias sesiones para lograr el efecto buscado.\n\nComprendo que pueden aparecer efectos temporales como enrojecimiento, inflamación o sensibilidad en la zona tratada.\n\nMe comprometo a seguir las indicaciones antes y después del tratamiento que me indique la profesional.\n\nAutorizo a GLAMB a realizar el procedimiento de depilación láser.'
+      },
+      microblading:{
+        id:'microblading', version:'1.0', minorBlock:true, askDni:true,
+        title:'Micropigmentación / Microblading — Ficha y consentimiento',
+        sections:[
+          {title:'Estado de salud', questions:[
+            {id:'embarazo',type:'single',label:'¿Está embarazada o en período de lactancia?',
+             options:[{v:'si',label:'Sí',risk:true},{v:'no',label:'No'}],
+             riskNote:'Durante el embarazo o la lactancia no se realiza el procedimiento.'},
+            {id:'condiciones',type:'multi',label:'¿Padece alguna de estas condiciones?',
+             options:[{v:'diabetes',label:'Diabetes',risk:true},{v:'autoinmune',label:'Enf. autoinmunes',risk:true},
+                      {v:'queloides',label:'Tendencia a queloides',risk:true},{v:'coagulacion',label:'Problemas de coagulación',risk:true},
+                      {v:'hepatitis',label:'Hepatitis / VIH',risk:true},{v:'cardiaca',label:'Afección cardíaca'},
+                      {v:'ninguna',label:'Ninguna',none:true}]},
+            {id:'medicacion',type:'multi',label:'¿Toma alguno de estos medicamentos?',
+             options:[{v:'anticoagulantes',label:'Anticoagulantes',risk:true},{v:'isotretinoina',label:'Isotretinoína (Roaccutan)',risk:true},
+                      {v:'corticoides',label:'Corticoides'},{v:'ninguno',label:'Ninguno',none:true}],
+             riskNote:'Los anticoagulantes y la isotretinoína afectan la cicatrización y la retención del pigmento.'},
+            {id:'alergias',type:'multi',label:'¿Tenés alergias conocidas?',
+             options:[{v:'pigmentos',label:'Pigmentos / tintas',risk:true},{v:'latex',label:'Látex'},{v:'anestesicos',label:'Anestésicos locales',risk:true},
+                      {v:'niquel',label:'Níquel / metales'},{v:'ninguna',label:'Ninguna',none:true}]},
+            {id:'otras_condiciones',type:'text',label:'Otra condición, alergia o medicación a informar',placeholder:'Opcional',optional:true},
+          ]},
+          {title:'Antecedentes en la zona', questions:[
+            {id:'previo',type:'single',label:'¿Te hiciste micropigmentación o tatuaje de cejas antes?',
+             options:[{v:'no',label:'No, es la primera vez'},{v:'si',label:'Sí',risk:true}],
+             riskNote:'Un trabajo previo puede condicionar el diseño y el color final. La profesional va a evaluar la zona.'},
+            {id:'piel_zona',type:'multi',label:'¿Presentás algo en la zona a tratar?',
+             options:[{v:'heridas',label:'Heridas'},{v:'irritacion',label:'Irritación'},{v:'acne',label:'Acné activo'},
+                      {v:'herpes',label:'Herpes activo',risk:true},{v:'ninguna',label:'Ninguna',none:true}]},
+          ]},
+        ],
+        consentText:'Declaro que la información brindada es verdadera y completa.\n\nComprendo que la micropigmentación es un procedimiento semipermanente: el color se desvanece con el tiempo y requiere retoques periódicos para mantenerse.\n\nComprendo que el resultado final depende del tipo de piel, la cicatrización individual y los cuidados posteriores, y que puede diferir del diseño previsto.\n\nComprendo que suele requerirse una sesión de retoque para completar el trabajo.\n\nComprendo los riesgos posibles: inflamación, enrojecimiento, cambios de color y, en casos poco frecuentes, reacción alérgica al pigmento o infección.\n\nMe comprometo a seguir las indicaciones de cuidado posterior que me indique la profesional.\n\nAutorizo a GLAMB a realizar el procedimiento.'
+      }
+    };
+    // Caché en memoria. Los consentimientos NO se suscriben (a diferencia del resto
+    // de las colecciones): se leen a demanda al abrir la pestaña. Así no suman
+    // lecturas en cada arranque ni retrasan el login.
+    let _consents=null, _consentsLoading=false;
+    const consentPublicUrl=token=>location.origin+'/consentimiento.html?t='+encodeURIComponent(token);
+    function _newConsentToken(){
+      try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID().replace(/-/g,''); }catch(e){}
+      return 'ct'+Date.now().toString(36)+Math.random().toString(36).slice(2,12)+Math.random().toString(36).slice(2,12);
+    }
+    async function loadConsents(force){
+      if(!fbReady||!db||curRole()!=='admin') return;
+      if(_consents&&!force) return;
+      if(_consentsLoading) return;
+      _consentsLoading=true;
+      try{
+        // limit(): nunca traemos toda la colección de una, para acotar lecturas.
+        const snap=await db.collection('consentForms').orderBy('createdAt','desc').limit(60).get();
+        _consents=snap.docs.map(d=>({id:d.id,...d.data()}));
+      }catch(e){ console.error('[GLAMB] carga de consentimientos falló:',e); _consents=_consents||[]; }
+      finally{ _consentsLoading=false; renderCommsConsentsInto(); }
+    }
+    function renderCommsConsents(){
+      const opts=Object.values(CONSENT_TEMPLATES).map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('');
+      const pend=(_consents||[]).filter(c=>c.status==='pending');
+      const firm=(_consents||[]).filter(c=>c.status==='signed');
+      const fecha=s=>s?new Date(s).toLocaleDateString('es-AR'):'—';
+      const rowsPend=pend.length?pend.map(c=>`<div class="mini-row"><strong>${esc(c.clientName||'—')}</strong><span>${esc(c.templateTitle||'')} · enviado ${fecha(c.createdAt)}</span>
+          <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+            <button class="small-btn" data-action="copyConsentLink" data-id="${c.id}">Copiar link</button>
+            <button class="small-btn" data-action="waConsentLink" data-id="${c.id}">WhatsApp</button>
+            <button class="small-btn danger" data-action="deleteConsent" data-id="${c.id}">Anular</button>
+          </div></div>`).join(''):'<div class="mini-row"><strong>Sin envíos pendientes</strong><span>Los formularios enviados y aún no firmados aparecen acá.</span></div>';
+      const rowsFirm=firm.length?firm.map(c=>`<div class="mini-row"><strong>${esc(c.clientName||'—')} ${c.isMinor?'<span class="tag" style="font-size:10px">menor</span>':''}</strong><span>${esc(c.templateTitle||'')} · firmado ${fecha(c.signedAt)}${c.signerName&&c.signerName!==c.clientName?' por '+esc(c.signerName):''}</span>
+          <div style="margin-top:6px"><button class="small-btn primary" data-action="viewConsent" data-id="${c.id}">Ver ficha</button></div></div>`).join(''):'<div class="mini-row"><strong>Sin formularios firmados</strong><span>—</span></div>';
+      return `
+        <section class="form-card">
+          <h3>Enviar un consentimiento</h3>
+          <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Elegí la clienta y el formulario. Se genera un link único que ella abre desde su celular, completa y firma. Queda archivado acá y le llega una copia por mail.</p>
+          <div class="form-grid">
+            <div class="field full"><label>Clienta</label>
+              <div class="client-autocomplete"><input id="consentClientSearch" placeholder="Buscar por nombre, WhatsApp o email" autocomplete="off"><div class="autocomplete-list" id="consentClientSuggestions"></div></div>
+              <div id="consentClientChip" style="display:none;margin-top:8px;font-size:13px"></div>
+            </div>
+            <div class="field full"><label>Formulario</label><select id="consentTemplate" class="select-like" style="width:100%">${opts}</select></div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+            <button class="btn primary" data-action="sendConsentMail">✉ Enviar por mail</button>
+            <button class="btn" data-action="sendConsentWA">WhatsApp</button>
+            <button class="btn" data-action="sendConsentCopy">Copiar link</button>
+          </div>
+        </section>
+        <section class="form-card"><h3>Pendientes de firma (${pend.length})</h3>${rowsPend}</section>
+        <section class="form-card"><h3>Firmados (${firm.length})</h3>${rowsFirm}</section>
+        ${_consents===null?'<div class="mini-row"><strong>Cargando…</strong><span>Trayendo los formularios.</span></div>':''}`;
+    }
+    function renderCommsConsentsInto(){
+      const el=$('comms-consents'); if(!el) return;
+      el.innerHTML=renderCommsConsents();
+      bindConsentSearch();
+    }
+    let _consentClient=null;
+    function bindConsentSearch(){
+      const input=$('consentClientSearch'), box=$('consentClientSuggestions'), chip=$('consentClientChip');
+      if(!input||!box) return;
+      if(_consentClient){ // conservar la selección al redibujar
+        input.value=fullName(_consentClient);
+        if(chip){ chip.style.display='block'; chip.innerHTML=`Seleccionada: <strong>${esc(fullName(_consentClient))}</strong> · ${esc(_consentClient.email||'sin email')}`; }
+      }
+      input.oninput=()=>{
+        const q=input.value.trim().toLowerCase();
+        if(q.length<2){ box.classList.remove('open'); box.innerHTML=''; return; }
+        const m=state.clients.filter(c=>[fullName(c),c.phone||'',c.email||''].join(' ').toLowerCase().includes(q)).slice(0,5);
+        box.innerHTML=m.map(c=>`<div class="autocomplete-item" data-consent-client="${c.id}">${esc(fullName(c))}<span>${maskedPhone(c)} · ${maskedEmail(c)}</span></div>`).join('');
+        box.classList.toggle('open',m.length>0);
+        box.querySelectorAll('[data-consent-client]').forEach(it=>it.onclick=()=>{
+          _consentClient=client(it.dataset.consentClient);
+          input.value=fullName(_consentClient); box.classList.remove('open');
+          if(chip){ chip.style.display='block'; chip.innerHTML=`Seleccionada: <strong>${esc(fullName(_consentClient))}</strong> · ${esc(_consentClient.email||'sin email')}`; }
+        });
+      };
+    }
+    // Crea el documento (solo el admin puede) con la foto del texto y devuelve el link.
+    async function _createConsentDoc(){
+      if(curRole()!=='admin') { showToast('Solo el administrador puede enviar consentimientos.'); return null; }
+      if(!_consentClient){ showToast('Elegí una clienta primero.'); return null; }
+      const tplId=$('consentTemplate')?.value||'laser';
+      const tpl=CONSENT_TEMPLATES[tplId];
+      if(!tpl){ showToast('Formulario no encontrado.'); return null; }
+      const token=_newConsentToken();
+      const DIAS_VALIDEZ=30;
+      const rec={
+        id:token, clientId:_consentClient.id, clientName:fullName(_consentClient),
+        templateId:tpl.id, templateTitle:tpl.title, templateVersion:tpl.version,
+        snapshot:JSON.parse(JSON.stringify(tpl)),   // foto congelada del texto
+        status:'pending', createdAt:new Date().toISOString(), createdBy:(curUser()&&curUser().name)||'admin',
+        expiresAtMs: Date.now()+DIAS_VALIDEZ*86400000
+      };
+      try{
+        await db.collection('consentForms').doc(token).set(rec);
+        _consents=[rec,...(_consents||[])];
+        return {token, rec, url:consentPublicUrl(token)};
+      }catch(e){ console.error('[GLAMB] crear consentimiento falló:',e); showToast('No se pudo generar el formulario.'); return null; }
+    }
+    async function sendConsentMail(){
+      const r=await _createConsentDoc(); if(!r) return;
+      const email=_consentClient.email;
+      if(!email){ showToast('Esa clienta no tiene email cargado. Usá WhatsApp o copiá el link.'); renderCommsConsentsInto(); return; }
+      const biz=(state.comms&&state.comms.bizName)||'GLAMB';
+      const html=`<div style="font-family:Arial,sans-serif;color:#2a2521;line-height:1.6"><p>Hola ${esc(_consentClient.first||'')},</p>
+        <p>Antes de tu turno necesitamos que completes y firmes este formulario. Te lleva 2 minutos desde el celular:</p>
+        <p><a href="${r.url}" style="background:#9c8266;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;display:inline-block">Completar y firmar</a></p>
+        <p style="font-size:12px;color:#777">Si el botón no funciona, copiá este link:<br>${r.url}</p>
+        <p style="font-size:12px;color:#777">El enlace vence en 30 días.</p><p>¡Gracias!<br>${esc(biz)}</p></div>`;
+      try{
+        await db.collection('mail').add({to:[email],message:{subject:`${biz} · ${r.rec.templateTitle}`,html,text:`Completá y firmá tu formulario: ${r.url}`},createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+        showToast('Formulario enviado por mail a '+email);
+      }catch(e){ console.error(e); showToast('No se pudo enviar el mail. El link quedó generado igual.'); }
+      renderCommsConsentsInto();
+    }
+    async function sendConsentWA(){
+      const r=await _createConsentDoc(); if(!r) return;
+      const msg=`Hola ${_consentClient.first||''} 👋 Antes de tu turno necesitamos que completes y firmes este formulario (te lleva 2 minutos): ${r.url}`;
+      renderCommsConsentsInto();
+      window.open(getWALink(_consentClient.phone||'',msg),'_blank');
+    }
+    async function sendConsentCopy(){
+      const r=await _createConsentDoc(); if(!r) return;
+      try{ await navigator.clipboard.writeText(r.url); showToast('Link copiado al portapapeles.'); }
+      catch(e){ showPromptDialog('Copiá este link manualmente:', r.url, ()=>{}); }
+      renderCommsConsentsInto();
+    }
+    function _consentById(id){ return (_consents||[]).find(c=>c.id===id); }
+    function copyConsentLink(id){
+      const c=_consentById(id); if(!c) return;
+      const url=consentPublicUrl(c.id);
+      navigator.clipboard?.writeText(url).then(()=>showToast('Link copiado.')).catch(()=>showPromptDialog('Copiá este link:',url,()=>{}));
+    }
+    function waConsentLink(id){
+      const c=_consentById(id); if(!c) return;
+      const cl=client(c.clientId);
+      window.open(getWALink(cl.phone||'',`Hola ${cl.first||''} 👋 Te reenvío el formulario para completar y firmar: ${consentPublicUrl(c.id)}`),'_blank');
+    }
+    function deleteConsent(id){
+      showConfirm('¿Anular este envío? El link deja de funcionar.',async()=>{
+        try{ await db.collection('consentForms').doc(id).delete(); _consents=(_consents||[]).filter(c=>c.id!==id); renderCommsConsentsInto(); showToast('Envío anulado.'); }
+        catch(e){ console.error(e); showToast('No se pudo anular.'); }
+      });
+    }
+    // Ficha firmada: se arma desde el snapshot guardado, no desde la plantilla actual.
+    function consentAnswersHtml(c){
+      const snap=c.snapshot||{}; const a=c.answers||{};
+      const labelOf=(q,v)=>{ const o=(q.options||[]).find(o=>o.v===v); return o?o.label:v; };
+      const riskOf=(q,v)=>{ const o=(q.options||[]).find(o=>o.v===v); return !!(o&&o.risk); };
+      let html='';
+      (snap.sections||[]).forEach(sec=>{
+        html+=`<h4>${esc(sec.title||'')}</h4>`;
+        (sec.questions||[]).forEach(q=>{
+          const v=a[q.id];
+          let val='—', risky=false;
+          if(Array.isArray(v)){ val=v.map(x=>{ if(riskOf(q,x)) risky=true; return esc(labelOf(q,x)); }).join(', ')||'—'; }
+          else if(v!==undefined&&v!==''){ risky=riskOf(q,v); val=esc(labelOf(q,v)); }
+          html+=`<div class="liq-fixed-row"><span style="max-width:60%">${esc(q.label||'')}</span><strong style="${risky?'color:#c0392b':''}">${val}${risky?' ⚠':''}</strong></div>`;
+        });
+      });
+      return html;
+    }
+    function viewConsent(id){
+      const c=_consentById(id); if(!c) return;
+      const fecha=s=>s?new Date(s).toLocaleString('es-AR'):'—';
+      const rep=c.representante;
+      const body=`
+        <section class="form-card liq-section">
+          <h4>Datos</h4>
+          <div class="liq-fixed-row"><span>Clienta</span><strong>${esc(c.clientName||'—')}</strong></div>
+          ${c.clientDni?`<div class="liq-fixed-row"><span>DNI</span><strong>${esc(c.clientDni)}</strong></div>`:''}
+          <div class="liq-fixed-row"><span>Formulario</span><strong>${esc(c.templateTitle||'')} (v${esc(c.templateVersion||'1.0')})</strong></div>
+          <div class="liq-fixed-row"><span>Firmado</span><strong>${fecha(c.signedAt)}</strong></div>
+          ${c.isMinor?`<div style="background:#f6e2e0;border-radius:10px;padding:10px 13px;font-size:12.5px;margin-top:10px"><strong>Menor de edad — firmó su representante legal</strong><br>${esc(rep?.nombre||'—')} · DNI ${esc(rep?.dni||'—')} · ${esc(rep?.vinculo||'')}${rep?.telefono?' · '+esc(rep.telefono):''}</div>`:''}
+        </section>
+        <section class="form-card liq-section"><h4>Respuestas</h4>${consentAnswersHtml(c)}</section>
+        <section class="form-card liq-section"><h4>Texto aceptado</h4>
+          <div style="font-size:12.5px;color:var(--text-muted);white-space:pre-line;line-height:1.6">${esc((c.snapshot&&c.snapshot.consentText)||'')}</div>
+        </section>
+        <section class="form-card liq-section"><h4>Firma</h4>
+          ${c.signature?`<img src="${c.signature}" alt="Firma" style="max-width:100%;background:#fff;border:1px solid var(--line);border-radius:10px">`:'<span style="color:var(--text-muted)">Sin firma registrada</span>'}
+          <div style="font-size:11px;color:var(--text-muted);margin-top:6px">${esc(c.signerName||'')} · ${fecha(c.signedAt)}</div>
+        </section>`;
+      if($('liqViewTitle')) $('liqViewTitle').textContent='Consentimiento · '+(c.clientName||'');
+      if($('liqViewSubtitle')) $('liqViewSubtitle').textContent=(c.templateTitle||'')+' · '+fecha(c.signedAt);
+      if($('liqViewBody')) $('liqViewBody').innerHTML=body;
+      if($('liqViewFooter')) $('liqViewFooter').innerHTML='<button class="btn" data-close>Cerrar</button>';
+      openDrawer('liquidationViewDrawer');
+    }
+    // ═══ FIN CONSENTIMIENTOS ═══════════════════════════════════════════════
+
     function renderComms(){
       const tpl=$('comms-templates'),cfg=$('comms-config'),pnd=$('comms-pending'),log=$('comms-log');
       if(!tpl) return;
@@ -12464,6 +12737,15 @@
       log.innerHTML=renderCommsLog();
       const rvPanel=$('comms-reviews');
       if(rvPanel){ rvPanel.innerHTML=renderCommsReviews(); bindSurveyHandlers(); }
+      // Consentimientos: se dibuja solo si la pestaña está abierta, y la carga
+      // desde Firestore ocurre a demanda (nunca en el arranque de la app).
+      // Solo se dibuja si el panel está vacío: renderComms corre en cada
+      // sincronización y redibujar borraría lo que se esté tipeando.
+      if(currentTab==='consents'){
+        const cel=$('comms-consents');
+        if(cel && !cel.innerHTML.trim()) renderCommsConsentsInto();
+        loadConsents();
+      }
       // Badge
       const badge=$('commsWABadge'),pwaLen=getPendingWA().length;
       if(badge){badge.textContent=pwaLen;badge.style.display=pwaLen?'inline-flex':'none';}
@@ -12476,6 +12758,7 @@
         document.querySelectorAll('.comms-tab-btn').forEach(b=>b.classList.toggle('active',b===btn));
         document.querySelectorAll('.comms-panel').forEach(p=>p.classList.toggle('active',p.id===`comms-${btn.dataset.commsTab}`));
         if(btn.dataset.commsTab==='pending') renderComms();
+        if(btn.dataset.commsTab==='consents'){ renderCommsConsentsInto(); loadConsents(); }
       });
       // Template toggles
       document.querySelectorAll('.comms-toggle').forEach(cb=>cb.onchange=()=>{
@@ -13498,6 +13781,13 @@ ${context}`;
       exportLiquidationExcel:  el => exportLiquidationExcel(el.dataset.id),
       moveCollabUp:            el => moveCollaborator(el.dataset.id, -1),
       moveCollabDown:          el => moveCollaborator(el.dataset.id, 1),
+      sendConsentMail:         () => sendConsentMail(),
+      sendConsentWA:           () => sendConsentWA(),
+      sendConsentCopy:         () => sendConsentCopy(),
+      copyConsentLink:         el => copyConsentLink(el.dataset.id),
+      waConsentLink:           el => waConsentLink(el.dataset.id),
+      deleteConsent:           el => deleteConsent(el.dataset.id),
+      viewConsent:             el => viewConsent(el.dataset.id),
       voidCashWithdrawal:      el => voidCashWithdrawal(el.dataset.id),
       voidCashExpense:         el => voidCashExpense(el.dataset.id),
       toggleApNote:            el => toggleApNote(el),
