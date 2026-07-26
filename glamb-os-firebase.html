@@ -525,6 +525,23 @@
       margin-bottom: 14px;
     }
 
+    /* Filtros del CRM de clientes */
+    .cli-filters{margin-bottom:14px}
+    .cli-quick{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+    .cli-chip{padding:6px 13px;border-radius:var(--radius-pill);font-size:12px;border:0.5px solid var(--line);
+      background:var(--surface);color:var(--text-muted);cursor:pointer;white-space:nowrap;user-select:none}
+    .cli-chip:hover{border-color:var(--line-strong)}
+    .cli-chip.on{background:var(--text);color:#fff;border-color:var(--text)}
+    .cli-chip .cli-n{opacity:.6;margin-left:5px;font-size:11px}
+    .cli-adv{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-top:10px;padding:12px 14px;
+      background:var(--surface-2);border-radius:12px}
+    .cli-adv .f{display:flex;flex-direction:column;gap:4px}
+    .cli-adv label{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted)}
+    .cli-adv input,.cli-adv select{padding:7px 10px;border:0.5px solid var(--line);border-radius:8px;font-size:13px;
+      background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif}
+    .cli-adv input[type=number]{width:110px}
+    .cli-count{font-size:11.5px;color:var(--text-muted);margin-top:9px}
+
     .searchbar input {
       border: 0;
       outline: 0;
@@ -3497,6 +3514,11 @@
         </div>
         <input type="file" id="clientsImportFile" accept=".csv,.txt" style="display:none">
         <div class="searchbar">⌕ <input id="clientSearch" placeholder="Buscar por nombre, WhatsApp o email"></div>
+        <div class="cli-filters">
+          <div class="cli-quick" id="clientQuickFilters"></div>
+          <div class="cli-adv" id="clientAdvFilters" style="display:none"></div>
+          <div class="cli-count" id="clientFilterCount"></div>
+        </div>
         <div class="list" id="clientsList"></div>
       </section>
 
@@ -5922,6 +5944,100 @@
       return 'sin visitas aún';
     }
 
+    // ── Filtros del CRM de clientes ───────────────────────────────────────
+    // Se calculan sobre los insights ya indexados (ver _buildClientIndex), así
+    // filtrar 1000+ clientes no vuelve a recorrer todo el historial por cada uno.
+    const CLIENT_SORTS={
+      nombre:  {label:'Nombre (A-Z)', fn:(a,b)=>fullName(a.c).localeCompare(fullName(b.c))},
+      gasto:   {label:'Mayor gasto',  fn:(a,b)=>b.ins.totalSpent-a.ins.totalSpent},
+      abandono:{label:'Hace más que no viene', fn:(a,b)=>(b.ins.daysSinceLast??-1)-(a.ins.daysSinceLast??-1)},
+      reciente:{label:'Visita más reciente',   fn:(a,b)=>(a.ins.daysSinceLast??1e9)-(b.ins.daysSinceLast??1e9)},
+      visitas: {label:'Más visitas',  fn:(a,b)=>b.ins.visits-a.ins.visits},
+      ticket:  {label:'Mayor ticket promedio', fn:(a,b)=>b.ins.avgTicket-a.ins.avgTicket}
+    };
+    const _hasInsTag=(ins,label)=>ins.tags.some(t=>t.label===label);
+    function _clientFilterState(){
+      if(!state.clientFilter) state.clientFilter={quick:'todos',tag:'',min:'',max:'',sort:'nombre',advOpen:false};
+      return state.clientFilter;
+    }
+    // Clientas con turno a futuro (para el filtro "sin turno futuro"): se arma
+    // una sola vez por render, no por cliente.
+    function _clientsWithFutureAppt(){
+      const hoy=dateKey(new Date());
+      const s=new Set();
+      (state.appointments||[]).forEach(a=>{
+        if(!a.clientId) return;
+        if(['cancelled','cancelado','voided','no_show'].includes(a.status)) return;
+        if((a.date||'')>=hoy) s.add(a.clientId);
+      });
+      return s;
+    }
+    const CLIENT_QUICK={
+      todos:      {label:'Todos',              test:()=>true},
+      recuperar:  {label:'Por recuperar',      test:(c,ins)=>_hasInsTag(ins,'Riesgo de abandono')},
+      frecuentes: {label:'Frecuentes',         test:(c,ins)=>_hasInsTag(ins,'Frecuente')},
+      altoGasto:  {label:'Alto gasto / valor', test:(c,ins)=>ins.tags.some(t=>t.cls==='gold')},
+      nuevas:     {label:'Nuevas',             test:(c,ins)=>ins.visits<=1},
+      sinTurno:   {label:'Sin turno futuro',   test:(c,ins,ctx)=>!ctx.future.has(c.id)},
+      sinContacto:{label:'Sin contacto',       test:(c)=>!(c.phone||'').trim()||!(c.email||'').trim(), adminOnly:true}
+    };
+    function applyClientFilters(base){
+      const f=_clientFilterState();
+      const ctx={future:_clientsWithFutureAppt()};
+      const withIns=base.map(c=>({c, ins:clientInsights(c.id)}));
+      // Conteos por filtro rápido (sobre el resultado de la búsqueda de texto)
+      const counts={};
+      Object.entries(CLIENT_QUICK).forEach(([k,def])=>{
+        if(def.adminOnly && curRole()!=='admin') return;
+        counts[k]=withIns.filter(({c,ins})=>def.test(c,ins,ctx)).length;
+      });
+      let list=withIns;
+      const quick=CLIENT_QUICK[f.quick]||CLIENT_QUICK.todos;
+      if(f.quick&&f.quick!=='todos') list=list.filter(({c,ins})=>quick.test(c,ins,ctx));
+      if(f.tag) list=list.filter(({c,ins})=>c.tags.includes(f.tag)||ins.tags.some(t=>t.label===f.tag));
+      const min=f.min===''?null:Number(f.min), max=f.max===''?null:Number(f.max);
+      if(min!==null) list=list.filter(({ins})=>ins.totalSpent>=min);
+      if(max!==null) list=list.filter(({ins})=>ins.totalSpent<=max);
+      const sorter=(CLIENT_SORTS[f.sort]||CLIENT_SORTS.nombre).fn;
+      list=list.slice().sort(sorter);
+      return {list,counts,total:withIns.length};
+    }
+    function renderClientFilterBar(counts,shown,total){
+      const f=_clientFilterState();
+      const qEl=$('clientQuickFilters'), aEl=$('clientAdvFilters'), cEl=$('clientFilterCount');
+      if(!qEl) return;
+      const chips=Object.entries(CLIENT_QUICK)
+        .filter(([k,def])=>!(def.adminOnly&&curRole()!=='admin'))
+        .map(([k,def])=>`<span class="cli-chip ${f.quick===k?'on':''}" data-cli-quick="${k}">${esc(def.label)}<span class="cli-n">${counts[k]??0}</span></span>`).join('');
+      qEl.innerHTML=chips+`<span class="cli-chip" data-cli-adv="1">${f.advOpen?'▲':'⚙'} Más filtros</span>`;
+      // Etiquetas: las manuales cargadas + las automáticas del sistema
+      const manual=new Set(); state.clients.forEach(c=>(c.tags||[]).forEach(t=>t&&manual.add(t)));
+      const autoTags=['Frecuente','Alto valor',(state.highSpenderConfig&&state.highSpenderConfig.label)||'Alto gasto','Riesgo de abandono','Nueva','Sin historial'];
+      const allTags=[...new Set([...manual,...autoTags])].sort();
+      aEl.style.display=f.advOpen?'flex':'none';
+      if(f.advOpen){
+        aEl.innerHTML=`
+          <div class="f"><label>Etiqueta</label><select data-cli-f="tag"><option value="">Todas</option>${allTags.map(t=>`<option value="${esc(t)}"${f.tag===t?' selected':''}>${esc(t)}</option>`).join('')}</select></div>
+          <div class="f"><label>Gasto desde</label><input type="number" data-cli-f="min" value="${f.min}" placeholder="$ mín"></div>
+          <div class="f"><label>Gasto hasta</label><input type="number" data-cli-f="max" value="${f.max}" placeholder="$ máx"></div>
+          <div class="f"><label>Ordenar por</label><select data-cli-f="sort">${Object.entries(CLIENT_SORTS).map(([k,s])=>`<option value="${k}"${f.sort===k?' selected':''}>${esc(s.label)}</option>`).join('')}</select></div>
+          <button class="small-btn" data-cli-clear="1">Limpiar</button>`;
+      }
+      const filtrando=f.quick!=='todos'||f.tag||f.min!==''||f.max!=='';
+      cEl.textContent = filtrando ? `Mostrando ${shown} de ${total} clientes` : `${total} cliente${total!==1?'s':''}`;
+      // Handlers (se re-asignan en cada dibujado: el bloque se reconstruye entero)
+      qEl.querySelectorAll('[data-cli-quick]').forEach(el=>el.onclick=()=>{ f.quick=el.dataset.cliQuick; renderClients(); });
+      const advBtn=qEl.querySelector('[data-cli-adv]');
+      if(advBtn) advBtn.onclick=()=>{ f.advOpen=!f.advOpen; renderClients(); };
+      aEl.querySelectorAll('[data-cli-f]').forEach(el=>{
+        const k=el.dataset.cliF;
+        const ev=el.tagName==='SELECT'?'onchange':'oninput';
+        el[ev]=()=>{ f[k]=el.value; clearTimeout(f._t); f._t=setTimeout(()=>renderClients(),el.tagName==='SELECT'?0:250); };
+      });
+      const clr=aEl.querySelector('[data-cli-clear]');
+      if(clr) clr.onclick=()=>{ f.quick='todos'; f.tag=''; f.min=''; f.max=''; f.sort='nombre'; renderClients(); };
+    }
+
     function renderClients(){
       // Exportar CSV y detectar duplicados: solo admin
       const expBtn=$('exportClientsBtn');
@@ -5935,9 +6051,10 @@
       // y se dibuja fresca. Evita trabajo inútil en cada sincronización de fondo.
       if(state.page!=='clients') return;
       const q=state.clientSearch.toLowerCase();
-      const list=state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c),...c.tags].join(' ').toLowerCase().includes(q));
-      $('clientsList').innerHTML=list.map(c=>{
-        const ins = clientInsights(c.id);
+      const base=state.clients.filter(c=>[fullName(c),c.phone,c.email||'',clientCode(c),...c.tags].join(' ').toLowerCase().includes(q));
+      const {list,counts,total}=applyClientFilters(base);
+      renderClientFilterBar(counts,list.length,total);
+      $('clientsList').innerHTML=list.map(({c,ins})=>{
         const lastTxt = ins.daysSinceLast!==null ? ` · última hace ${ins.daysSinceLast} día(s)` : '';
         return `<article class="client-card"><div class="client-main"><div class="avatar">${esc(initials(c))}</div><div><h3>${esc(fullName(c))}</h3><div class="meta">${esc(clientCode(c))} · ${maskedPhone(c)} · ${maskedEmail(c)} · ${frequencyLabel(ins)}${lastTxt}</div><div class="tags">${c.tags.map(t=>`<span class="tag">${esc(t)}</span>`).join('')}${insightTagsHtml(ins)}</div></div></div><div class="actions-col"><button class="small-btn primary" data-action="openClientProfile" data-id="${c.id}">Ver perfil</button><button class="small-btn" data-action="openApptForClient" data-client="${c.id}">Crear turno</button></div></article>`;
       }).join('')
