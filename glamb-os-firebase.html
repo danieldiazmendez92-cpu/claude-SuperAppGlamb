@@ -12620,8 +12620,34 @@
         consentText:'Declaro que la información brindada es verdadera y completa.\n\nComprendo que los resultados dependen de factores individuales y que el tratamiento requiere varias sesiones para lograr el efecto buscado.\n\nComprendo que pueden aparecer efectos temporales como enrojecimiento, inflamación o sensibilidad en la zona tratada.\n\nMe comprometo a seguir las indicaciones antes y después del tratamiento que me indique la profesional.\n\nAutorizo a GLAMB a realizar el procedimiento de depilación láser.'
       },
       microblading:{
-        id:'microblading', version:'1.0', minorBlock:true, askDni:true,
+        id:'microblading', version:'1.1', minorBlock:true, askDni:true,
         title:'Micropigmentación / Microblading — Ficha y consentimiento',
+        // Cuidados previos y política de seña: se muestran en el formulario, se
+        // repiten en la copia por mail y quedan aceptados en el texto firmado.
+        preCare:{
+          title:'Cuidados previos al turno',
+          intro:'Para que el procedimiento sea seguro y el resultado el mejor posible, seguí estas indicaciones antes de tu turno.',
+          groups:[
+            {t:'24 a 48 horas antes', items:[
+              'No consumir alcohol.',
+              'Evitar café, bebidas energéticas o exceso de cafeína el día del procedimiento.',
+              'No tomar aspirina, ibuprofeno, naproxeno u otros antiinflamatorios (salvo indicación médica).',
+              'Evitar suplementos que aumenten el sangrado, como omega 3, vitamina E, ginkgo biloba o ajo en cápsulas.']},
+            {t:'1 a 2 semanas antes', items:[
+              'No depilar, teñir, hacer laminado o lifting de cejas.',
+              'Evitar peelings químicos, exfoliaciones fuertes o tratamientos con láser en la zona.',
+              'No aplicar autobronceante en el rostro.']},
+            {t:'1 mes antes', items:[
+              'No realizar tratamientos estéticos invasivos en la frente o las cejas, como bótox, rellenos o hilos tensores. Lo ideal es esperar de 3 a 4 semanas entre esos procedimientos y el microblading.']},
+            {t:'El día del turno', items:[
+              'Venir con la piel limpia, sin maquillaje en las cejas.',
+              'Haber comido antes, para evitar bajas de azúcar.']}
+          ]
+        },
+        policy:{
+          title:'Reprogramaciones y cancelaciones',
+          text:'Las reprogramaciones y cancelaciones deben avisarse con un mínimo de 72 horas hábiles de anticipación. Si el aviso se hace con menos tiempo, o si no se asiste al turno, la seña se considera consumida: no se reintegra ni se traslada a otro turno.'
+        },
         sections:[
           {title:'Estado de salud', questions:[
             {id:'embarazo',type:'single',label:'¿Está embarazada o en período de lactancia?',
@@ -12668,7 +12694,7 @@
              riskNote:'En trabajos de labios suele indicarse tratamiento preventivo. Consultalo con la profesional.'},
           ]},
         ],
-        consentText:'Declaro que la información brindada es verdadera y completa.\n\nComprendo que la micropigmentación es un procedimiento semipermanente: el color se desvanece con el tiempo y requiere retoques periódicos para mantenerse.\n\nComprendo que el resultado final depende del tipo de piel, la cicatrización individual y los cuidados posteriores, y que puede diferir del diseño previsto.\n\nComprendo que suele requerirse una sesión de retoque para completar el trabajo.\n\nComprendo los riesgos posibles: inflamación, enrojecimiento, cambios de color y, en casos poco frecuentes, reacción alérgica al pigmento o infección.\n\nMe comprometo a seguir las indicaciones de cuidado posterior que me indique la profesional.\n\nAutorizo a GLAMB a realizar el procedimiento.'
+        consentText:'Declaro que la información brindada es verdadera y completa.\n\nComprendo que la micropigmentación es un procedimiento semipermanente: el color se desvanece con el tiempo y requiere retoques periódicos para mantenerse.\n\nComprendo que el resultado final depende del tipo de piel, la cicatrización individual y los cuidados posteriores, y que puede diferir del diseño previsto.\n\nComprendo que suele requerirse una sesión de retoque para completar el trabajo.\n\nComprendo los riesgos posibles: inflamación, enrojecimiento, cambios de color y, en casos poco frecuentes, reacción alérgica al pigmento o infección.\n\nMe comprometo a seguir las indicaciones de cuidado posterior que me indique la profesional.\n\nFui informada de los cuidados previos detallados en este formulario y me comprometo a cumplirlos. Comprendo que no cumplirlos puede obligar a reprogramar el turno o afectar el resultado.\n\nAcepto la política de reprogramaciones y cancelaciones: los cambios o cancelaciones deben avisarse con un mínimo de 72 horas hábiles de anticipación. Con menos tiempo, o ante la inasistencia al turno, la seña se considera consumida.\n\nAutorizo a GLAMB a realizar el procedimiento.'
       }
     };
     // Caché en memoria. Los consentimientos NO se suscriben (a diferencia del resto
@@ -12853,6 +12879,25 @@
       });
       return html;
     }
+    // Cuidados previos y política, tal como se le mostraron a la clienta ese día.
+    function consentExtrasHtml(c){
+      const snap=c.snapshot||{}; let html='';
+      const pc=snap.preCare;
+      if(pc&&(pc.groups||[]).length){
+        html+=`<section class="form-card liq-section"><h4>${esc(pc.title||'Cuidados previos')}</h4>`;
+        (pc.groups||[]).forEach(g=>{
+          html+=`<div style="margin-top:10px"><div style="font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--gold,#9c8266);font-weight:600">${esc(g.t||'')}</div><ul style="margin:4px 0 0;padding-left:18px;font-size:12.5px;color:var(--text-muted);line-height:1.55">`;
+          (g.items||[]).forEach(i=>{ html+=`<li>${esc(i)}</li>`; });
+          html+=`</ul></div>`;
+        });
+        html+=`</section>`;
+      }
+      if(snap.policy&&snap.policy.text){
+        html+=`<section class="form-card liq-section"><h4>${esc(snap.policy.title||'Política de turnos')}</h4>
+          <div style="font-size:12.5px;color:var(--text-muted);line-height:1.6">${esc(snap.policy.text)}</div></section>`;
+      }
+      return html;
+    }
     function viewConsent(id){
       const c=_consentById(id); if(!c) return;
       const fecha=s=>s?new Date(s).toLocaleString('es-AR'):'—';
@@ -12867,6 +12912,7 @@
           ${c.isMinor?`<div style="background:#f6e2e0;border-radius:10px;padding:10px 13px;font-size:12.5px;margin-top:10px"><strong>Menor de edad — firmó su representante legal</strong><br>${esc(rep?.nombre||'—')} · DNI ${esc(rep?.dni||'—')} · ${esc(rep?.vinculo||'')}${rep?.telefono?' · '+esc(rep.telefono):''}</div>`:''}
         </section>
         <section class="form-card liq-section"><h4>Respuestas</h4>${consentAnswersHtml(c)}</section>
+        ${consentExtrasHtml(c)}
         <section class="form-card liq-section"><h4>Texto aceptado</h4>
           <div style="font-size:12.5px;color:var(--text-muted);white-space:pre-line;line-height:1.6">${esc((c.snapshot&&c.snapshot.consentText)||'')}</div>
         </section>
