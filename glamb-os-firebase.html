@@ -12923,8 +12923,91 @@
       if($('liqViewTitle')) $('liqViewTitle').textContent='Consentimiento · '+(c.clientName||'');
       if($('liqViewSubtitle')) $('liqViewSubtitle').textContent=(c.templateTitle||'')+' · '+fecha(c.signedAt);
       if($('liqViewBody')) $('liqViewBody').innerHTML=body;
-      if($('liqViewFooter')) $('liqViewFooter').innerHTML='<button class="btn" data-close>Cerrar</button>';
+      if($('liqViewFooter')) $('liqViewFooter').innerHTML=
+        `<button class="btn" data-action="consent-pdf" data-id="${esc(c.id)}">Exportar PDF</button>`+
+        `<button class="btn" data-close>Cerrar</button>`;
       openDrawer('liquidationViewDrawer');
+    }
+    // Ficha firmada lista para imprimir o guardar como PDF. Se arma desde el
+    // snapshot (igual que la vista y el mail): refleja lo que se firmó ese día.
+    function exportConsentPdf(id){
+      const c=_consentById(id); if(!c) return;
+      const snap=c.snapshot||{}, a=c.answers||{};
+      const biz=(state.comms&&state.comms.bizName)||'GLAMB';
+      const fecha=s=>s?new Date(s).toLocaleString('es-AR'):'—';
+      const labelOf=(q,v)=>{ const o=(q.options||[]).find(o=>o.v===v); return o?o.label:v; };
+      const riskOf=(q,v)=>{ const o=(q.options||[]).find(o=>o.v===v); return !!(o&&o.risk); };
+      let rows='';
+      (snap.sections||[]).forEach(sec=>{
+        rows+=`<tr class="sec"><td colspan="2">${esc(sec.title||'')}</td></tr>`;
+        (sec.questions||[]).forEach(q=>{
+          const v=a[q.id];
+          let val='—', risky=false;
+          if(Array.isArray(v)){ val=v.map(x=>{ if(riskOf(q,x)) risky=true; return esc(labelOf(q,x)); }).join(', ')||'—'; }
+          else if(v!==undefined&&v!==''){ risky=riskOf(q,v); val=esc(labelOf(q,v)); }
+          rows+=`<tr><td class="q">${esc(q.label||'')}</td><td class="a${risky?' risk':''}">${val}${risky?' ⚠':''}</td></tr>`;
+        });
+      });
+      const pc=snap.preCare;
+      const careHtml=pc&&(pc.groups||[]).length
+        ? `<h2>${esc(pc.title||'Cuidados previos')}</h2>`+
+          (pc.intro?`<p class="intro">${esc(pc.intro)}</p>`:'')+
+          (pc.groups||[]).map(g=>`<div class="care"><div class="care-t">${esc(g.t||'')}</div><ul>${(g.items||[]).map(i=>`<li>${esc(i)}</li>`).join('')}</ul></div>`).join('')
+        : '';
+      const policyHtml=snap.policy&&snap.policy.text
+        ? `<div class="policy"><b>${esc(snap.policy.title||'Política de turnos')}</b>${esc(snap.policy.text)}</div>` : '';
+      const rep=c.representante;
+      const html=`<!doctype html><html lang="es"><head><meta charset="utf-8">
+<title>Consentimiento · ${esc(c.clientName||'')}</title>
+<style>
+  *{box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;color:#2b2b2b;margin:0;padding:32px 36px;font-size:13px;line-height:1.55;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  h1{font-family:Georgia,'Times New Roman',serif;font-weight:400;font-size:24px;margin:0 0 2px}
+  .eyebrow{letter-spacing:.12em;text-transform:uppercase;font-size:10px;color:#b98a6f;font-weight:600;margin-bottom:14px}
+  .sub{color:#888;font-size:12px;margin-bottom:18px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#b98a6f;margin:22px 0 8px}
+  table{width:100%;border-collapse:collapse}
+  td{padding:6px 8px;border-bottom:1px solid #f0f0f0;vertical-align:top}
+  td.q{color:#666;width:62%}
+  td.a{text-align:right;font-weight:600}
+  td.a.risk{color:#c0392b}
+  tr.sec td{padding:14px 0 4px;font-weight:700;color:#7a6350;border-bottom:none;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .minor{background:#f9ecea;border-left:3px solid #cf8b83;border-radius:8px;padding:10px 13px;margin:14px 0;font-size:12px}
+  .intro{color:#888;font-size:12px;margin:0 0 8px}
+  .care{margin-top:10px}
+  .care-t{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#b98a6f;font-weight:700}
+  .care ul{margin:3px 0 0;padding-left:18px;color:#555}
+  .care li{margin-bottom:2px}
+  .policy{background:#f9ecea;border-left:3px solid #cf8b83;border-radius:8px;padding:11px 14px;margin:16px 0;font-size:12px}
+  .policy b{display:block;color:#8a3b34;margin-bottom:2px}
+  .consent{background:#faf6f2;border:1px solid #e7d8ca;border-radius:10px;padding:14px 16px;white-space:pre-line;color:#5d564e;font-size:12px}
+  .sign{margin-top:8px}
+  .sign img{max-width:280px;border:1px solid #e7d8ca;border-radius:8px;background:#fff}
+  .sign .who{font-size:11px;color:#999;margin-top:4px}
+  .foot{margin-top:26px;color:#bbb;font-size:10px;text-align:center;border-top:1px solid #eee;padding-top:10px}
+  @media print{body{padding:0}@page{margin:15mm}h2{page-break-after:avoid}.care,.policy,.sign{page-break-inside:avoid}}
+</style></head><body>
+  <div class="eyebrow">${esc(biz)} · Consentimiento informado</div>
+  <h1>${esc(c.clientName||'')}</h1>
+  <div class="sub">${esc(c.templateTitle||snap.title||'')} (v${esc(c.templateVersion||'1.0')})${c.clientDni?' · DNI '+esc(c.clientDni):''} · Firmado el ${esc(fecha(c.signedAt))}</div>
+  ${c.isMinor&&rep?`<div class="minor"><b>Menor de edad — firmó su representante legal.</b><br>${esc(rep.nombre||'')} · DNI ${esc(rep.dni||'')} · ${esc(rep.vinculo||'')}${rep.telefono?' · '+esc(rep.telefono):''}</div>`:''}
+  <h2>Respuestas</h2>
+  <table><tbody>${rows}</tbody></table>
+  ${careHtml}
+  ${policyHtml}
+  <h2>Texto aceptado</h2>
+  <div class="consent">${esc(snap.consentText||'')}</div>
+  <h2>Firma</h2>
+  <div class="sign">
+    ${c.signature?`<img src="${c.signature}" alt="Firma">`:'<span style="color:#aaa">Sin firma registrada</span>'}
+    <div class="who">${esc(c.signerName||'')} · ${esc(fecha(c.signedAt))}</div>
+  </div>
+  <div class="foot">Generado por ${esc(biz)} OS · ${new Date().toLocaleDateString('es-AR')}</div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>
+</body></html>`;
+      const w=window.open('','_blank');
+      if(!w){ showToast('Permití las ventanas emergentes para exportar el PDF.'); return; }
+      w.document.write(html); w.document.close();
     }
     // ═══ FIN CONSENTIMIENTOS ═══════════════════════════════════════════════
 
@@ -14005,6 +14088,7 @@ ${context}`;
       waConsentLink:           el => waConsentLink(el.dataset.id),
       deleteConsent:           el => deleteConsent(el.dataset.id),
       viewConsent:             el => viewConsent(el.dataset.id),
+      'consent-pdf':           el => exportConsentPdf(el.dataset.id),
       voidCashWithdrawal:      el => voidCashWithdrawal(el.dataset.id),
       voidCashExpense:         el => voidCashExpense(el.dataset.id),
       toggleApNote:            el => toggleApNote(el),
