@@ -287,6 +287,8 @@ async function inspectRetention() {
   console.log('=== PLANTILLA retention ===');
   console.log('enabled:', ret.enabled, '| daysAfter:', ret.daysAfter, '| subject:', JSON.stringify(ret.subject || ''));
   console.log('comms vive en:', cfgSnap.exists && cfg.comms ? 'appState/config' : 'appState/main');
+  console.log('body guardado:', JSON.stringify(ret.body || ''));
+  console.log('bizName:', JSON.stringify(comms.bizName || ''), '| claves de comms:', Object.keys(comms).join(','));
 
   const log = comms.sentLog || [];
   const byType = {};
@@ -352,6 +354,8 @@ async function inspectRetention() {
     const when = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toISOString().slice(0,16) : '';
     (per[to] = per[to] || []).push(when);
   });
+  const last = rows.sort((a,b)=>String((a.createdAt&&a.createdAt.toMillis&&a.createdAt.toMillis())||0)-String((b.createdAt&&b.createdAt.toMillis&&b.createdAt.toMillis())||0)).slice(-1)[0];
+  if (last) console.log('TEXTO REALMENTE ENVIADO (último):', JSON.stringify(((last.message||{}).text||'').slice(0,400)));
   const dup = Object.entries(per).filter(([,v]) => v.length > 1).sort((a,b)=>b[1].length-a[1].length);
   console.log('destinatarios distintos:', Object.keys(per).length, '| con MÁS DE UN envío:', dup.length);
   dup.slice(0, 15).forEach(([to, when]) => {
