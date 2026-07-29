@@ -369,6 +369,7 @@ exports.sendConsentInvite = onDocumentCreated(
  * El guardado se hace ANTES de encolar el mail: si algo falla, se pierde un
  * envío (recuperable a mano) y nunca se duplica.
  */
+const RETENTION_SCHEDULE_REV = 2; // fuerza el redespliegue para crear la tarea programada
 const RETENTION_COOLDOWN_DAYS = 90;
 const RETENTION_MAX_PER_RUN = 40;
 
