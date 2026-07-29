@@ -273,6 +273,160 @@ async function inspectLiqFinance() {
   });
 }
 
+// inspect-retention: SOLO LECTURA. Diagnostica los emails de reactivación:
+// cuántas clientas califican hoy, cómo está el registro anti-duplicados
+// (comms.sentLog, tope 100) y cuántos mails repetidos salieron de verdad.
+async function inspectRetention() {
+  const [cfgSnap, mainSnap] = await Promise.all([
+    db.doc('appState/config').get(), db.doc('appState/main').get(),
+  ]);
+  const cfg = cfgSnap.exists ? cfgSnap.data() : {};
+  const main = mainSnap.exists ? mainSnap.data() : {};
+  const comms = cfg.comms || main.comms || {};
+  const ret = (comms.templates || {}).retention || {};
+  console.log('=== PLANTILLA retention ===');
+  console.log('enabled:', ret.enabled, '| daysAfter:', ret.daysAfter, '| subject:', JSON.stringify(ret.subject || ''));
+  console.log('comms vive en:', cfgSnap.exists && cfg.comms ? 'appState/config' : 'appState/main');
+  console.log('body guardado:', JSON.stringify(ret.body || ''));
+  console.log('bizName:', JSON.stringify(comms.bizName || ''), '| claves de comms:', Object.keys(comms).join(','));
+
+  const log = comms.sentLog || [];
+  const byType = {};
+  log.forEach(e => { byType[e.type] = (byType[e.type] || 0) + 1; });
+  const dates = log.map(e => e.sentAt).filter(Boolean).sort();
+  console.log('\n=== comms.sentLog (registro anti-duplicados) ===');
+  console.log('entradas:', log.length, '(tope duro: 100)');
+  console.log('por tipo:', JSON.stringify(byType));
+  console.log('más vieja:', dates[0] || '—', '| más nueva:', dates[dates.length - 1] || '—');
+  if (dates.length > 1) {
+    const spanH = (Date.parse(dates[dates.length-1]) - Date.parse(dates[0])) / 3600000;
+    console.log('el registro solo recuerda las últimas', spanH.toFixed(1), 'horas');
+  }
+  const retKeys = log.filter(e => e.type === 'retention').map(e => e.apptId);
+  console.log('claves retention guardadas:', retKeys.length, JSON.stringify(retKeys.slice(0, 20)));
+
+  // Candidatas de hoy, replicando getRetentionCandidates() de la app
+  const [clientsSnap, apptsSnap] = await Promise.all([
+    db.collection('clients').get(), db.collection('appointments').get(),
+  ]);
+  const clients = clientsSnap.docs.map(d => d.data());
+  const appts = apptsSnap.docs.map(d => d.data());
+  const privSnap = await db.collection('clientsPrivate').get();
+  const priv = {}; privSnap.docs.forEach(d => priv[d.id] = d.data());
+  const today = new Date().toISOString().slice(0, 10);
+  const daysAfter = Number(ret.daysAfter || 27);
+  const cutoff = new Date(Date.now() - daysAfter * 86400000).toISOString().slice(0, 10);
+  const byClient = {};
+  appts.forEach(a => {
+    if (a.isAdditional) return;
+    if (['cancelled','cancelado','voided'].includes(a.status)) return;
+    (byClient[a.clientId] = byClient[a.clientId] || []).push(a);
+  });
+  const cands = clients.filter(c => {
+    const email = c.email || (priv[c.id] && priv[c.id].email);
+    if (!email && !c.phone) return false;
+    const cas = byClient[c.id] || [];
+    if (!cas.length) return false;
+    const last = cas.filter(a => (a.date||'') <= today).sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
+    if (!last || (last.date||'') > cutoff) return false;
+    return !cas.some(a => (a.date||'') > today);
+  });
+  const withEmail = cands.filter(c => c.email || (priv[c.id] && priv[c.id].email));
+  console.log('\n=== CANDIDATAS A REACTIVACIÓN (hoy) ===');
+  console.log('total que califican:', cands.length, '| con email (o sea, que reciben mail):', withEmail.length);
+  console.log('capacidad del registro para retention: 100 menos lo que ocupen los otros tipos');
+  if (withEmail.length > retKeys.length) {
+    console.log('>>> ALERTA: hay', withEmail.length, 'candidatas y solo', retKeys.length, 'recordadas: el resto se vuelve a enviar.');
+  }
+
+  // Mails realmente encolados: repetidos por destinatario
+  const mailSnap = await db.collection('mail').get();
+  const subj = String(ret.subject || '').replace(/\{\{\w+\}\}/g, '').trim().slice(0, 18);
+  const rows = mailSnap.docs.map(d => d.data()).filter(m => {
+    const s = (m.message && m.message.subject) || '';
+    return subj && s.includes(subj);
+  });
+  console.log('\n=== MAILS DE REACTIVACIÓN REALMENTE ENCOLADOS ===');
+  console.log('coincidencias por asunto', JSON.stringify(subj), ':', rows.length, 'de', mailSnap.size, 'mails totales');
+  const per = {};
+  rows.forEach(m => {
+    const to = (Array.isArray(m.to) ? m.to[0] : m.to) || '?';
+    const when = m.createdAt && m.createdAt.toDate ? m.createdAt.toDate().toISOString().slice(0,16) : '';
+    (per[to] = per[to] || []).push(when);
+  });
+  const last = rows.sort((a,b)=>String((a.createdAt&&a.createdAt.toMillis&&a.createdAt.toMillis())||0)-String((b.createdAt&&b.createdAt.toMillis&&b.createdAt.toMillis())||0)).slice(-1)[0];
+  if (last) console.log('TEXTO REALMENTE ENVIADO (último):', JSON.stringify(((last.message||{}).text||'').slice(0,400)));
+  const dup = Object.entries(per).filter(([,v]) => v.length > 1).sort((a,b)=>b[1].length-a[1].length);
+  console.log('destinatarios distintos:', Object.keys(per).length, '| con MÁS DE UN envío:', dup.length);
+  dup.slice(0, 15).forEach(([to, when]) => {
+    const anon = to.replace(/^(.).*(@.*)$/, '$1***$2');
+    console.log('  ·', anon, '→', when.length, 'envíos:', when.sort().join(', '));
+  });
+}
+
+// seed-retention-guards: ESCRIBE, pero solo crea candados que IMPIDEN enviar
+// mails. Marca como "ya avisada" a toda clienta que YA recibió un mail de
+// reactivación, para que la nueva función programada no le mande uno más.
+// No borra ni modifica nada más. Idempotente.
+async function seedRetentionGuards() {
+  const APPLY = process.env.SEED_APPLY === '1' || MODE.endsWith('-apply');
+  const cfg = (await db.doc('appState/config').get()).data() || {};
+  const comms = cfg.comms || {};
+  const ret = (comms.templates || {}).retention || {};
+  const subj = String(ret.subject || '').replace(/\{\{\w+\}\}/g, '').trim().slice(0, 18);
+  if (!subj) { console.log('Sin asunto de referencia; abortado.'); return; }
+
+  const mailSnap = await db.collection('mail').get();
+  const lastByEmail = {};
+  mailSnap.docs.forEach((d) => {
+    const m = d.data();
+    const s = (m.message && m.message.subject) || '';
+    if (!s.includes(subj)) return;
+    const to = (Array.isArray(m.to) ? m.to[0] : m.to) || '';
+    const ms = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : 0;
+    if (!to) return;
+    if (!lastByEmail[to] || ms > lastByEmail[to]) lastByEmail[to] = ms;
+  });
+  console.log('emails que ya recibieron reactivación:', Object.keys(lastByEmail).length);
+
+  // email -> clientId
+  const [clientsSnap, privSnap, apptsSnap] = await Promise.all([
+    db.collection('clients').get(),
+    db.collection('clientsPrivate').get(),
+    db.collection('appointments').select('clientId', 'date', 'status', 'isAdditional').get(),
+  ]);
+  const idByEmail = {};
+  clientsSnap.docs.forEach((d) => { const c = d.data() || {}; if (c.email) idByEmail[c.email.toLowerCase()] = d.id; });
+  privSnap.docs.forEach((d) => { const c = d.data() || {}; if (c.email) idByEmail[c.email.toLowerCase()] = d.id; });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const lastAppt = {};
+  apptsSnap.docs.forEach((d) => {
+    const a = d.data() || {};
+    if (a.isAdditional) return;
+    if (a.status && ['cancelled', 'cancelado', 'voided'].includes(a.status)) return;
+    if (!a.clientId || !a.date || a.date > today) return;
+    if (!lastAppt[a.clientId] || a.date > lastAppt[a.clientId]) lastAppt[a.clientId] = a.date;
+  });
+
+  let n = 0; let miss = 0;
+  for (const [email, ms] of Object.entries(lastByEmail)) {
+    const id = idByEmail[email.toLowerCase()];
+    if (!id) { miss++; console.log('  sin clienta para', email.replace(/^(.).*(@.*)$/, '$1***$2')); continue; }
+    const doc = {
+      type: 'retention', clientId: id,
+      lastApptDate: lastAppt[id] || '',
+      lastSentAtMs: ms || Date.now(),
+      seededFromMailHistory: true,
+    };
+    console.log('  candado →', id, 'últimoTurno=', doc.lastApptDate, 'últimoMail=', new Date(doc.lastSentAtMs).toISOString().slice(0, 10));
+    if (APPLY) await db.doc(`sentReminders/retention_${id}`).set(doc, {merge: true});
+    n++;
+  }
+  console.log(APPLY ? `ESCRITO: ${n} candado(s).` : `SIMULACIÓN: se crearían ${n} candado(s). Usá el modo seed-retention-guards-apply para aplicar.`);
+  if (miss) console.log('sin correspondencia:', miss);
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -336,6 +490,8 @@ async function inspectReportes() {
   if (MODE === 'inspect-commissions') { await inspectCommissions(); return; }
   if (MODE === 'simulate-commissions') { await simulateCommissions(); return; }
   if (MODE === 'inspect-reportes') { await inspectReportes(); return; }
+  if (MODE === 'inspect-retention') { await inspectRetention(); return; }
+  if (MODE === 'seed-retention-guards' || MODE === 'seed-retention-guards-apply') { await seedRetentionGuards(); return; }
   if (MODE === 'inspect-liq-finance') { await inspectLiqFinance(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }

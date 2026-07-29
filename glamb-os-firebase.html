@@ -11999,7 +11999,11 @@
       });
       return 'https://calendar.google.com/calendar/render?'+p.toString();
     }
-    async function sendReminderEmail(type,appt,c){
+    // logKey: con qué clave se anota el envío. Por defecto el id del turno, pero
+    // la reactivación no se identifica por turno sino por clienta+ausencia; sin
+    // este parámetro se anotaban DOS entradas por envío (una con cada clave) y
+    // el registro, que tiene tope 100, se llenaba al doble de velocidad.
+    async function sendReminderEmail(type,appt,c,logKey){
       if(!fbReady||!db) return false;
       const toEmail=c?.email||(c?.id&&state.clientsPrivate?.[c.id]?.email);
       if(!toEmail) return false;
@@ -12029,11 +12033,11 @@
       message.html=html; message.text=text;
       try{
         await db.collection('mail').add({to:[toEmail],message,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
-        logReminder(type,appt?.id||'','email','sent');
+        logReminder(type,logKey||appt?.id||'','email','sent');
         return true;
       }catch(e){
         console.error('mail write failed',e);
-        logReminder(type,appt?.id||'','email','error');
+        logReminder(type,logKey||appt?.id||'','email','error');
         return false;
       }
     }
@@ -12069,35 +12073,42 @@
         return !cas.some(a=>(a.date||'')>today);
       });
     }
-    function checkAndSendScheduledReminders(){
-      if(!state.comms) return;
-      const tpls=state.comms.templates||{};
-      // El recordatorio previo por EMAIL ahora lo envía la Cloud Function
-      // programada (sendAppointmentReminders), que corre en el servidor cada
-      // 15 min — así sale SIEMPRE, esté la app abierta o no. Se quitó de acá
-      // para no enviar duplicados.
-      if(tpls.retention?.enabled){
-        for(const c of getRetentionCandidates()){
-          const cas=state.appointments.filter(a=>a.clientId===c.id&&!a.isAdditional&&a.date);
-          const last=cas.sort((a,b)=>b.date.localeCompare(a.date)).find(Boolean);
-          const logKey=c.id+'-'+(last?.date||'');
-          if(!alreadySentReminder('retention',logKey)){
-            sendReminderEmail('retention',last||{},c).then(ok=>{if(ok) logReminder('retention',logKey,'email');});
-          }
-        }
-      }
-    }
+    // NOTA: ya no hay envíos automáticos desde el navegador.
+    //  · Recordatorio previo por email → Cloud Function sendAppointmentReminders.
+    //  · Reactivación → Cloud Function sendRetentionEmails (1 vez por día).
+    // Corrían en cada dispositivo con la app abierta: varios equipos abrían a la
+    // misma hora, ninguno veía lo que el otro ya había mandado, y la misma
+    // clienta llegó a recibir el mail 6 veces en dos minutos. En el servidor
+    // corre una sola vez y el "ya le escribí" vive en un documento por clienta
+    // (sentReminders), no en la lista de 100 que se olvidaba a los 5 días.
+    // Los botones de la pestaña Pendientes siguen siendo manuales.
     function triggerBookingReminder(appt){
       if(!state.comms?.templates?.booking?.enabled) return;
       const c=client(appt.clientId);
       if(!c?.id) return;
       sendReminderEmail('booking',appt,c).then(ok=>{if(ok) showToast(`Confirmación enviada a ${c.first}`);});
     }
+    // Reactivaciones que ya mandó el servidor. Se leen UNA vez por sesión y solo
+    // si el admin entra a Pendientes: no se suscriben ni suman lecturas al
+    // arranque. Sirve para no ofrecer un envío manual que sería duplicado.
+    let _retSent=null,_retSentLoading=false;
+    function loadRetentionGuards(){
+      if(_retSent||_retSentLoading) return;
+      if(!fbReady||!db||curRole()!=='admin') return;
+      _retSentLoading=true;
+      db.collection('sentReminders').where('type','==','retention').limit(200).get()
+        .then(s=>{ const m={}; s.forEach(d=>{const x=d.data()||{}; if(x.clientId) m[x.clientId]=x;}); _retSent=m; renderComms(); })
+        .catch(e=>{ console.warn('sentReminders no disponible',e); _retSent={}; })
+        .finally(()=>{ _retSentLoading=false; });
+    }
     function sendRetentionEmailForClient(clientId){
       const c=state.clients.find(x=>x.id===clientId); if(!c) return;
       const cas=state.appointments.filter(a=>a.clientId===clientId&&!a.isAdditional&&a.date);
       const last=cas.sort((a,b)=>b.date.localeCompare(a.date)).find(Boolean);
-      sendReminderEmail('retention',last||{},c).then(ok=>{showToast(ok?`Email enviado a ${c.first}`:'Error al enviar');renderComms();});
+      // Misma clave que usa el servidor, para que un envío manual y uno
+      // automático nunca se dupliquen entre sí.
+      const logKey=clientId+'-'+(last?.date||'');
+      sendReminderEmail('retention',last||{},c,logKey).then(ok=>{showToast(ok?`Email enviado a ${c.first}`:'Error al enviar');renderComms();});
     }
 
     function renderCommsTemplates(){
@@ -12162,6 +12173,7 @@
         html+='</div>';
       }
       if(ret.length){
+        loadRetentionGuards();
         const daysAfter=state.comms.templates.retention.daysAfter||27;
         html+=`<div class="form-card" style="margin-bottom:16px"><h3 style="margin-bottom:4px">🔄 Clientas a reactivar (${ret.length})</h3><div class="meta" style="margin-bottom:12px">Sin turno próximo hace más de ${daysAfter} días.</div>`;
         html+=ret.slice(0,30).map(c=>{
@@ -12171,8 +12183,13 @@
           const waMsg=fillTemplate(state.comms.templates.preWA.message||'',getTemplateVars(last,c));
           const waLink=c.phone?getWALink(c.phone,waMsg):'';
           const retLogKey=c.id+'-'+(last?.date||'');
-          const sent=alreadySentReminder('retention',retLogKey);
-          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><div style="flex:1"><strong>${esc(fullName(c))}</strong><div style="font-size:11px;color:var(--text-muted)">Último turno: hace ${daysAgo} días${last?' · '+esc(last.service):''}</div></div><div style="display:flex;gap:6px;flex-shrink:0">${c.email&&!sent?`<button class="small-btn primary" onclick="sendRetentionEmailForClient('${c.id}')">Email</button>`:sent?'<span style="font-size:11px;color:#1a7a4a">✓ Enviado</span>':''} ${waLink?`<a href="${esc(waLink)}" target="_blank" rel="noopener" class="small-btn" style="text-decoration:none">WA</a>`:''}</div></div>`;
+          // "Ya enviado" = lo mandó alguien desde acá (sentLog) o lo mandó el
+          // servidor en su corrida diaria (sentReminders).
+          const g=_retSent&&_retSent[c.id];
+          const sentByServer=!!(g&&g.lastApptDate===(last?.date||''));
+          const sent=alreadySentReminder('retention',retLogKey)||sentByServer;
+          const sentWhen=sentByServer&&g.lastSentAtMs?new Date(g.lastSentAtMs).toLocaleDateString('es-AR'):'';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)"><div style="flex:1"><strong>${esc(fullName(c))}</strong><div style="font-size:11px;color:var(--text-muted)">Último turno: hace ${daysAgo} días${last?' · '+esc(last.service):''}</div></div><div style="display:flex;gap:6px;flex-shrink:0">${c.email&&!sent?`<button class="small-btn primary" onclick="sendRetentionEmailForClient('${c.id}')">Email</button>`:sent?`<span style="font-size:11px;color:#1a7a4a">✓ Enviado${sentWhen?' '+sentWhen:''}</span>`:''} ${waLink?`<a href="${esc(waLink)}" target="_blank" rel="noopener" class="small-btn" style="text-decoration:none">WA</a>`:''}</div></div>`;
         }).join('');
         html+='</div>';
       }
@@ -13105,9 +13122,7 @@
         showToast(ok?'✓ Documento creado en colección mail — llegará si la extensión está instalada':'✗ Error al escribir en Firestore. Verificá las reglas.');
       };
     }
-    // Run reminder check on load and every 30 min
-    setTimeout(checkAndSendScheduledReminders, 8000);
-    setInterval(checkAndSendScheduledReminders, 30*60*1000);
+    // (Ya no hay temporizador de envíos: todo lo automático corre en el servidor.)
     // ── FIN COMUNICACIONES ────────────────────────────────────────────────────
 
     // ── ATHENAS IA ────────────────────────────────────────────────────────────
