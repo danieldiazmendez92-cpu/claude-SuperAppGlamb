@@ -427,6 +427,48 @@ async function seedRetentionGuards() {
   if (miss) console.log('sin correspondencia:', miss);
 }
 
+// fix-liq-expenses: crea el gasto de sueldo que falta para las liquidaciones
+// PAGADAS que quedaron sin él (las que se pagaron antes de que existiera el
+// registro automático). Replica exactamente lo que hace la app al marcar
+// pagada: gasto en categoría "salaries" con fecha de pago, y enlace
+// liq.expenseId para que no se duplique nunca más.
+// Idempotente: si la liquidación ya tiene expenseId, no hace nada.
+async function fixLiqExpenses() {
+  const APPLY = MODE.endsWith('-apply');
+  const METHOD = process.env.PAY_METHOD || 'Transferencia';
+  const docId = (v) => String(v).replace(/[\/.]/g, '_');
+
+  const [liqs, exps] = await Promise.all([
+    db.collection('financeLiquidations').get(),
+    db.collection('financeExpenses').get(),
+  ]);
+  const all = exps.docs.map((d) => d.data());
+  const pend = liqs.docs.filter((d) => {
+    const l = d.data();
+    return l.status === 'paid' && !l.expenseId && Number(l.netPay) > 0;
+  });
+  console.log('liquidaciones pagadas sin gasto:', pend.length);
+
+  for (const d of pend) {
+    const l = d.data();
+    const date = String(l.paidAt || '').slice(0, 10);
+    const description = `Sueldo ${l.collaboratorName} · ${(l.period && l.period.label) || ''}`;
+    // Chequeo anti-duplicado por si ya se cargó a mano mientras tanto.
+    const dup = all.find((e) => e.date === date && Number(e.amount) === Number(l.netPay) && e.category === 'salaries');
+    if (dup) { console.log('  YA EXISTE un gasto igual, no se crea:', JSON.stringify({d: dup.date, a: dup.amount, t: dup.description})); continue; }
+
+    const id = 'exp' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
+    const exp = {id, date, category: 'salaries', description, amount: Number(l.netPay), paymentMethod: METHOD};
+    console.log('  GASTO A CREAR:', JSON.stringify(exp), '→ liquidación', l.id);
+    if (APPLY) {
+      await db.collection('financeExpenses').doc(docId(id)).set(exp);
+      await db.collection('financeLiquidations').doc(d.id).set({expenseId: id}, {merge: true});
+      console.log('    escrito y enlazado.');
+    }
+  }
+  console.log(APPLY ? 'LISTO.' : 'SIMULACIÓN: nada escrito. Usá fix-liq-expenses-apply.');
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -493,6 +535,7 @@ async function inspectReportes() {
   if (MODE === 'inspect-retention') { await inspectRetention(); return; }
   if (MODE === 'seed-retention-guards' || MODE === 'seed-retention-guards-apply') { await seedRetentionGuards(); return; }
   if (MODE === 'inspect-liq-finance') { await inspectLiqFinance(); return; }
+  if (MODE === 'fix-liq-expenses' || MODE === 'fix-liq-expenses-apply') { await fixLiqExpenses(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
 
