@@ -67,6 +67,14 @@ service cloud.firestore {
     match /financeDeductions/{id}   { allow read, write: if isAdmin(); }
     match /financeLiquidations/{id} { allow read, write: if isAdmin(); }
 
+    // Registro de "ya le mandé este recordatorio", escrito SOLO por las Cloud
+    // Functions (que usan el SDK admin y no pasan por estas reglas). La app lo
+    // lee para mostrar en Pendientes a quién ya le escribió el servidor y no
+    // ofrecer un envío manual duplicado. Solo admin: guarda emails de clientas.
+    match /sentReminders/{id} {
+      allow read: if isAdmin();
+    }
+
     // Cola de emails — usada por la extensión "Trigger Email from Firestore".
     // Usuarios autenticados pueden crear documentos (encolar emails);
     // solo la extensión (service account) los lee y actualiza.

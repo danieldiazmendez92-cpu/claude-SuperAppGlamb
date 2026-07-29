@@ -364,6 +364,69 @@ async function inspectRetention() {
   });
 }
 
+// seed-retention-guards: ESCRIBE, pero solo crea candados que IMPIDEN enviar
+// mails. Marca como "ya avisada" a toda clienta que YA recibió un mail de
+// reactivación, para que la nueva función programada no le mande uno más.
+// No borra ni modifica nada más. Idempotente.
+async function seedRetentionGuards() {
+  const APPLY = process.env.SEED_APPLY === '1' || MODE.endsWith('-apply');
+  const cfg = (await db.doc('appState/config').get()).data() || {};
+  const comms = cfg.comms || {};
+  const ret = (comms.templates || {}).retention || {};
+  const subj = String(ret.subject || '').replace(/\{\{\w+\}\}/g, '').trim().slice(0, 18);
+  if (!subj) { console.log('Sin asunto de referencia; abortado.'); return; }
+
+  const mailSnap = await db.collection('mail').get();
+  const lastByEmail = {};
+  mailSnap.docs.forEach((d) => {
+    const m = d.data();
+    const s = (m.message && m.message.subject) || '';
+    if (!s.includes(subj)) return;
+    const to = (Array.isArray(m.to) ? m.to[0] : m.to) || '';
+    const ms = m.createdAt && m.createdAt.toMillis ? m.createdAt.toMillis() : 0;
+    if (!to) return;
+    if (!lastByEmail[to] || ms > lastByEmail[to]) lastByEmail[to] = ms;
+  });
+  console.log('emails que ya recibieron reactivación:', Object.keys(lastByEmail).length);
+
+  // email -> clientId
+  const [clientsSnap, privSnap, apptsSnap] = await Promise.all([
+    db.collection('clients').get(),
+    db.collection('clientsPrivate').get(),
+    db.collection('appointments').select('clientId', 'date', 'status', 'isAdditional').get(),
+  ]);
+  const idByEmail = {};
+  clientsSnap.docs.forEach((d) => { const c = d.data() || {}; if (c.email) idByEmail[c.email.toLowerCase()] = d.id; });
+  privSnap.docs.forEach((d) => { const c = d.data() || {}; if (c.email) idByEmail[c.email.toLowerCase()] = d.id; });
+
+  const today = new Date().toISOString().slice(0, 10);
+  const lastAppt = {};
+  apptsSnap.docs.forEach((d) => {
+    const a = d.data() || {};
+    if (a.isAdditional) return;
+    if (a.status && ['cancelled', 'cancelado', 'voided'].includes(a.status)) return;
+    if (!a.clientId || !a.date || a.date > today) return;
+    if (!lastAppt[a.clientId] || a.date > lastAppt[a.clientId]) lastAppt[a.clientId] = a.date;
+  });
+
+  let n = 0; let miss = 0;
+  for (const [email, ms] of Object.entries(lastByEmail)) {
+    const id = idByEmail[email.toLowerCase()];
+    if (!id) { miss++; console.log('  sin clienta para', email.replace(/^(.).*(@.*)$/, '$1***$2')); continue; }
+    const doc = {
+      type: 'retention', clientId: id,
+      lastApptDate: lastAppt[id] || '',
+      lastSentAtMs: ms || Date.now(),
+      seededFromMailHistory: true,
+    };
+    console.log('  candado →', id, 'últimoTurno=', doc.lastApptDate, 'últimoMail=', new Date(doc.lastSentAtMs).toISOString().slice(0, 10));
+    if (APPLY) await db.doc(`sentReminders/retention_${id}`).set(doc, {merge: true});
+    n++;
+  }
+  console.log(APPLY ? `ESCRITO: ${n} candado(s).` : `SIMULACIÓN: se crearían ${n} candado(s). Usá el modo seed-retention-guards-apply para aplicar.`);
+  if (miss) console.log('sin correspondencia:', miss);
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -428,6 +491,7 @@ async function inspectReportes() {
   if (MODE === 'simulate-commissions') { await simulateCommissions(); return; }
   if (MODE === 'inspect-reportes') { await inspectReportes(); return; }
   if (MODE === 'inspect-retention') { await inspectRetention(); return; }
+  if (MODE === 'seed-retention-guards' || MODE === 'seed-retention-guards-apply') { await seedRetentionGuards(); return; }
   if (MODE === 'inspect-liq-finance') { await inspectLiqFinance(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }

@@ -350,3 +350,130 @@ exports.sendConsentInvite = onDocumentCreated(
       console.log(`Invitación de consentimiento ${event.params.id} enviada a ${email}`);
     },
 );
+
+/**
+ * Emails de reactivación ("¿Cuándo nos volvemos a ver?").
+ *
+ * Antes esto corría en el NAVEGADOR: cada dispositivo con la app abierta hacía
+ * su propia ronda de envíos. Con varios equipos abiertos a la vez ninguno veía
+ * lo que ya había enviado el otro y la misma clienta recibía el mail 6 veces
+ * en dos minutos. Además el registro anti-duplicados vivía en una lista tope
+ * 100 compartida con los otros recordatorios: se llenaba en ~5 días, se
+ * olvidaba, y la clienta volvía a recibirlo.
+ *
+ * Ahora corre UNA vez por día en el servidor, y el "ya le escribí" vive en un
+ * documento por clienta (sentReminders/retention_<clientId>), que no se borra
+ * ni se pisa. Dos candados:
+ *   1) una sola vez por ausencia (clave: la fecha de su último turno);
+ *   2) nunca dos veces a la misma clienta dentro de COOLDOWN_DAYS.
+ * El guardado se hace ANTES de encolar el mail: si algo falla, se pierde un
+ * envío (recuperable a mano) y nunca se duplica.
+ */
+const RETENTION_COOLDOWN_DAYS = 90;
+const RETENTION_MAX_PER_RUN = 40;
+
+exports.sendRetentionEmails = onSchedule(
+    {
+      schedule: "every day 11:00",
+      timeZone: "America/Argentina/Buenos_Aires",
+      region: "southamerica-east1",
+    },
+    async () => {
+      const [cfgSnap, blobSnap] = await Promise.all([
+        db.doc("appState/config").get(),
+        db.doc("appState/main").get(),
+      ]);
+      const cfg = cfgSnap.exists ? cfgSnap.data() : {};
+      const blob = blobSnap.exists ? blobSnap.data() : {};
+      const comms = (cfg && cfg.comms) || (blob && blob.comms) || {};
+      const tpl = (comms.templates || {}).retention;
+      if (!tpl || tpl.enabled === false) {
+        console.log("Reactivación deshabilitada; nada que enviar.");
+        return;
+      }
+      const bizName = comms.bizName || "GLAMB";
+      const daysAfter = Number(tpl.daysAfter || 27);
+      const {today} = argentinaDates();
+      const cutoff = new Date(Date.now() - daysAfter * 86400000).toISOString().slice(0, 10);
+
+      // Turnos: se leen una vez por día. Se descartan los anulados y los
+      // adicionales, igual que hacía la app.
+      const apptSnap = await db.collection("appointments")
+          .select("clientId", "date", "status", "isAdditional", "service").get();
+      const lastByClient = {};   // clientId -> fecha del último turno pasado
+      const activeClients = new Set(); // con turno reciente o futuro: no molestar
+      apptSnap.docs.forEach((d) => {
+        const a = d.data() || {};
+        if (a.isAdditional) return;
+        if (a.status && ["cancelled", "cancelado", "voided"].includes(a.status)) return;
+        if (!a.clientId || !a.date) return;
+        if (a.date > cutoff) { activeClients.add(a.clientId); return; }
+        if (a.date <= today && (!lastByClient[a.clientId] || a.date > lastByClient[a.clientId])) {
+          lastByClient[a.clientId] = a.date;
+        }
+      });
+
+      // Envíos manuales hechos desde la app (quedan en comms.sentLog): se
+      // respetan para no pisarlos con uno automático.
+      const manual = new Set((comms.sentLog || [])
+          .filter((e) => e.type === "retention")
+          .map((e) => e.apptId));
+
+      const candidates = Object.keys(lastByClient).filter((id) => !activeClients.has(id));
+      console.log(`Candidatas: ${candidates.length} (corte ${cutoff}, ${daysAfter} días)`);
+
+      const nowMs = Date.now();
+      let sent = 0; let skipped = 0;
+      for (const clientId of candidates) {
+        if (sent >= RETENTION_MAX_PER_RUN) { console.log("Tope de la corrida alcanzado."); break; }
+        const lastDate = lastByClient[clientId];
+        if (manual.has(`${clientId}-${lastDate}`)) { skipped++; continue; }
+
+        const guardRef = db.doc(`sentReminders/retention_${clientId}`);
+        const guard = await guardRef.get();
+        if (guard.exists) {
+          const g = guard.data() || {};
+          if (g.lastApptDate === lastDate) { skipped++; continue; }
+          if (g.lastSentAtMs && nowMs - g.lastSentAtMs < RETENTION_COOLDOWN_DAYS * 86400000) { skipped++; continue; }
+        }
+
+        const [cSnap, cpSnap] = await Promise.all([
+          db.doc(`clients/${clientId}`).get(),
+          db.doc(`clientsPrivate/${clientId}`).get(),
+        ]);
+        if (!cSnap.exists) { skipped++; continue; }
+        const c = cSnap.data() || {};
+        const email = (cpSnap.exists && cpSnap.data().email) || c.email || "";
+        if (!email) { skipped++; continue; }
+
+        const dias = Math.round((nowMs - Date.parse(`${lastDate}T12:00:00-03:00`)) / 86400000);
+        const vars = {
+          nombre: c.first || "",
+          apellido: c.last || "",
+          nombreCompleto: `${c.first || ""} ${c.last || ""}`.trim(),
+          bizName,
+          dias: dias > 0 ? dias : daysAfter,
+        };
+        const subject = fillTemplate(tpl.subject || "", vars);
+        const body = fillTemplate(tpl.body || "", vars);
+
+        // Candado PRIMERO: preferimos perder un envío antes que duplicarlo.
+        await guardRef.set({
+          type: "retention",
+          clientId,
+          lastApptDate: lastDate,
+          lastSentAtMs: nowMs,
+          sentAt: FieldValue.serverTimestamp(),
+          count: FieldValue.increment(1),
+        }, {merge: true});
+
+        await db.collection("mail").add({
+          to: [email],
+          message: {subject, html: body.replace(/\n/g, "<br>"), text: body},
+          createdAt: FieldValue.serverTimestamp(),
+        });
+        sent++;
+      }
+      console.log(`Reactivación: ${sent} enviados, ${skipped} omitidos (ya avisados o sin email).`);
+    },
+);
