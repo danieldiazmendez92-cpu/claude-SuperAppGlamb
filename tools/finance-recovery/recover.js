@@ -271,6 +271,24 @@ async function inspectLiqFinance() {
   exps.docs.map(x=>x.data()).filter(e=>e.category==='salaries').forEach(e=>{
     console.log(`  ${e.date} · ${e.description} · ${e.amount} · ${e.paymentMethod||''} · id=${e.id}`);
   });
+
+  // ¿Alguna liquidación pagada quedó sin su gasto? Y si es así, ¿está cargado
+  // a mano en otra categoría? Se listan TODOS los gastos del período para no
+  // proponer un duplicado.
+  const all = exps.docs.map(x=>x.data());
+  const huerfanas = liqs.docs.map(x=>x.data()).filter(l => l.status === 'paid' && !l.expenseId);
+  console.log('\n=== LIQUIDACIONES PAGADAS SIN GASTO ASOCIADO ===');
+  if (!huerfanas.length) console.log('  ninguna');
+  huerfanas.forEach(l => {
+    console.log(`  ${l.collaboratorName} · ${l.period?.from}→${l.period?.to} · neto=${l.netPay} · pagada=${(l.paidAt||'').slice(0,10)}`);
+    const cand = all.filter(e => Number(e.amount) === Number(l.netPay));
+    console.log('    gastos con ese importe exacto (cualquier categoría):',
+        cand.length ? JSON.stringify(cand.map(e => ({d: e.date, c: e.category, t: e.description, m: e.paymentMethod}))) : 'NINGUNO');
+    const nom = String(l.collaboratorName || '').split(' ')[0].toLowerCase();
+    const porNombre = all.filter(e => nom && String(e.description || '').toLowerCase().includes(nom));
+    console.log('    gastos que mencionan a la colaboradora:',
+        porNombre.length ? JSON.stringify(porNombre.map(e => ({d: e.date, c: e.category, a: e.amount, t: String(e.description).slice(0, 50)}))) : 'NINGUNO');
+  });
 }
 
 // inspect-retention: SOLO LECTURA. Diagnostica los emails de reactivación:
