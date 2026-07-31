@@ -469,6 +469,74 @@ async function fixLiqExpenses() {
   console.log(APPLY ? 'LISTO.' : 'SIMULACIÓN: nada escrito. Usá fix-liq-expenses-apply.');
 }
 
+// inspect-billing: SOLO LECTURA. Averigua qué puede estar cobrando Google en
+// este proyecto. Cada llamada va en su propio try: si falta un permiso, se
+// informa y se sigue con las demás (nunca aborta todo por una).
+// OJO: Google NO expone el importe facturado por API; el detalle de costos
+// vive en la consola o en una exportación a BigQuery. Lo que sí se puede
+// confirmar acá es QUÉ cuenta de facturación está enlazada (sirve para
+// verificar si un mail que la menciona es legítimo) y QUÉ recursos hay.
+async function inspectBilling() {
+  const {GoogleAuth} = require('google-auth-library');
+  const auth = new GoogleAuth({credentials: creds, scopes: ['https://www.googleapis.com/auth/cloud-platform']});
+  const client = await auth.getClient();
+  console.log('cuenta de servicio:', creds.client_email);
+
+  const get = async (url) => {
+    try {
+      const r = await client.request({url});
+      return r.data;
+    } catch (e) {
+      const msg = (e.response && e.response.data && e.response.data.error && e.response.data.error.message) || e.message;
+      return {__error: String(msg).slice(0, 240)};
+    }
+  };
+
+  console.log('\n=== CUENTA DE FACTURACIÓN ENLAZADA AL PROYECTO ===');
+  const info = await get('https://cloudbilling.googleapis.com/v1/projects/glamb-os/billingInfo');
+  console.log(JSON.stringify(info, null, 1));
+
+  const acct = info && info.billingAccountName;
+  if (acct) {
+    console.log('\n=== ESTADO DE ESA CUENTA ===');
+    console.log(JSON.stringify(await get(`https://cloudbilling.googleapis.com/v1/${acct}`), null, 1));
+  }
+
+  console.log('\n=== SERVICIOS HABILITADOS (los que pueden generar cargo) ===');
+  const svc = await get('https://serviceusage.googleapis.com/v1/projects/glamb-os/services?filter=state:ENABLED&pageSize=200');
+  if (svc.__error) console.log(JSON.stringify(svc));
+  else (svc.services || []).map((s) => s.config && s.config.name).filter(Boolean).sort().forEach((n) => console.log('  ·', n));
+
+  console.log('\n=== ARTIFACT REGISTRY (imágenes de los deploys — el aviso repetido en cada deploy) ===');
+  const regs = ['southamerica-east1', 'us-central1'];
+  for (const loc of regs) {
+    const r = await get(`https://artifactregistry.googleapis.com/v1/projects/glamb-os/locations/${loc}/repositories`);
+    if (r.__error) { console.log(` ${loc}: ${r.__error}`); continue; }
+    (r.repositories || []).forEach((x) => {
+      console.log(`  ${loc} · ${x.name.split('/').pop()} · formato=${x.format} · tamaño=${x.sizeBytes ? (Number(x.sizeBytes) / 1e9).toFixed(3) + ' GB' : '?'} · limpieza=${x.cleanupPolicies ? 'SÍ' : 'NO'}`);
+    });
+    if (!(r.repositories || []).length) console.log(`  ${loc}: sin repositorios`);
+  }
+
+  console.log('\n=== FUNCIONES DESPLEGADAS ===');
+  const fns = await get('https://cloudfunctions.googleapis.com/v2/projects/glamb-os/locations/-/functions');
+  if (fns.__error) console.log(JSON.stringify(fns));
+  else (fns.functions || []).forEach((f) => console.log(`  · ${f.name.split('/').pop()} · ${f.state} · min=${(f.serviceConfig || {}).minInstanceCount || 0} max=${(f.serviceConfig || {}).maxInstanceCount || '?'} · mem=${(f.serviceConfig || {}).availableMemory || '?'}`));
+
+  console.log('\n=== TAREAS PROGRAMADAS (Cloud Scheduler: 3 gratis por mes) ===');
+  const sch = await get('https://cloudscheduler.googleapis.com/v1/projects/glamb-os/locations/southamerica-east1/jobs');
+  if (sch.__error) console.log(JSON.stringify(sch));
+  else (sch.jobs || []).forEach((j) => console.log(`  · ${j.name.split('/').pop()} · ${j.schedule} · ${j.state}`));
+
+  console.log('\n=== VOLUMEN EN FIRESTORE (almacenamiento y lecturas) ===');
+  for (const c of ['appointments', 'clients', 'clientsPrivate', 'salesTickets', 'payments', 'mail', 'sentReminders', 'consentForms', 'surveyResponses']) {
+    try {
+      const s = await db.collection(c).count().get();
+      console.log(`  ${c}: ${s.data().count} documentos`);
+    } catch (e) { console.log(`  ${c}: ?`); }
+  }
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -535,6 +603,7 @@ async function inspectReportes() {
   if (MODE === 'inspect-retention') { await inspectRetention(); return; }
   if (MODE === 'seed-retention-guards' || MODE === 'seed-retention-guards-apply') { await seedRetentionGuards(); return; }
   if (MODE === 'inspect-liq-finance') { await inspectLiqFinance(); return; }
+  if (MODE === 'inspect-billing') { await inspectBilling(); return; }
   if (MODE === 'fix-liq-expenses' || MODE === 'fix-liq-expenses-apply') { await fixLiqExpenses(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
