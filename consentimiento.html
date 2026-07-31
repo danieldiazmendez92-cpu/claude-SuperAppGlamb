@@ -151,7 +151,7 @@
 
     // ── Secciones del formulario ──
     (snap.sections||[]).forEach((sec,si)=>{
-      html += `<section><div class="sec-title">${esc(sec.title||'')}</div>`;
+      html += `<section data-sec="${si}"><div class="sec-title">${esc(sec.title||'')}</div>`;
       (sec.questions||[]).forEach(q=>{
         // showIf: la pregunta solo aparece si otra tiene cierta respuesta
         // (ej. "¿hace cuánto?" solo si dijo que ya se hizo el tratamiento).
@@ -292,8 +292,25 @@
       const match=Array.isArray(dep)?dep.includes(want):dep===want;
       card.style.display = match ? '' : 'none';
     });
+    // Una sección entera puede quedar sin ninguna pregunta visible (ej. el
+    // bloque capilar cuando el tratamiento es facial): se oculta también el
+    // título, si no queda un encabezado suelto sin nada debajo.
+    app.querySelectorAll('section[data-sec]').forEach(sec=>{
+      const cards=sec.querySelectorAll('[data-qcard]');
+      if(!cards.length) return;
+      const alguna=Array.from(cards).some(c=>c.style.display!=='none');
+      sec.style.display = alguna ? '' : 'none';
+    });
   }
-  const isHidden = qid => { const c=app.querySelector(`[data-qcard="${qid}"]`); return !!(c && c.style.display==='none'); };
+  // Oculta si la pregunta está oculta o si lo está la sección que la contiene
+  // (si no, se pediría responder algo que no se ve en pantalla).
+  const isHidden = qid => {
+    const c=app.querySelector(`[data-qcard="${qid}"]`);
+    if(!c) return true;
+    if(c.style.display==='none') return true;
+    const sec=c.closest('section[data-sec]');
+    return !!(sec && sec.style.display==='none');
+  };
 
   // ── Firma con el dedo ──
   let ctx, canvas;

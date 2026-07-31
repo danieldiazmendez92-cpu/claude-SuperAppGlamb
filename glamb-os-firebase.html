@@ -12712,6 +12712,114 @@
           ]},
         ],
         consentText:'Declaro que la información brindada es verdadera y completa.\n\nComprendo que la micropigmentación es un procedimiento semipermanente: el color se desvanece con el tiempo y requiere retoques periódicos para mantenerse.\n\nComprendo que el resultado final depende del tipo de piel, la cicatrización individual y los cuidados posteriores, y que puede diferir del diseño previsto.\n\nComprendo que suele requerirse una sesión de retoque para completar el trabajo.\n\nComprendo los riesgos posibles: inflamación, enrojecimiento, cambios de color y, en casos poco frecuentes, reacción alérgica al pigmento o infección.\n\nMe comprometo a seguir las indicaciones de cuidado posterior que me indique la profesional.\n\nFui informada de los cuidados previos detallados en este formulario y me comprometo a cumplirlos. Comprendo que no cumplirlos puede obligar a reprogramar el turno o afectar el resultado.\n\nAcepto la política de reprogramaciones y cancelaciones: los cambios o cancelaciones deben avisarse con un mínimo de 72 horas hábiles de anticipación. Con menos tiempo, o ante la inasistencia al turno, la seña se considera consumida.\n\nAutorizo a GLAMB a realizar el procedimiento.'
+      },
+      prp:{
+        id:'prp', version:'1.0', minorBlock:true, askDni:true,
+        title:'PRP — Plasma rico en plaquetas · Ficha y consentimiento',
+        preCare:{
+          title:'Antes del turno',
+          intro:'El PRP se prepara con tu propia sangre, así que llegar en buenas condiciones cambia el resultado. Seguí estas indicaciones.',
+          groups:[
+            {t:'48 horas antes', items:[
+              'No tomar antiinflamatorios ni aspirina (salvo indicación médica): reducen la función de las plaquetas, que es justamente lo que se busca aprovechar.']},
+            {t:'24 horas antes', items:[
+              'No consumir alcohol.',
+              'Tomar bastante agua: la buena hidratación facilita la extracción y mejora la calidad de la muestra.']},
+            {t:'El día del turno', items:[
+              'Venir habiendo desayunado o almorzado, para evitar mareos o bajas de presión durante la extracción.',
+              'Si el tratamiento es facial, venir sin maquillaje en la zona.']}
+          ]
+        },
+        sections:[
+          {title:'Motivo de la consulta', questions:[
+            {id:'zona',type:'multi',label:'¿Qué tratamiento querés realizarte?',
+             options:[{v:'facial',label:'Facial'},{v:'capilar',label:'Capilar'},{v:'corporal',label:'Corporal'}]},
+            {id:'objetivo',type:'multi',label:'¿Cuál es tu objetivo principal?',
+             options:[{v:'rejuvenecimiento',label:'Rejuvenecimiento'},{v:'textura',label:'Mejorar la textura de la piel'},
+                      {v:'lineas',label:'Disminuir líneas de expresión'},{v:'caida',label:'Frenar la caída del cabello'},
+                      {v:'crecimiento',label:'Estimular el crecimiento capilar'},{v:'otro',label:'Otro'}]},
+            {id:'objetivo_otro',type:'text',label:'Contanos cuál',placeholder:'Tu objetivo',showIf:{q:'objetivo',v:'otro'},optional:true},
+          ]},
+          {title:'Estado de salud', questions:[
+            {id:'embarazo',type:'single',label:'¿Estás embarazada o en período de lactancia?',
+             options:[{v:'no',label:'No'},{v:'si',label:'Sí',risk:true}],
+             riskNote:'Durante el embarazo o la lactancia no se realiza el procedimiento.'},
+            {id:'infeccion',type:'single',label:'¿Tenés alguna infección activa o fiebre en este momento?',
+             options:[{v:'no',label:'No'},{v:'si',label:'Sí',risk:true}],
+             riskNote:'Con una infección en curso o fiebre el tratamiento se pospone hasta la recuperación.'},
+            {id:'sangre',type:'multi',label:'¿Tenés alguna de estas condiciones de la sangre?',
+             options:[{v:'enf_sangre',label:'Enfermedad de la sangre',risk:true},{v:'anemia',label:'Anemia importante',risk:true},
+                      {v:'coagulacion',label:'Problemas de coagulación',risk:true},{v:'plaquetas',label:'Plaquetas bajas',risk:true},
+                      {v:'ninguna',label:'Ninguna',none:true}],
+             riskNote:'El PRP se prepara con tus propias plaquetas: estas condiciones pueden desaconsejarlo o exigir un análisis previo. La profesional lo va a evaluar.'},
+            {id:'condiciones',type:'multi',label:'¿Presentás alguna de estas condiciones?',
+             options:[{v:'autoinmune',label:'Enfermedad autoinmune',risk:true},{v:'oncologico',label:'Cáncer o tratamiento oncológico',risk:true},
+                      {v:'diabetes',label:'Diabetes',risk:true},{v:'epilepsia',label:'Epilepsia',risk:true},
+                      {v:'ninguna',label:'Ninguna de las anteriores',none:true}]},
+            {id:'alergias',type:'multi',label:'¿Sos alérgica a alguna de estas cosas?',
+             options:[{v:'alcohol',label:'Alcohol (antiséptico)',risk:true},{v:'yodo',label:'Yodo',risk:true},
+                      {v:'anestesicos',label:'Anestésicos locales',risk:true},{v:'medicamentos',label:'Algún medicamento',risk:true},
+                      {v:'ninguna',label:'Ninguna',none:true}]},
+            {id:'alergias_cual',type:'text',label:'¿A qué medicamento?',placeholder:'Nombre del medicamento',showIf:{q:'alergias',v:'medicamentos'},optional:true},
+            // Pregunta amplia en vez de relevar patologías puntuales: lo que
+            // importa es lo que afecte la cicatrización o la respuesta inmune.
+            {id:'otras_condiciones',type:'text',label:'¿Tenés alguna otra enfermedad o tratamiento que pueda afectar la cicatrización o tus defensas?',placeholder:'Opcional — contanos lo que consideres importante',optional:true},
+          ]},
+          {title:'Medicación', questions:[
+            {id:'medicacion',type:'multi',label:'¿Estás tomando alguno de estos medicamentos?',
+             options:[{v:'anticoagulantes',label:'Anticoagulantes (aspirina, clopidogrel, warfarina, rivaroxabán…)',risk:true},
+                      {v:'antiinflamatorios',label:'Antiinflamatorios con frecuencia',risk:true},
+                      {v:'antibioticos',label:'Antibióticos',risk:true},
+                      {v:'corticoides',label:'Corticoides',risk:true},
+                      {v:'ninguno',label:'Ninguno',none:true}],
+             riskNote:'Los anticoagulantes y antiinflamatorios afectan directamente a las plaquetas y al sangrado. No los suspendas por tu cuenta: la profesional va a evaluar cómo seguir.'},
+            {id:'otra_medicacion',type:'text',label:'¿Tomás algún otro medicamento de forma habitual? ¿Cuál?',placeholder:'Opcional',optional:true},
+          ]},
+          {title:'Antecedentes estéticos', questions:[
+            {id:'prp_previo',type:'single',label:'¿Te realizaste PRP anteriormente?',
+             options:[{v:'no',label:'No'},{v:'si',label:'Sí'}]},
+            {id:'prp_cuando',type:'text',label:'¿Cuándo fue la última sesión?',placeholder:'Ej.: hace 6 meses',showIf:{q:'prp_previo',v:'si'},optional:true},
+            {id:'botox',type:'single',label:'¿Te aplicaste bótox en los últimos 15 días?',
+             options:[{v:'no',label:'No'},{v:'si',label:'Sí',risk:true}],
+             riskNote:'Conviene esperar a que el efecto se asiente antes de intervenir la zona.'},
+            {id:'hialuronico',type:'single',label:'¿Te aplicaste ácido hialurónico en los últimos 30 días?',
+             options:[{v:'no',label:'No'},{v:'si',label:'Sí',risk:true}],
+             riskNote:'La profesional va a evaluar la zona antes de empezar.'},
+            {id:'laser_peeling',type:'single',label:'¿Te hiciste láser o peeling recientemente?',
+             options:[{v:'no',label:'No'},{v:'si',label:'Sí',risk:true}],
+             riskNote:'La piel necesita estar recuperada. Puede ser necesario reprogramar.'},
+            {id:'reaccion',type:'single',label:'¿Tuviste alguna reacción adversa en tratamientos estéticos?',
+             options:[{v:'no',label:'No'},{v:'si',label:'Sí',risk:true}]},
+            {id:'reaccion_cual',type:'text',label:'Contanos qué pasó',placeholder:'Qué tratamiento y qué reacción tuviste',showIf:{q:'reaccion',v:'si'},optional:true},
+          ]},
+          // Sección condicional completa: solo aparece si eligió "Capilar".
+          {title:'Solo para PRP capilar', questions:[
+            {id:'caida_desde',type:'text',label:'¿Desde cuándo notás la caída del cabello?',placeholder:'Ej.: hace 8 meses',showIf:{q:'zona',v:'capilar'},optional:true},
+            {id:'caida_grado',type:'single',label:'¿Cómo describirías la caída?',
+             options:[{v:'leve',label:'Leve'},{v:'moderada',label:'Moderada'},{v:'intensa',label:'Intensa',risk:true}],
+             showIf:{q:'zona',v:'capilar'}},
+            {id:'calvicie_familiar',type:'single',label:'¿Tenés antecedentes familiares de calvicie?',
+             options:[{v:'no',label:'No'},{v:'si',label:'Sí'}],showIf:{q:'zona',v:'capilar'}},
+            {id:'trat_capilar',type:'single',label:'¿Estás haciendo algún tratamiento capilar?',
+             options:[{v:'no',label:'No'},{v:'si',label:'Sí'}],showIf:{q:'zona',v:'capilar'}},
+            {id:'trat_capilar_cual',type:'text',label:'¿Cuál?',placeholder:'Ej.: minoxidil, finasteride, lociones…',showIf:{q:'trat_capilar',v:'si'},optional:true},
+          ]},
+          {title:'Antes del tratamiento', questions:[
+            {id:'prev_alcohol',type:'single',label:'¿Evitaste el alcohol en las últimas 24 horas?',
+             options:[{v:'si',label:'Sí'},{v:'no',label:'No',risk:true}],
+             riskNote:'Avisale a la profesional al llegar: puede afectar la calidad de la muestra.'},
+            {id:'prev_aine',type:'single',label:'¿Evitaste antiinflamatorios y aspirina en las últimas 48 horas?',
+             options:[{v:'si',label:'Sí'},{v:'no',label:'No',risk:true},{v:'medico',label:'No, pero es por indicación médica',risk:true}],
+             riskNote:'Es la indicación más importante: estos medicamentos inhiben las plaquetas. La profesional va a evaluar si conviene reprogramar.'},
+            {id:'prev_hidratacion',type:'single',label:'¿Tomaste suficiente agua hoy?',
+             options:[{v:'si',label:'Sí'},{v:'no',label:'No',risk:true}],
+             riskNote:'Tomá agua antes de venir: facilita la extracción.'},
+            {id:'prev_comida',type:'single',label:'¿Comiste antes de venir (desayuno o almuerzo)?',
+             options:[{v:'si',label:'Sí'},{v:'no',label:'No',risk:true}],
+             riskNote:'Venir en ayunas aumenta el riesgo de mareo durante la extracción. Comé algo antes del turno.'},
+          ]},
+        ],
+        consentText:'Declaro que la información brindada es verdadera y completa.\n\nComprendo que el PRP se realiza con plasma obtenido de mi propia sangre, mediante una extracción y su posterior aplicación.\n\nComprendo que los resultados varían según cada persona y que habitualmente se requiere más de una sesión.\n\nComprendo los efectos temporales posibles: enrojecimiento, inflamación, sensibilidad y pequeños hematomas en la zona de la extracción o de la aplicación.\n\nFui informada de las indicaciones previas al tratamiento detalladas en este formulario y me comprometo a cumplirlas.\n\nMe comprometo a seguir las indicaciones de cuidado posterior que me indique la profesional.\n\nAutorizo a la profesional de GLAMB a realizar el tratamiento.'
       }
     };
     // Caché en memoria. Los consentimientos NO se suscriben (a diferencia del resto
