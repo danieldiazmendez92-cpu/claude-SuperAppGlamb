@@ -8862,13 +8862,32 @@
     }
     function updateApptStatus(id, status) {
       const appt = state.appointments.find(a => a.id === id);
-      if (appt) {
+      if (!appt) return;
+      const aplicar = () => {
         appt.status = status;
         saveState();
         renderAgenda();
         showToast('Estado actualizado');
         document.getElementById('detailPopover').classList.remove('open');
-      }
+      };
+      // Marcar inasistencia RETIENE la seña como ingreso (ticket origin:'no_show').
+      // Si después el turno deja de ser inasistencia, hay que revertir esa
+      // retención: si no, el ticket queda atado a la reserva, el turno figura
+      // "✓ Ya cobrado", desaparece del listado de Caja y no hay forma de cobrarlo.
+      const salioDeNoShow = appt.status === 'no_show' && status !== 'no_show';
+      const rKey = reservationKey(appt);
+      const ret = salioDeNoShow && rKey
+        ? state.salesTickets.find(t => t.reservationId === rKey && t.origin === 'no_show' && t.status !== 'voided')
+        : null;
+      if (!ret) return aplicar();
+      showConfirm(`Este turno tenía una inasistencia con la seña de ${money(ret.grossTotal||0)} retenida como ingreso del local. ¿Anular esa retención y devolver la seña al turno?`, () => {
+        ret.status = 'voided';
+        ret.voidReason = 'Inasistencia revertida';
+        ret.voidedBy = cashActorName();
+        ret.voidedAt = new Date().toISOString();
+        state.payments.filter(p => p.ticketId === ret.id).forEach(p => { p.voided = true; });
+        aplicar();
+      }, () => showToast('No se cambió el estado. Si el salón se queda con la seña, creá un turno nuevo.'));
     }
     document.addEventListener('click',e=>{if(!e.target.closest('.detail-popover')&&!e.target.closest('.appointment-block'))$('detailPopover').classList.remove('open')});
 
