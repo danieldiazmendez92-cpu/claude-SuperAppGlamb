@@ -479,7 +479,9 @@ async function auditCaja() {
   const cfg = (await CFG.get()).data() || {};
   const s = cfg.cashSession || {};
   const money = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
-  const hora = (t) => String(t || '').slice(11, 16);
+  // Fecha y hora en horario argentino (UTC-3), que es como las ve el salón.
+  const ar = (t) => { const d = new Date(String(t || '')); return isNaN(d) ? '??' : new Date(d.getTime() - 3 * 3600000).toISOString().replace('T', ' ').slice(5, 16); };
+  const hora = ar;
 
   console.log('=== SESIÓN DE CAJA ===');
   console.log('abierta:', s.isOpen, '| abrió:', s.openedBy || '?', '| openedAt:', s.openedAt || '—');
@@ -508,6 +510,14 @@ async function auditCaja() {
     console.log(`  ${hora(p.createdAt)} · ${money(p.amount)} · ${nombre(p)} · ${p.type || ''}${p.ticketId ? ' · ticket ' + p.ticketId : ''}`);
   });
   console.log('  SUBTOTAL cobrado en efectivo:', money(cashIn));
+  // ¿La sesión abarca más de un día? Es la causa más común de que el número
+  // "esperado" no coincida con lo que el salón contó de una sola jornada.
+  const porDia = {};
+  inSession.forEach((p) => { const d = ar(p.createdAt).slice(0, 5); porDia[d] = (porDia[d] || 0) + Number(p.amount || 0); });
+  const dias = Object.keys(porDia).sort();
+  console.log('  cobros en efectivo POR DÍA:', JSON.stringify(porDia));
+  if (dias.length > 1) console.log(`  >>> ATENCIÓN: la caja lleva ${dias.length} días abierta (${dias.join(', ')}). El "esperado" acumula todos esos días, no solo hoy.`);
+  console.log('  apertura de la sesión (hora AR):', ar(s.openedAt));
 
   // Retiros y gastos
   const ws = s.withdrawals || [];
