@@ -4854,6 +4854,11 @@
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     const fullName=x=>`${x.first||''} ${x.last||''}`.trim();
     const dateKey=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    // Día al que pertenece un movimiento, en hora LOCAL (Argentina). createdAt se
+    // guarda en UTC: cortar sus primeros 10 caracteres mandaba al día siguiente
+    // todo lo ocurrido después de las 21:00 — la franja de más trabajo del salón.
+    // Agrupar SIEMPRE por acá, nunca por createdAt.slice(0,10).
+    const dayOf=iso=>{ const d=new Date(iso||''); return isNaN(d.getTime())?'':dateKey(d); };
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
@@ -5758,7 +5763,7 @@
       //  - las señas NO se cuentan al recibirse (son pasivo): entran recién
       //    cuando se aplican a una venta o se retienen por inasistencia.
       const sold = state.salesTickets.filter(t=>t.status==='confirmed'||t.status==='partial');
-      const byPrefix = p => sold.filter(t=>(t.createdAt||'').startsWith(p));
+      const byPrefix = p => sold.filter(t=>dayOf(t.createdAt).startsWith(p));
       //  - se resta el saldo pendiente del parcial: al cobrarse genera un
       //    ticket nuevo por ese monto y se contaría dos veces.
       const svcTotal = t => Math.max(0,(t.servicesTotal!==undefined ? Number(t.servicesTotal||0) : (Number(t.grossTotal||0)-Number(t.tipsTotal||0))) - Number(t.pendingBalance||0));
@@ -5924,7 +5929,7 @@
     function clientVisitDays(clientId){
       ensureClientIndex();
       const days = new Set();
-      (_ciTickets.get(clientId)||[]).forEach(t=>{ if(t.createdAt) days.add(t.createdAt.slice(0,10)); });
+      (_ciTickets.get(clientId)||[]).forEach(t=>{ if(t.createdAt) days.add(dayOf(t.createdAt)); });
       const today = dateKey(new Date());
       (_ciAppts.get(clientId)||[]).forEach(a=>{ if(!['cancelled','cancelado','voided'].includes(a.status) && a.date && a.date<=today) days.add(a.date); });
       return [...days].sort();
@@ -6997,7 +7002,7 @@
     }
     function renderCashKpis(){
       const today = dateKey(new Date());
-      const todayP = p => (p.createdAt||'').startsWith(today);
+      const todayP = p => dayOf(p.createdAt)===today;
       const confirmed = state.salesTickets.filter(t=>t.status==='confirmed' && todayP(t));
       // INGRESO = servicios cobrados + señas aplicadas. La seña, al recibirse, es dinero
       // pero un PASIVO (no ingreso); recién al concretarse la venta (deposit_applied) se
@@ -7855,7 +7860,7 @@
       const isToday = selDate === today;
       if($('cashDailyDate')){ $('cashDailyDate').value=selDate; $('cashDailyDate').max=today; $('cashDailyDate').onchange=e=>setCashDailyDate(e.target.value); }
       if($('cashDailyDateLabel')) $('cashDailyDateLabel').textContent = isToday ? 'Hoy' : '';
-      const todayP = p => (p.createdAt||'').startsWith(selDate);
+      const todayP = p => dayOf(p.createdAt)===selDate;
       // Panel resumen financiero
       if($('cashDailySummary')){
         const session = state.cashSession;
@@ -7932,7 +7937,7 @@
       const isToday = selDate === today;
       if($('cashTicketsDate')){ $('cashTicketsDate').value=selDate; $('cashTicketsDate').max=today; $('cashTicketsDate').onchange=e=>setCashTicketsDate(e.target.value); }
       if($('cashTicketsDateLabel')) $('cashTicketsDateLabel').textContent = isToday ? 'Hoy' : '';
-      const todayTickets = state.salesTickets.filter(t=>(t.createdAt||'').startsWith(selDate));
+      const todayTickets = state.salesTickets.filter(t=>dayOf(t.createdAt)===selDate);
       const visibleTickets = state.cashMode==='collaborator' ? todayTickets.filter(t=>t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) : todayTickets;
       $('ticketsList').innerHTML = visibleTickets.length ? visibleTickets.map(t=>{
         const isVoided = t.status === 'voided';
@@ -7995,7 +8000,7 @@
       const today = dateKey(new Date());
       if(state.cashMode==='collaborator'){
         if(!t.lines.some(l=>l.collaboratorId===state.cashCurrentCollaboratorId)) return showToast('No podés anular tickets ajenos.');
-        if(!(t.createdAt||'').startsWith(today)) return showToast('Solo podés anular tickets del día de hoy.');
+        if(dayOf(t.createdAt)!==today) return showToast('Solo podés anular tickets del día de hoy.');
       }
       showPromptDialog('Motivo de anulación','Ingresá el motivo…',reason=>{
         if(!reason)return;
@@ -8016,7 +8021,7 @@
       const selDate=state.ledgerDate||today;
       const sub=state.ledgerSubTab||'efectivo';
       const subLabels={efectivo:'Efectivo',tickets:'Tickets',metodos:'Por método'};
-      const sesDate=(state.cashSession.openedAt||'').slice(0,10);
+      const sesDate=dayOf(state.cashSession.openedAt);
       const hasSes=sesDate===selDate;
 
       const header=`
@@ -8056,12 +8061,12 @@
       const srcs=[state.cashSession, ...(state.cashClosings||[])].filter(Boolean);
       const aperturas=[], retiros=[], gastos=[]; const sw=new Set(), se=new Set(), so=new Set();
       srcs.forEach(s=>{
-        if(s.openedAt && Number(s.openingAmount) && (s.openedAt||'').slice(0,10)===selDate && !so.has(s.openedAt)){
+        if(s.openedAt && Number(s.openingAmount) && dayOf(s.openedAt)===selDate && !so.has(s.openedAt)){
           so.add(s.openedAt);
           aperturas.push({openedAt:s.openedAt, openingAmount:Number(s.openingAmount), openedBy:s.openedBy});
         }
-        (s.withdrawals||[]).forEach(w=>{ if(w&&w.id&&!sw.has(w.id)&&(w.createdAt||'').slice(0,10)===selDate){ sw.add(w.id); retiros.push(w); } });
-        (s.expenses||[]).forEach(e=>{ if(e&&e.id&&!se.has(e.id)&&(e.createdAt||'').slice(0,10)===selDate){ se.add(e.id); gastos.push(e); } });
+        (s.withdrawals||[]).forEach(w=>{ if(w&&w.id&&!sw.has(w.id)&&dayOf(w.createdAt)===selDate){ sw.add(w.id); retiros.push(w); } });
+        (s.expenses||[]).forEach(e=>{ if(e&&e.id&&!se.has(e.id)&&dayOf(e.createdAt)===selDate){ se.add(e.id); gastos.push(e); } });
       });
       const byTs=(a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''));
       return {aperturas:aperturas.sort((a,b)=>String(a.openedAt).localeCompare(String(b.openedAt))), retiros:retiros.sort(byTs), gastos:gastos.sort(byTs)};
@@ -8076,7 +8081,7 @@
         events.push({ts:ap.openedAt,tipo:'apertura',label:'Apertura de caja',detalle:ap.openedBy||'Admin caja',entra:ap.openingAmount,sale:0,cashIn:ap.openingAmount,cashOut:0});
       });
       // Payments
-      state.payments.filter(p=>(p.createdAt||'').slice(0,10)===selDate).forEach(p=>{
+      state.payments.filter(p=>dayOf(p.createdAt)===selDate).forEach(p=>{
         const amt=Number(p.amount||0);
         const isCash=/efectivo/i.test(p.method||'');
         const isOut=p.type==='withdrawal';
@@ -8142,8 +8147,8 @@
     }
 
     function ledgerTickets(selDate){
-      const dayTickets=state.salesTickets.filter(t=>(t.createdAt||'').slice(0,10)===selDate).sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
-      const standaloneDeps=state.payments.filter(p=>p.type==='deposit_received'&&!p.ticketId&&(p.createdAt||'').slice(0,10)===selDate);
+      const dayTickets=state.salesTickets.filter(t=>dayOf(t.createdAt)===selDate).sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
+      const standaloneDeps=state.payments.filter(p=>p.type==='deposit_received'&&!p.ticketId&&dayOf(p.createdAt)===selDate);
 
       let totSvc=0,totSeña=0,totCob=0,totTip=0;
 
@@ -8208,7 +8213,7 @@
     }
 
     function ledgerMetodos(selDate){
-      const pays=state.payments.filter(p=>!p.voided&&(p.createdAt||'').slice(0,10)===selDate&&(p.type==='service'||p.type==='deposit_received'));
+      const pays=state.payments.filter(p=>!p.voided&&dayOf(p.createdAt)===selDate&&(p.type==='service'||p.type==='deposit_received'));
       const byM={};
       pays.forEach(p=>{const m=p.method||'Sin método';if(!byM[m])byM[m]={total:0,count:0};byM[m].total+=Number(p.amount||0);byM[m].count++;});
       const rows=Object.entries(byM).sort((a,b)=>b[1].total-a[1].total);
@@ -9127,7 +9132,7 @@
       const today=dateKey(new Date());
       let best=null;
       state.salesTickets.filter(t=>t.clientId===clientId && t.status!=='voided').forEach(t=>{
-        const d=(t.createdAt||'').slice(0,10);
+        const d=dayOf(t.createdAt);
         (t.lines||[]).forEach(l=>{ if(l.service && d && (!best||d>best.date)) best={date:d, service:l.service, memberId:l.collaboratorId||null}; });
       });
       state.appointments.filter(a=>a.clientId===clientId && a.service && (a.date||'')<=today && !['cancelled','cancelado','voided','no_show'].includes(a.status)).forEach(a=>{
@@ -9777,7 +9782,7 @@
           if(item.type === 'ticket') {
             const t = item.ticket;
             const lines = t.lines || [];
-            const dateStr = (t.createdAt||'').slice(0,10) || '—';
+            const dateStr = dayOf(t.createdAt) || '—';
             const cols = [...new Set(lines.map(l=>(member(l.collaboratorId)?.first||'')).filter(Boolean))].join(', ');
             const svcsHtml = lines.map(l => {
               const addons = (l.addons||[]).map(a=>a.name);
@@ -10452,14 +10457,18 @@
       if(!state.liquidations) state.liquidations=[];
       if(!state.payrollDeductions) state.payrollDeductions=[];
       const commissionLines=[];
-      state.salesTickets.filter(t=>t.status!=='voided'&&t.createdAt>=from&&t.createdAt<=to+'T23:59:59').forEach(t=>{
+      // El período se compara por el DÍA LOCAL del ticket. Antes se comparaba
+      // el createdAt crudo (UTC) contra fechas locales: un servicio de las 21:30
+      // del último día quedaba fuera del período, y uno de las 21:30 del día
+      // anterior al inicio entraba de más.
+      state.salesTickets.filter(t=>{ if(t.status==='voided') return false; const d=dayOf(t.createdAt); return d>=from&&d<=to; }).forEach(t=>{
         (t.lines||[]).forEach(l=>{
           if(l.collaboratorId!==memberId) return;
           const pct=getCollaboratorCommission(m,l.group,l.variantId,l.service);
           // Canje: la clienta no paga, pero la comisión se calcula sobre el precio de catálogo (basePrice).
           const commissionBase = l.discountType==='canje' ? (l.basePrice||0) : (l.finalPrice||0);
           const commAmt=Math.round(commissionBase*pct/100);
-          commissionLines.push({ticketId:t.id,ticketDate:t.createdAt.slice(0,10),clientName:t.clientNameSnapshot||'—',service:l.service||l.group||'Servicio',group:l.group||'',variantId:l.variantId||'',saleAmount:commissionBase,pct,commissionAmt:commAmt,discountType:l.discountType||'none'});
+          commissionLines.push({ticketId:t.id,ticketDate:dayOf(t.createdAt),clientName:t.clientNameSnapshot||'—',service:l.service||l.group||'Servicio',group:l.group||'',variantId:l.variantId||'',saleAmount:commissionBase,pct,commissionAmt:commAmt,discountType:l.discountType||'none'});
         });
       });
       const totalCommissions=commissionLines.reduce((s,l)=>s+l.commissionAmt,0);
@@ -10821,7 +10830,7 @@
       return {from:today,to:today};
     }
     // Los tickets no guardan campo `date`: la fecha real surge de createdAt (ISO).
-    function finTicketDay(t){ return t.date || (t.createdAt ? t.createdAt.slice(0,10) : ''); }
+    function finTicketDay(t){ return t.date || dayOf(t.createdAt); }
     // Ingreso del ticket = servicios (sin propinas, que son pass-through a la colaboradora);
     // coincide con la suma de finalPrice por línea usada en los desgloses.
     // Ingreso reconocido de un ticket: servicios MENOS el saldo que quedó
@@ -10847,7 +10856,7 @@
         const matched=expenseCats().find(c=>c.label.toLowerCase()===catStr.toLowerCase());
         out.push({
           id:e.id,
-          date:(e.createdAt||'').slice(0,10),
+          date:dayOf(e.createdAt),
           category: matched?matched.id:'other',
           description: e.note || catStr || 'Gasto de caja',
           amount: Number(e.amount||0),
@@ -10864,7 +10873,7 @@
       return own+caja;
     }
     function finPayrollCost(from,to){
-      return (state.liquidations||[]).filter(l=>l.status==='paid'&&l.paidAt&&(l.paidAt||'').slice(0,10)>=from&&(l.paidAt||'').slice(0,10)<=to).reduce((s,l)=>s+(l.netPay||0),0);
+      return (state.liquidations||[]).filter(l=>{ if(l.status!=='paid'||!l.paidAt) return false; const d=dayOf(l.paidAt); return d>=from&&d<=to; }).reduce((s,l)=>s+(l.netPay||0),0);
     }
     function finTicketCount(from,to){
       return state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).length;
@@ -10888,7 +10897,7 @@
     function finPaymentsByMethod(from,to){
       const map={};
       (state.payments||[])
-        .filter(p=>!p.voided&&(p.type==='service'||p.type==='deposit_received')&&(p.createdAt||'').slice(0,10)>=from&&(p.createdAt||'').slice(0,10)<=to)
+        .filter(p=>{ if(p.voided) return false; if(p.type!=='service'&&p.type!=='deposit_received') return false; const d=dayOf(p.createdAt); return d>=from&&d<=to; })
         .forEach(p=>{const m=p.method||'Sin método';if(!map[m])map[m]={amount:0,count:0};map[m].amount+=Number(p.amount||0);map[m].count++;});
       return Object.entries(map).sort((a,b)=>b[1].amount-a[1].amount);
     }
@@ -11327,7 +11336,7 @@
     // Cuenta plata REAL que entró: cobro de servicio + seña recibida. Excluye la
     // seña aplicada (no es plata nueva) y las propinas (son de la colaboradora).
     function buildRecaudacionReport(from,to){
-      const inRange=p=>{ const d=(p.createdAt||'').slice(0,10); return d>=from && d<=to; };
+      const inRange=p=>{ const d=dayOf(p.createdAt); return d>=from && d<=to; };
       const pays=state.payments
         .filter(p=>!p.voided && (p.type==='service'||p.type==='deposit_received') && inRange(p))
         .sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||'')));
@@ -11341,7 +11350,7 @@
         return '—';
       };
       const rows=pays.map(p=>({
-        fecha:(p.createdAt||'').slice(0,10),
+        fecha:dayOf(p.createdAt),
         cliente:nombreCliente(p),
         motivo:p.type==='service'?'Cobro de servicio':'Seña recibida',
         monto:Number(p.amount||0),
@@ -12543,7 +12552,7 @@
             const c=state.clients.find(x=>x.id===r.clientId);
             const info=r._info;
             let dateStr=info.date||'';
-            if(!dateStr&&r.createdAt) dateStr=(r.createdAt||'').slice(0,10);
+            if(!dateStr&&r.createdAt) dateStr=dayOf(r.createdAt);
             const tags=r.tags?Object.entries(r.tags).filter(([,v])=>v).map(([k])=>SURVEY_TAG_LABELS[k]||k):[];
             return `<div class="review-card">
               <div class="review-card-top">
@@ -13295,7 +13304,7 @@
       const weekAppts=activeAppts.filter(a=>(a.date||'')>=weekStart&&(a.date||'')<=today);
       const svcCount={};weekAppts.forEach(a=>{svcCount[a.service]=(svcCount[a.service]||0)+1;});
       const topSvcs=Object.entries(svcCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
-      const weekRev=state.payments.filter(p=>(p.date||p.createdAt||'').slice(0,10)>=weekStart&&!p.voided&&(p.type==='service'||p.type==='deposit_applied')).reduce((s,p)=>s+Number(p.amount||0),0);
+      const weekRev=state.payments.filter(p=>(p.date||dayOf(p.createdAt))>=weekStart&&!p.voided&&(p.type==='service'||p.type==='deposit_applied')).reduce((s,p)=>s+Number(p.amount||0),0);
       const collabStats=state.collaborators.filter(c=>c.can).map(c=>({name:fullName(c),hoy:todayAppts.filter(a=>a.memberId===c.id).length,semana:weekAppts.filter(a=>a.memberId===c.id).length}));
       // Financial summary by month from tickets
       const ticketsByMonth={};
