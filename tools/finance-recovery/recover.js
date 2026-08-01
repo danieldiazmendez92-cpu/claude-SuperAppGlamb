@@ -765,6 +765,39 @@ async function fixRetiroHuerfano() {
   console.log('  efectivo esperado ahora:', money(base - wFinal));
 }
 
+
+// audit-fechas: SOLO LECTURA. createdAt se guarda en UTC y la app agrupa por
+// día cortando sus primeros 10 caracteres. Argentina es UTC-3, así que TODO lo
+// que pasa después de las 21:00 queda contado en el día siguiente — justo la
+// franja en la que más trabaja el salón. Acá se mide cuánto está corrido.
+async function auditFechas() {
+  const money = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
+  const diaAR = (iso) => { const d = new Date(String(iso || '')); return isNaN(d) ? '' : new Date(d.getTime() - 3 * 3600000).toISOString().slice(0, 10); };
+  const diaUTC = (iso) => String(iso || '').slice(0, 10);
+
+  for (const [coll, campo] of [['payments', 'createdAt'], ['salesTickets', 'createdAt']]) {
+    const snap = await db.collection(coll).get();
+    const docs = snap.docs.map((d) => d.data());
+    const malos = docs.filter((x) => x[campo] && diaAR(x[campo]) !== diaUTC(x[campo]));
+    console.log(`\n=== ${coll}: ${malos.length} de ${docs.length} están en el día equivocado ===`);
+    const porDia = {};
+    malos.forEach((x) => {
+      const k = `${diaAR(x[campo])} → ${diaUTC(x[campo])}`;
+      porDia[k] = porDia[k] || { n: 0, monto: 0 };
+      porDia[k].n++;
+      porDia[k].monto += Number(x.amount || x.grossTotal || 0);
+    });
+    Object.keys(porDia).sort().slice(-15).forEach((k) => {
+      console.log(`   ${k} · ${porDia[k].n} movimiento(s) · ${money(porDia[k].monto)}`);
+    });
+    if (malos.length) {
+      const hora = {};
+      malos.forEach((x) => { const h = String(x[campo]).slice(11, 13); hora[h] = (hora[h] || 0) + 1; });
+      console.log('   franja horaria UTC afectada:', JSON.stringify(hora));
+    }
+  }
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -834,6 +867,7 @@ async function inspectReportes() {
   if (MODE === 'fix-liq-expenses' || MODE === 'fix-liq-expenses-apply') { await fixLiqExpenses(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'audit-caja') { await auditCaja(); return; }
+  if (MODE === 'audit-fechas') { await auditFechas(); return; }
   if (MODE === 'audit-retiros') { await auditRetiros(); return; }
   if (MODE === 'fix-caja-openedat' || MODE === 'fix-caja-openedat-apply') { await fixCajaOpenedAt(); return; }
   if (MODE === 'fix-retiro-huerfano' || MODE === 'fix-retiro-huerfano-apply') { await fixRetiroHuerfano(); return; }
