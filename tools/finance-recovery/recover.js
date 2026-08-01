@@ -469,6 +469,93 @@ async function fixLiqExpenses() {
   console.log(APPLY ? 'LISTO.' : 'SIMULACIÓN: nada escrito. Usá fix-liq-expenses-apply.');
 }
 
+// audit-caja: SOLO LECTURA. Reproduce EXACTAMENTE cashExpectedAmount() de la
+// app sobre la sesión de caja abierta, y muestra de dónde sale cada peso:
+//   apertura + cobros en efectivo desde openedAt − retiros − gastos en efectivo
+// Además lista los pagos que quedaron AFUERA del cálculo y por qué (método con
+// otra grafía, sin fecha, anulado, anterior a la apertura), que es donde se
+// esconden las diferencias.
+async function auditCaja() {
+  const cfg = (await CFG.get()).data() || {};
+  const s = cfg.cashSession || {};
+  const money = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
+  const hora = (t) => String(t || '').slice(11, 16);
+
+  console.log('=== SESIÓN DE CAJA ===');
+  console.log('abierta:', s.isOpen, '| abrió:', s.openedBy || '?', '| openedAt:', s.openedAt || '—');
+  console.log('monto de apertura:', money(s.openingAmount));
+  if (s.openingCorrectedFrom != null) console.log('  (apertura corregida: de', money(s.openingCorrectedFrom), 'a', money(s.openingAmount), 'el', s.openingCorrectedAt, ')');
+
+  const since = s.openedAt || '';
+  const pays = (await db.collection('payments').get()).docs.map((d) => d.data());
+  const tickets = {};
+  (await db.collection('salesTickets').get()).docs.forEach((d) => { const t = d.data(); tickets[t.id || d.id] = t; });
+  const clients = {};
+  (await db.collection('clients').get()).docs.forEach((d) => { const c = d.data(); clients[c.id || d.id] = `${c.first || ''} ${c.last || ''}`.trim(); });
+
+  const nombre = (p) => {
+    if (p.clientId && clients[p.clientId]) return clients[p.clientId];
+    const t = p.ticketId && tickets[p.ticketId];
+    if (t && t.clientId && clients[t.clientId]) return clients[t.clientId];
+    return '—';
+  };
+
+  // Lo que la app SÍ cuenta
+  const inSession = pays.filter((p) => p.method === 'Efectivo' && !p.voided && (p.createdAt || '') >= since);
+  const cashIn = inSession.reduce((a, p) => a + Number(p.amount || 0), 0);
+  console.log(`\n=== COBROS EN EFECTIVO QUE SUMA EL SISTEMA (${inSession.length}) ===`);
+  inSession.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))).forEach((p) => {
+    console.log(`  ${hora(p.createdAt)} · ${money(p.amount)} · ${nombre(p)} · ${p.type || ''}${p.ticketId ? ' · ticket ' + p.ticketId : ''}`);
+  });
+  console.log('  SUBTOTAL cobrado en efectivo:', money(cashIn));
+
+  // Retiros y gastos
+  const ws = s.withdrawals || [];
+  const wTot = ws.reduce((a, w) => a + Number(w.amount || 0), 0);
+  console.log(`\n=== RETIROS (${ws.length}) ===`);
+  ws.forEach((w) => console.log(`  ${hora(w.createdAt)} · ${money(w.amount)} · ${w.reason || ''}${w.voided ? '  [ANULADO — ojo: el cálculo lo resta igual]' : ''}`));
+  console.log('  SUBTOTAL retiros:', money(wTot));
+
+  const exAll = s.expenses || [];
+  const exCash = exAll.filter((e) => e.method === 'Efectivo');
+  const eTot = exCash.reduce((a, e) => a + Number(e.amount || 0), 0);
+  console.log(`\n=== GASTOS DE CAJA (${exAll.length}, en efectivo ${exCash.length}) ===`);
+  exAll.forEach((e) => console.log(`  ${hora(e.createdAt)} · ${money(e.amount)} · ${e.category || ''} · ${e.method || '?'}${e.method !== 'Efectivo' ? '  (no resta: no es efectivo)' : ''}${e.voided ? '  [ANULADO — se resta igual]' : ''}`));
+  console.log('  SUBTOTAL gastos en efectivo:', money(eTot));
+
+  const esperado = Number(s.openingAmount || 0) + cashIn - wTot - eTot;
+  console.log('\n=== CUENTA FINAL (igual que la app) ===');
+  console.log(`  ${money(s.openingAmount)} (apertura)`);
+  console.log(`+ ${money(cashIn)} (cobros en efectivo)`);
+  console.log(`− ${money(wTot)} (retiros)`);
+  console.log(`− ${money(eTot)} (gastos en efectivo)`);
+  console.log(`= ${money(esperado)}  ← EFECTIVO ESPERADO`);
+
+  // Dónde se esconden las diferencias
+  console.log('\n=== PAGOS QUE NO ENTRARON EN LA CUENTA (y por qué) ===');
+  const hoy = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
+  const fuera = pays.filter((p) => !inSession.includes(p) && String(p.createdAt || '').slice(0, 10) === hoy);
+  if (!fuera.length) console.log('  ninguno de hoy');
+  fuera.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))).forEach((p) => {
+    const razones = [];
+    if (p.method !== 'Efectivo') razones.push(`método="${p.method}"`);
+    if (p.voided) razones.push('ANULADO');
+    if (!p.createdAt) razones.push('sin fecha/hora');
+    else if (p.createdAt < since) razones.push('anterior a la apertura de caja');
+    console.log(`  ${hora(p.createdAt)} · ${money(p.amount)} · ${nombre(p)} → ${razones.join(' + ') || '?'}`);
+  });
+
+  // Grafías de método usadas hoy: si hay "efectivo" o "EFECTIVO", no suman.
+  const grafias = {};
+  pays.filter((p) => String(p.createdAt || '').slice(0, 10) === hoy).forEach((p) => {
+    grafias[String(p.method)] = (grafias[String(p.method)] || 0) + 1;
+  });
+  console.log('\n=== GRAFÍAS DE MEDIO DE PAGO USADAS HOY ===');
+  console.log(' ', JSON.stringify(grafias));
+  const sospechosas = Object.keys(grafias).filter((m) => m !== 'Efectivo' && /efectiv/i.test(m));
+  if (sospechosas.length) console.log('  >>> ALERTA: estas se escriben distinto y NO suman al efectivo:', JSON.stringify(sospechosas));
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -537,6 +624,7 @@ async function inspectReportes() {
   if (MODE === 'inspect-liq-finance') { await inspectLiqFinance(); return; }
   if (MODE === 'fix-liq-expenses' || MODE === 'fix-liq-expenses-apply') { await fixLiqExpenses(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
+  if (MODE === 'audit-caja') { await auditCaja(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
 
   if (MODE === 'restore-collections') {
