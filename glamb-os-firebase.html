@@ -7518,6 +7518,14 @@
       return state.catalog.additionals.find(a=>a.id===addId) || null;
     }
     function currentApptPrice(appt){
+      // MANDA EL PRECIO DEL TURNO. Antes se leía siempre el precio del catálogo
+      // y el que se escribía a mano en "Editar turno" quedaba ignorado: la
+      // agenda mostraba otro número y la colaboradora cobraba el del catálogo.
+      // Con esto se sostienen las dos promesas que ya hace la app: el precio
+      // editado a mano vale, y al cambiar un precio del catálogo los turnos ya
+      // agendados "mantienen el precio anterior" si se elige no actualizarlos.
+      const propio = Number(appt.price);
+      if(Number.isFinite(propio) && propio > 0) return propio;
       if(appt.isAdditional){
         const add = getAdditionalFromId(appt.variantId);
         return add ? add.price : appt.price;
