@@ -798,6 +798,49 @@ async function auditFechas() {
   }
 }
 
+
+// inspect-turno: SOLO LECTURA. Para un turno que aparece "ya cobrado" sin
+// haberse cobrado. Muestra el turno, su clave de reserva (bookingId) y TODO lo
+// que cuelga de esa clave: tickets, pagos y otros turnos que la compartan.
+// La app considera cobrada una reserva si existe un ticket con
+// reservationId == bookingId y estado confirmado o parcial.
+async function inspectTurno() {
+  const q = (process.env.TURNO_CLIENTE || '').toLowerCase();
+  const money = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
+  const [cls, aps, tks, pys] = await Promise.all([
+    db.collection('clients').get(), db.collection('appointments').get(),
+    db.collection('salesTickets').get(), db.collection('payments').get(),
+  ]);
+  const clients = {}; cls.docs.forEach((d) => { const c = d.data(); clients[c.id || d.id] = `${c.first || ''} ${c.last || ''}`.trim(); });
+  const ids = Object.keys(clients).filter((id) => clients[id].toLowerCase().includes(q));
+  console.log('clientas que coinciden con', JSON.stringify(q), ':', ids.map((i) => clients[i]).join(' | ') || 'ninguna');
+  if (!ids.length) return;
+
+  const appts = aps.docs.map((d) => d.data()).filter((a) => ids.includes(a.clientId));
+  const tickets = tks.docs.map((d) => d.data());
+  const pays = pys.docs.map((d) => d.data());
+
+  appts.sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach((a) => {
+    const key = a.bookingId || a.id;
+    console.log(`\n=== TURNO ${a.date} ${a.start}-${a.end} · ${a.service} · estado=${a.status || '—'} ===`);
+    console.log('   id:', a.id, '| bookingId:', a.bookingId || '(ninguno)', '→ clave de reserva:', key);
+    console.log('   deposit:', a.deposit || '—', '| depositAmount:', a.depositAmount != null ? money(a.depositAmount) : '—', '| depositMethod:', a.depositMethod || '—');
+    const otros = aps.docs.map((d) => d.data()).filter((x) => (x.bookingId || x.id) === key && x.id !== a.id);
+    if (otros.length) {
+      console.log('   >>> OTROS TURNOS CON LA MISMA CLAVE:', otros.length);
+      otros.forEach((x) => console.log(`       ${x.date} ${x.start} · ${x.service} · ${clients[x.clientId] || '?'} · estado=${x.status || '—'} · id=${x.id}`));
+    }
+    const tk = tickets.filter((t) => t.reservationId === key);
+    console.log('   tickets con esa clave:', tk.length);
+    tk.forEach((t) => console.log(`       ticket ${t.id} · ${(t.createdAt || '').slice(0, 16)} · estado=${t.status} · bruto=${money(t.grossTotal)} · saldo pendiente=${money(t.pendingBalance)} · seña aplicada=${money(t.depositApplied)}`));
+    const cuenta = tk.some((t) => t.status === 'confirmed' || t.status === 'partial');
+    console.log('   ¿la app lo da por COBRADO?', cuenta ? 'SÍ' : 'no');
+    const pg = pays.filter((x) => x.bookingId === key || (a.id && x.appointmentId === a.id));
+    console.log('   pagos ligados a la reserva:', pg.length);
+    pg.forEach((x) => console.log(`       ${(x.createdAt || '').slice(0, 16)} · ${x.type} · ${money(x.amount)} · ${x.method}${x.voided ? ' · ANULADO' : ''} · ticket=${x.ticketId || '—'}`));
+  });
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -868,6 +911,7 @@ async function inspectReportes() {
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'audit-caja') { await auditCaja(); return; }
   if (MODE === 'audit-fechas') { await auditFechas(); return; }
+  if (MODE === 'inspect-turno') { await inspectTurno(); return; }
   if (MODE === 'audit-retiros') { await auditRetiros(); return; }
   if (MODE === 'fix-caja-openedat' || MODE === 'fix-caja-openedat-apply') { await fixCajaOpenedAt(); return; }
   if (MODE === 'fix-retiro-huerfano' || MODE === 'fix-retiro-huerfano-apply') { await fixRetiroHuerfano(); return; }

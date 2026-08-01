@@ -20,10 +20,11 @@ jobs:
       - name: Run recovery
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLAMB_OS }}
+          TURNO_CLIENTE: micaela weiss
         run: |
           cd tools/finance-recovery
           export MODE=$(cat MODE | tr -d ' \n')
           echo "MODE=$MODE"
           npm init -y >/dev/null 2>&1
-          npm install @google-cloud/firestore@7 google-auth-library@9 --no-audit --no-fund 2>&1 | tail -1
+          npm install @google-cloud/firestore@7 --no-audit --no-fund 2>&1 | tail -1
           node recover.js
