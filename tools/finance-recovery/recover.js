@@ -703,6 +703,68 @@ async function fixCajaOpenedAt() {
   console.log('  efectivo esperado ahora:', money(esp(verif.openedAt)));
 }
 
+
+// fix-retiro-huerfano: un retiro hecho la MAÑANA de hoy, pero registrado en el
+// cierre de la jornada anterior (la caja cruzó la medianoche y se cerró recién
+// a la mañana), no lo resta el efectivo esperado: para la sesión actual ocurrió
+// "antes de abrir". Pero la plata salió hoy, así que corresponde a hoy.
+// Se COPIA a la sesión actual conservando el mismo id: el Ledger deduplica por
+// id, así que sigue mostrándose una sola vez, y el cierre del día anterior
+// queda intacto (cerró con diferencia cero y no hay que tocarlo).
+async function fixRetiroHuerfano() {
+  const APPLY = MODE.endsWith('-apply');
+  const money = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
+  const ar = (t) => { const d = new Date(String(t || '')); return isNaN(d) ? '??' : new Date(d.getTime() - 3 * 3600000).toISOString().replace('T', ' ').slice(5, 16); };
+
+  const cfg = (await CFG.get()).data() || {};
+  const ses = cfg.cashSession;
+  if (!ses || !ses.openedAt) { console.log('No hay sesión de caja abierta.'); return; }
+  const diaSesion = ses.openedAt.slice(0, 10);
+  const yaTiene = new Set((ses.withdrawals || []).map((w) => w.id));
+  console.log('=== SESIÓN ACTUAL ===');
+  console.log('  abierta', ar(ses.openedAt), '· apertura', money(ses.openingAmount), '· retiros propios:', (ses.withdrawals || []).length);
+
+  // Retiros en cierres anteriores con fecha del MISMO día que abrió la sesión
+  const cls = await db.collection('cashClosings').get();
+  const huerfanos = [];
+  cls.docs.map((d) => d.data()).forEach((c) => {
+    (c.withdrawals || []).forEach((w) => {
+      if (!w || !w.id) return;
+      if (yaTiene.has(w.id)) return;
+      if (String(w.createdAt || '').slice(0, 10) !== diaSesion) return;
+      if (huerfanos.some((x) => x.id === w.id)) return;
+      huerfanos.push(w);
+    });
+  });
+  console.log(`\n=== RETIROS DE HOY QUE QUEDARON EN UN CIERRE ANTERIOR (${huerfanos.length}) ===`);
+  huerfanos.forEach((w) => console.log(`  ${ar(w.createdAt)} · ${money(w.amount)} · ${w.reason || ''} · id=${w.id}`));
+  if (!huerfanos.length) { console.log('  ninguno: nada que corregir.'); return; }
+
+  // Efecto en el efectivo esperado
+  const pays = (await db.collection('payments').get()).docs.map((d) => d.data());
+  const cashIn = pays.filter((p) => p.method === 'Efectivo' && !p.voided && (p.createdAt || '') >= ses.openedAt)
+      .reduce((a, p) => a + Number(p.amount || 0), 0);
+  const g = (ses.expenses || []).filter((x) => x.method === 'Efectivo').reduce((a, x) => a + Number(x.amount || 0), 0);
+  const wAntes = (ses.withdrawals || []).reduce((a, x) => a + Number(x.amount || 0), 0);
+  const wDespues = wAntes + huerfanos.reduce((a, x) => a + Number(x.amount || 0), 0);
+  const base = Number(ses.openingAmount || 0) + cashIn - g;
+  console.log('\n=== EFECTO EN EL EFECTIVO ESPERADO ===');
+  console.log('  ANTES:  ', money(ses.openingAmount), '+', money(cashIn), '−', money(wAntes), '−', money(g), '=', money(base - wAntes));
+  console.log('  DESPUÉS:', money(ses.openingAmount), '+', money(cashIn), '−', money(wDespues), '−', money(g), '=', money(base - wDespues));
+
+  if (!APPLY) { console.log('\nSIMULACIÓN: no se escribió nada. Usá fix-retiro-huerfano-apply.'); return; }
+
+  const nueva = Object.assign({}, ses, {
+    withdrawals: [...(ses.withdrawals || []), ...huerfanos.map((w) => Object.assign({}, w, { movidoDesdeCierre: true }))],
+  });
+  await CFG.set({ cashSession: nueva }, { merge: true });
+  const v = (await CFG.get()).data().cashSession;
+  console.log('\nCORREGIDO. Retiros de la sesión:', (v.withdrawals || []).length);
+  (v.withdrawals || []).forEach((w) => console.log(`  ${ar(w.createdAt)} · ${money(w.amount)} · ${w.reason || ''}`));
+  const wFinal = (v.withdrawals || []).reduce((a, x) => a + Number(x.amount || 0), 0);
+  console.log('  efectivo esperado ahora:', money(base - wFinal));
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -774,6 +836,7 @@ async function inspectReportes() {
   if (MODE === 'audit-caja') { await auditCaja(); return; }
   if (MODE === 'audit-retiros') { await auditRetiros(); return; }
   if (MODE === 'fix-caja-openedat' || MODE === 'fix-caja-openedat-apply') { await fixCajaOpenedAt(); return; }
+  if (MODE === 'fix-retiro-huerfano' || MODE === 'fix-retiro-huerfano-apply') { await fixRetiroHuerfano(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
 
   if (MODE === 'restore-collections') {
