@@ -642,6 +642,67 @@ async function auditRetiros() {
   if (!faltan) console.log('   ninguno: todos los retiros que existieron siguen estando.');
 }
 
+
+// fix-caja-openedat: corrige la fecha de apertura de la sesión de caja actual
+// cuando quedó APUNTANDO A UN DÍA ANTERIOR (una copia vieja de otro equipo la
+// pisó). No toca montos, retiros ni gastos: solo openedAt, que es lo que hace
+// que el cálculo sume cobros de jornadas ya cerradas y contadas.
+// La fecha correcta NO se inventa: se lee del historial (PITR).
+async function fixCajaOpenedAt() {
+  const APPLY = MODE.endsWith('-apply');
+  const REF_UTC = process.env.PITR_REF || '2026-07-31T13:00:00Z';
+  const money = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
+  const ar = (t) => { const d = new Date(String(t || '')); return isNaN(d) ? '??' : new Date(d.getTime() - 3 * 3600000).toISOString().replace('T', ' ').slice(5, 16); };
+
+  const cfg = (await CFG.get()).data() || {};
+  const cur = cfg.cashSession;
+  if (!cur) { console.log('No hay sesión de caja. Nada que hacer.'); return; }
+  console.log('=== SESIÓN ACTUAL ===');
+  console.log('  openedAt:', cur.openedAt, `(${ar(cur.openedAt)})`, '| apertura:', money(cur.openingAmount), '| abierta:', cur.isOpen);
+
+  // Fecha correcta según el historial
+  let hist = null;
+  try {
+    hist = await db.runTransaction(async (t) => {
+      const sn = await t.get(CFG); return sn.exists ? sn.data() : null;
+    }, { readOnly: true, readTime: Timestamp.fromDate(new Date(REF_UTC)) });
+  } catch (e) { console.log('No se pudo leer el historial:', e.message); return; }
+  const buena = hist && hist.cashSession;
+  if (!buena || !buena.openedAt) { console.log('El historial no tiene sesión en', REF_UTC); return; }
+  console.log('=== SESIÓN SEGÚN EL HISTORIAL (' + REF_UTC + ') ===');
+  console.log('  openedAt:', buena.openedAt, `(${ar(buena.openedAt)})`, '| apertura:', money(buena.openingAmount));
+
+  if (!(Date.parse(buena.openedAt) > Date.parse(cur.openedAt))) {
+    console.log('\nLa fecha actual NO es anterior a la del historial: no hay nada que corregir.');
+    return;
+  }
+
+  // Efecto sobre el efectivo esperado, antes y después
+  const pays = (await db.collection('payments').get()).docs.map((d) => d.data());
+  const suma = (desde) => pays.filter((p) => p.method === 'Efectivo' && !p.voided && (p.createdAt || '') >= desde)
+      .reduce((a, p) => a + Number(p.amount || 0), 0);
+  const w = (cur.withdrawals || []).reduce((a, x) => a + Number(x.amount || 0), 0);
+  const g = (cur.expenses || []).filter((x) => x.method === 'Efectivo').reduce((a, x) => a + Number(x.amount || 0), 0);
+  const esp = (desde) => Number(cur.openingAmount || 0) + suma(desde) - w - g;
+  console.log('\n=== EFECTO EN EL EFECTIVO ESPERADO ===');
+  console.log('  ANTES (desde ' + ar(cur.openedAt) + '):  cobros', money(suma(cur.openedAt)), '→ esperado', money(esp(cur.openedAt)));
+  console.log('  DESPUÉS (desde ' + ar(buena.openedAt) + '): cobros', money(suma(buena.openedAt)), '→ esperado', money(esp(buena.openedAt)));
+  console.log('  diferencia:', money(esp(cur.openedAt) - esp(buena.openedAt)), '(cobros de jornadas ya cerradas que se estaban contando de nuevo)');
+
+  if (!APPLY) { console.log('\nSIMULACIÓN: no se escribió nada. Usá fix-caja-openedat-apply.'); return; }
+
+  const nueva = Object.assign({}, cur, {
+    openedAt: buena.openedAt,
+    openedAtFixedFrom: cur.openedAt,          // rastro para auditoría
+    openedAtFixedAt: new Date().toISOString(),
+  });
+  await CFG.set({ cashSession: nueva }, { merge: true });
+  const verif = (await CFG.get()).data().cashSession;
+  console.log('\nCORREGIDO. openedAt ahora:', verif.openedAt, `(${ar(verif.openedAt)})`);
+  console.log('  se conservaron: apertura', money(verif.openingAmount), '· retiros', (verif.withdrawals || []).length, '· gastos', (verif.expenses || []).length);
+  console.log('  efectivo esperado ahora:', money(esp(verif.openedAt)));
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -712,6 +773,7 @@ async function inspectReportes() {
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'audit-caja') { await auditCaja(); return; }
   if (MODE === 'audit-retiros') { await auditRetiros(); return; }
+  if (MODE === 'fix-caja-openedat' || MODE === 'fix-caja-openedat-apply') { await fixCajaOpenedAt(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
 
   if (MODE === 'restore-collections') {

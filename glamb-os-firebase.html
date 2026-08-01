@@ -5423,13 +5423,35 @@
     // uno que no la tocó nunca la pisa.
     function _configObj(){ const out={}; CONFIG_KEYS.forEach(k=>{ if(state[k]!==undefined) out[k]=state[k]; }); return out; }
     function _configJSON(){ try{ return JSON.stringify(_configObj()); }catch(e){ return null; } }
+    // ── Guardián de la caja: openedAt NUNCA retrocede ──────────────────────
+    // Un equipo con la app abierta desde el día anterior (teléfono suspendido,
+    // pestaña vieja) llegó a pisar la caja del día con la de la jornada
+    // anterior. El efectivo esperado quedó sumando cobros que ya se habían
+    // cerrado y contado: $45.000 duplicados. Como una sesión de caja solo puede
+    // avanzar en el tiempo, alcanza con rechazar cualquier versión más vieja,
+    // tanto al escribir como al recibir.
+    const _sessionStamp=cs=>{ const t=Date.parse((cs&&cs.openedAt)||''); return isNaN(t)?0:t; };
+    const _CFG_STALE='__caja_vieja__';   // fuerza el reguardado de la versión buena
     function saveConfig(){
       if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
       if(_configShadow===null) return;              // todavía no cargamos el doc real
       const json=_configJSON();
       if(json===null || json===_configShadow) return; // sin cambios: no pisamos nada
-      db.collection('appState').doc('config').set(_configObj(),{merge:false})
-        .then(()=>{ _configShadow=json; })
+      const ref=db.collection('appState').doc('config');
+      // Transacción: se lee lo que hay en el servidor y, si su caja es más
+      // nueva que la nuestra, se conserva la del servidor en vez de pisarla.
+      db.runTransaction(async t=>{
+        const snap=await t.get(ref);
+        const remote=snap.exists?(snap.data()||{}):{};
+        const out=_configObj();
+        if(_sessionStamp(remote.cashSession) > _sessionStamp(out.cashSession)){
+          out.cashSession=remote.cashSession;
+          state.cashSession=remote.cashSession;   // adoptamos la buena localmente
+          console.warn('[GLAMB] caja: se conservó la sesión del servidor (la local era anterior)');
+        }
+        t.set(ref,out);
+        return JSON.stringify(out);
+      }).then(written=>{ _configShadow=written; try{ renderAll(); }catch(e){} })
         .catch(e=>console.error('[GLAMB] guardado config falló:',e));
     }
     function subscribeConfigSync(){
@@ -5438,10 +5460,18 @@
         if(!snap.exists || snap.metadata.hasPendingWrites) return; // ignorar eco propio
         _applyingRemote=true;
         const d=snap.data()||{};
-        CONFIG_KEYS.forEach(k=>{ if(d[k]!==undefined) state[k]=d[k]; });
-        _configShadow=_configJSON();
+        // Si llega una caja anterior a la que ya tenemos, es la copia vieja de
+        // otro equipo: no se adopta, y se reescribe la correcta.
+        const cajaVieja = d.cashSession!==undefined && _sessionStamp(d.cashSession) < _sessionStamp(state.cashSession);
+        CONFIG_KEYS.forEach(k=>{
+          if(k==='cashSession' && cajaVieja) return;
+          if(d[k]!==undefined) state[k]=d[k];
+        });
+        _configShadow = cajaVieja ? _CFG_STALE : _configJSON();
+        if(cajaVieja) console.warn('[GLAMB] caja: se ignoró una sesión anterior a la actual');
         try{ renderAll(); }catch(e){ console.error(e); }
         _applyingRemote=false;
+        if(cajaVieja) saveConfig();   // devolver la sesión correcta al servidor
       }, e=>console.error('[GLAMB] config sync falló:',e));
     }
     // Siembra única: si appState/config no existe, lo crea con lo que haya en el
