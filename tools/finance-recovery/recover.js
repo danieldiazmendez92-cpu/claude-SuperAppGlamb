@@ -848,6 +848,41 @@ async function inspectTurno() {
   });
 }
 
+
+// anular-ticket: anula un ticket exactamente como lo hace la app (voidTicket):
+// estado 'voided' + motivo + se anulan sus pagos. Se usa para tickets viejos que
+// desde la app son difíciles de alcanzar. Muestra el antes y el después.
+async function anularTicket() {
+  const APPLY = MODE.endsWith('-apply');
+  const ID = process.env.TICKET_ID || '';
+  const MOTIVO = process.env.TICKET_MOTIVO || 'Anulado por corrección';
+  const money = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
+  if (!ID) { console.log('Falta TICKET_ID.'); return; }
+
+  const tks = await db.collection('salesTickets').get();
+  const doc = tks.docs.find((d) => (d.data().id || d.id) === ID);
+  if (!doc) { console.log('No existe el ticket', ID); return; }
+  const t = doc.data();
+  console.log('=== TICKET ===');
+  console.log(' ', t.id, '·', (t.createdAt || '').slice(0, 16), '· estado=', t.status, '· bruto=', money(t.grossTotal), '· reserva=', t.reservationId || '—', '· origen=', t.origin || '—');
+  (t.lines || []).forEach((l) => console.log('   línea:', l.service || l.group, money(l.finalPrice)));
+  if (t.status === 'voided') { console.log('Ya estaba anulado. Nada que hacer.'); return; }
+
+  const pys = await db.collection('payments').get();
+  const pagos = pys.docs.filter((d) => d.data().ticketId === ID);
+  console.log('pagos del ticket:', pagos.length);
+  pagos.forEach((d) => { const x = d.data(); console.log('  ', (x.createdAt || '').slice(0, 16), x.type, money(x.amount), x.method, x.voided ? '· ya anulado' : ''); });
+
+  if (!APPLY) { console.log('\nSIMULACIÓN: no se escribió nada. Usá anular-ticket-apply.'); return; }
+
+  const now = new Date().toISOString();
+  await doc.ref.set({ status: 'voided', voidReason: MOTIVO, voidedBy: 'Corrección asistida', voidedAt: now }, { merge: true });
+  for (const d of pagos) await d.ref.set({ voided: true, voidReason: MOTIVO, voidedAt: now }, { merge: true });
+  const after = (await doc.ref.get()).data();
+  console.log('\nANULADO. estado=', after.status, '· motivo:', after.voidReason);
+  console.log('pagos anulados:', pagos.length);
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -919,6 +954,7 @@ async function inspectReportes() {
   if (MODE === 'audit-caja') { await auditCaja(); return; }
   if (MODE === 'audit-fechas') { await auditFechas(); return; }
   if (MODE === 'inspect-turno') { await inspectTurno(); return; }
+  if (MODE === 'anular-ticket' || MODE === 'anular-ticket-apply') { await anularTicket(); return; }
   if (MODE === 'audit-retiros') { await auditRetiros(); return; }
   if (MODE === 'fix-caja-openedat' || MODE === 'fix-caja-openedat-apply') { await fixCajaOpenedAt(); return; }
   if (MODE === 'fix-retiro-huerfano' || MODE === 'fix-retiro-huerfano-apply') { await fixRetiroHuerfano(); return; }
