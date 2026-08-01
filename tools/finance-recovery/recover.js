@@ -832,7 +832,14 @@ async function inspectTurno() {
     }
     const tk = tickets.filter((t) => t.reservationId === key);
     console.log('   tickets con esa clave:', tk.length);
-    tk.forEach((t) => console.log(`       ticket ${t.id} · ${(t.createdAt || '').slice(0, 16)} · estado=${t.status} · bruto=${money(t.grossTotal)} · saldo pendiente=${money(t.pendingBalance)} · seña aplicada=${money(t.depositApplied)}`));
+    tk.forEach((t) => {
+      console.log(`       ticket ${t.id} · ${(t.createdAt || '').slice(0, 16)} · estado=${t.status} · bruto=${money(t.grossTotal)} · saldo pendiente=${money(t.pendingBalance)} · seña aplicada=${money(t.depositApplied)}`);
+      console.log('         clienta del ticket:', t.clientNameSnapshot || clients[t.clientId] || '?');
+      (t.lines || []).forEach((l) => console.log(`         línea: ${l.service || l.group || '?'} · ${money(l.finalPrice)} · colaboradora=${l.collaboratorId || '—'}`));
+      const pt = pays.filter((x) => x.ticketId === t.id);
+      console.log('         pagos de ese ticket:', pt.length);
+      pt.forEach((x) => console.log(`           ${(x.createdAt || '').slice(0, 16)} · ${x.type} · ${money(x.amount)} · ${x.method}${x.voided ? ' · ANULADO' : ''}`));
+    });
     const cuenta = tk.some((t) => t.status === 'confirmed' || t.status === 'partial');
     console.log('   ¿la app lo da por COBRADO?', cuenta ? 'SÍ' : 'no');
     const pg = pays.filter((x) => x.bookingId === key || (a.id && x.appointmentId === a.id));
