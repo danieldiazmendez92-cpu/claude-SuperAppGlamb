@@ -566,6 +566,72 @@ async function auditCaja() {
   if (sospechosas.length) console.log('  >>> ALERTA: estas se escriben distinto y NO suman al efectivo:', JSON.stringify(sospechosas));
 }
 
+
+// audit-retiros: SOLO LECTURA. Rastrea la sesión de caja hora por hora hacia
+// atrás (PITR) y muestra CADA VEZ que cambia la lista de retiros o gastos.
+// Sirve para saber si un retiro que "falta" existió alguna vez y en qué
+// momento desapareció — anular un retiro lo BORRA del registro, no lo marca.
+async function auditRetiros() {
+  const HORAS = Number(process.env.PITR_HORAS || 72);
+  const money = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
+  const ar = (t) => { const d = new Date(String(t || '')); return isNaN(d) ? '??' : new Date(d.getTime() - 3 * 3600000).toISOString().replace('T', ' ').slice(5, 16); };
+  const firma = (c) => JSON.stringify({
+    ap: c ? c.openingAmount : null,
+    w: ((c && c.withdrawals) || []).map((x) => `${ar(x.createdAt)}|${x.amount}|${x.reason || ''}`).sort(),
+    e: ((c && c.expenses) || []).map((x) => `${ar(x.createdAt)}|${x.amount}|${x.category || ''}`).sort(),
+  });
+
+  const snaps = [];
+  const end = new Date(); end.setMinutes(0, 0, 0);
+  for (let h = 0; h <= HORAS; h++) snaps.push(new Date(end.getTime() - h * 3600e3));
+  snaps.reverse(); // del más viejo al más nuevo
+
+  let prev = null;
+  console.log(`=== HISTORIAL DE LA CAJA (últimas ${HORAS} h, hora AR) ===`);
+  for (const when of snaps) {
+    let cfg = null;
+    try {
+      cfg = await db.runTransaction(async (t) => {
+        const sn = await t.get(CFG); return sn.exists ? sn.data() : null;
+      }, { readOnly: true, readTime: Timestamp.fromDate(when) });
+    } catch (e) { continue; }  // fuera de la ventana PITR
+    const c = cfg && cfg.cashSession;
+    const f = firma(c);
+    if (f === prev) continue;
+    prev = f;
+    console.log(`\n--- ${ar(when.toISOString())} ---`);
+    if (!c) { console.log('   (sin sesión de caja)'); continue; }
+    console.log(`   abierta=${c.isOpen} · desde ${ar(c.openedAt)} · apertura=${money(c.openingAmount)}`);
+    const ws = c.withdrawals || [];
+    console.log(`   RETIROS (${ws.length}):`, ws.length ? ws.map((x) => `${ar(x.createdAt)} ${money(x.amount)} ${x.reason || ''}`).join(' | ') : '—');
+    const es = c.expenses || [];
+    console.log(`   GASTOS (${es.length}):`, es.length ? es.map((x) => `${ar(x.createdAt)} ${money(x.amount)} ${x.category || ''} ${x.method || ''}`).join(' | ') : '—');
+  }
+
+  // Resumen: todos los retiros que aparecieron alguna vez vs los que quedan hoy
+  console.log('\n=== ¿ALGÚN RETIRO EXISTIÓ Y HOY NO ESTÁ? ===');
+  const vistos = new Map();
+  for (const when of snaps) {
+    let cfg = null;
+    try {
+      cfg = await db.runTransaction(async (t) => { const sn = await t.get(CFG); return sn.exists ? sn.data() : null; }, { readOnly: true, readTime: Timestamp.fromDate(when) });
+    } catch (e) { continue; }
+    ((cfg && cfg.cashSession && cfg.cashSession.withdrawals) || []).forEach((w) => {
+      if (!vistos.has(w.id)) vistos.set(w.id, { w, visto: ar(when.toISOString()) });
+      vistos.get(w.id).ultimo = ar(when.toISOString());
+    });
+  }
+  const hoy = (await CFG.get()).data() || {};
+  const actuales = new Set((((hoy.cashSession || {}).withdrawals) || []).map((w) => w.id));
+  let faltan = 0;
+  vistos.forEach((v, id) => {
+    if (actuales.has(id)) return;
+    faltan++;
+    console.log(`   DESAPARECIÓ: ${money(v.w.amount)} · ${v.w.reason || ''} · creado ${ar(v.w.createdAt)} · visible desde ${v.visto} hasta ${v.ultimo} · id=${id}`);
+  });
+  if (!faltan) console.log('   ninguno: todos los retiros que existieron siguen estando.');
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -635,6 +701,7 @@ async function inspectReportes() {
   if (MODE === 'fix-liq-expenses' || MODE === 'fix-liq-expenses-apply') { await fixLiqExpenses(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'audit-caja') { await auditCaja(); return; }
+  if (MODE === 'audit-retiros') { await auditRetiros(); return; }
   if (MODE === 'restore-caja') { await restoreCaja(); return; }
 
   if (MODE === 'restore-collections') {
