@@ -581,6 +581,16 @@ async function auditRetiros() {
     e: ((c && c.expenses) || []).map((x) => `${ar(x.createdAt)}|${x.amount}|${x.category || ''}`).sort(),
   });
 
+  // Cierres guardados: si un día se cerró bien, sus retiros quedaron ahí.
+  console.log('=== CIERRES DE CAJA GUARDADOS ===');
+  const cls = await db.collection('cashClosings').get();
+  cls.docs.map((d) => d.data()).sort((a, b) => String(a.closedAt).localeCompare(String(b.closedAt))).forEach((c) => {
+    const ws = c.withdrawals || [];
+    console.log(`  cerrado ${ar(c.closedAt)} · abierto ${ar(c.openedAt)} · apertura ${money(c.openingAmount)} · esperado ${money(c.expectedCash)} · contado ${money(c.countedCash)} · dif ${money(c.difference)}`);
+    console.log(`     retiros (${ws.length}):`, ws.length ? ws.map((x) => `${ar(x.createdAt)} ${money(x.amount)} ${x.reason || ''}`).join(' | ') : '—');
+  });
+  if (!cls.size) console.log('  NINGUNO: nunca se cerró la caja.');
+
   const snaps = [];
   const end = new Date(); end.setMinutes(0, 0, 0);
   for (let h = 0; h <= HORAS; h++) snaps.push(new Date(end.getTime() - h * 3600e3));
