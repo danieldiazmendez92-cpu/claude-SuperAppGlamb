@@ -3743,6 +3743,7 @@
                       <label>Seña ya abonada (se descuenta del saldo)</label>
                       <input id="reservationDeposit" type="number" value="0" min="0" placeholder="0" style="min-height:36px;padding:6px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-size:12px;width:100%;font-family:'DM Sans',sans-serif;">
                     </div>
+                    <div id="reservationDepositNote" style="display:none;margin-top:7px;font-size:11px;line-height:1.5;color:#8a5a14;background:#fff8e1;border-radius:8px;padding:7px 9px;"></div>
                   </div>
 
                   <!-- Forma de pago -->
@@ -7185,6 +7186,22 @@
       ).reduce((s,p)=>s+Number(p.amount||0),0);
       return Math.max(0, total - committed);
     }
+    // Aviso en el cobro: qué señas de esta clienta están guardadas para OTROS
+    // turnos todavía no cobrados. Esa plata NO se precarga acá (es de esos
+    // turnos), pero el campo sigue siendo editable si el salón decide usarla.
+    function updateSaleDepositNote(clientId, currentBookingId){
+      const el=$('reservationDepositNote'); if(!el) return;
+      const reservadas = clientId ? state.payments.filter(p=>
+        p.type==='deposit_received' && p.clientId===clientId && !p.voided && p.bookingId
+        && p.bookingId!==currentBookingId && !reservationCharged(p.bookingId)) : [];
+      if(!reservadas.length){ el.style.display='none'; el.innerHTML=''; return; }
+      const detalle = reservadas.map(p=>{
+        const a = state.appointments.find(x=>(x.bookingId||x.id)===p.bookingId && !x.isAdditional);
+        return `${money(p.amount)} para el turno del ${a?a.date:'—'}${a&&a.service?' · '+esc(a.service):''}`;
+      }).join('<br>');
+      el.innerHTML = `<strong>Seña reservada para otro turno</strong><br>${detalle}<br>No se descuenta acá. Si querés usarla igual, escribí el monto a mano.`;
+      el.style.display='block';
+    }
     // Actualiza el banner de seña en el formulario de turno.
     // freeBalance = saldo libre (sin comprometer a otro turno).
     function updateApDepositBanner(c){
@@ -7353,8 +7370,11 @@
           state.saleClient = {clientId:c.id, clientName:fullName(c)};
           input.value = fullName(c);
           box.classList.remove('open');
-          const bal = clientAvailableDeposit(c.id);
+          // Saldo LIBRE, no el total: una seña dejada para un turno futuro no
+          // puede consumirse sola en una venta de hoy.
+          const bal = clientFreeDeposit(c.id);
           if($('reservationDeposit')) $('reservationDeposit').value = bal > 0 ? bal : 0;
+          updateSaleDepositNote(c.id, null);
           updateSaleSummary();
         });
       };
@@ -7431,8 +7451,12 @@
         const thisKey = rKey;
         const committedHere = thisKey ? state.payments.filter(p=>p.type==='deposit_received'&&p.clientId===c.id&&!p.voided&&p.bookingId===thisKey).reduce((s,p)=>s+Number(p.amount||0),0) : 0;
         const apptDeposit = reservationDeposit(related);
-        const deposit = committedHere > 0 ? committedHere : (clientAvailableDeposit(c.id) || apptDeposit);
+        // Si el turno tiene su propia seña, esa manda. Si no, solo el saldo
+        // LIBRE de la clienta: antes se precargaba TODO su saldo, así que una
+        // seña dejada para un turno futuro se consumía sola al cobrar otro.
+        const deposit = committedHere > 0 ? committedHere : (clientFreeDeposit(c.id) || apptDeposit);
         if($('reservationDeposit')) $('reservationDeposit').value = deposit;
+        updateSaleDepositNote(c.id, thisKey);
         // Merge pending charges into the sale lines
         const pendingMemberIds = new Set(clientPending.map(p=>p.collaboratorId));
         related.forEach(line=>{
@@ -7830,6 +7854,7 @@
       if($('saleLines')) $('saleLines').innerHTML='';
       _saleLinesApptId = null;
       if($('reservationDeposit')) $('reservationDeposit').value='0';
+      updateSaleDepositNote(null, null);
       if($('checkoutPaymentPrimary')) $('checkoutPaymentPrimary').value='';
       if($('checkoutPaymentSecondary')) $('checkoutPaymentSecondary').value='0';
       if($('checkoutMixedRow')) $('checkoutMixedRow').style.display='none';
@@ -8483,12 +8508,15 @@
           const related=a.bookingId?state.appointments.filter(x=>x.bookingId===a.bookingId&&!x.isAdditional):[a];
           const totalPrice=related.reduce((s,r)=>s+Number(currentApptPrice(r)||0),0);
           const depAmt=appointmentDepositAmount(a);
-          const availDep=clientAvailableDeposit(c.id);
           const statusLabels={confirmed:'Confirmado',in_progress:'En curso',completed:'Finalizado',cancelled:'Cancelado',no_show:'No asistió'};
           const tier=c.tags.includes('VIP')?'Diamond':c.tags.includes('Acepta upgrades')?'Black':'Muse';
           const servicesHtml=related.map(r=>esc(r.service)).join('<br>');
           const proHtml=related.map(r=>esc(fullName(member(r.memberId)))).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
-          const depositLine=availDep>0?`<div class="tt-deposit">💰 Seña disponible: ${money(availDep)}</div>`:depAmt>0?`<div class="tt-deposit">Seña en turno: ${money(depAmt)}</div>`:'';
+          // La seña DE ESTE turno manda. El saldo suelto se muestra aparte y
+          // como "a favor", no como "seña": antes un saldo guardado para otro
+          // turno aparecía acá como si fuera de este.
+          const freeDep=clientFreeDeposit(c.id);
+          const depositLine=depAmt>0?`<div class="tt-deposit">Seña en turno: ${money(depAmt)}</div>`:freeDep>0?`<div class="tt-deposit">💰 Saldo a favor: ${money(freeDep)}</div>`:'';
           const tip=$('apptTooltip');
           if(!tip) return;
           tip.innerHTML=`<div class="tt-tier">${esc(tier)}</div><div class="tt-name">${esc(fullName(c))}</div><div class="tt-phone">${maskedPhone(c)}</div><hr class="tt-divider"><div class="tt-service">${servicesHtml}</div><div class="tt-pro">con ${proHtml}</div><div class="tt-time">${esc(a.start)}–${esc(a.end)}</div>${depositLine}<hr class="tt-divider"><div class="tt-price">${money(totalPrice)}</div><div class="tt-status-chip">${esc(statusLabels[a.status||'confirmed']||a.status||'')}</div>`;
