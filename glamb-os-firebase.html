@@ -7967,23 +7967,28 @@
           const dt = l.discountType||'none';
           const discBadge = dt!=='none'
             ? ` <span style="font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:10px;font-weight:600">${dt==='canje'?'Canje':dt==='employee'?`Empleada −${l.discountPct}%`:`Bonif. −${l.discountPct}%`}</span>` : '';
-          // Composición del importe, en una línea gris debajo del servicio.
-          const partes=[];
-          if(dt==='none'){
-            // finalPrice ya incluye los adicionales: se muestra el servicio solo
-            // y cada adicional con su precio, para que la suma cierre a la vista.
-            if(addonTotal>0) partes.push(`Servicio ${money(final-addonTotal)}`);
-            addons.forEach(a=>partes.push(`${esc(a.name||'Adicional')} ${money(a.price||0)}`));
-          } else if(dt==='canje'){
-            partes.push(`Sin cargo · precio de lista ${money(base)}`);
-            addons.forEach(a=>partes.push(`${esc(a.name||'Adicional')} ${money(a.price||0)}`));
-          } else {
-            partes.push(`Lista ${money(base)}`);
-            if(base>final) partes.push(`Descuento −${money(base-final)}`);
-            addons.forEach(a=>partes.push(`incluye ${esc(a.name||'Adicional')} ${money(a.price||0)}`));
+          // Apertura del importe: cada cosa cobrada en su propio renglón, con su
+          // costo. Un "Semi + exclusividad" tiene que mostrar cuánto es el semi
+          // y cuánto la exclusividad, no un total sin explicar. Los tres casos
+          // cierran exactamente contra el importe de la línea.
+          const items=[];
+          if(dt==='canje'){
+            items.push(['Precio de lista', money(base), '']);
+            items.push(['Canje · sin cargo', '−'+money(base), 'color:#8a6d1a']);
+          } else if(dt==='employee' || dt==='client'){
+            const subtotal = base + addonTotal;
+            items.push(['Precio de lista', money(base), '']);
+            addons.forEach(a=>items.push([esc(a.name||'Adicional'), money(a.price||0), '']));
+            items.push([`Descuento ${l.discountPct?`(${l.discountPct}%)`:''}`.trim(), '−'+money(Math.max(0,subtotal-final)), 'color:#8a6d1a']);
+          } else if(addonTotal>0){
+            items.push(['Servicio', money(final-addonTotal), '']);
+            addons.forEach(a=>items.push([esc(a.name||'Adicional'), money(a.price||0), '']));
           }
-          if(l.discountReason) partes.push(esc(l.discountReason));
-          const compo = partes.length ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${partes.join(' · ')}</div>` : '';
+          const compo = items.length
+            ? `<div style="margin-top:3px;padding-left:10px;border-left:2px solid var(--line)">${items.map(([lbl,val,st])=>
+                `<div style="display:flex;justify-content:space-between;gap:10px;font-size:11.5px;color:var(--text-muted);${st}"><span>${lbl}</span><span style="white-space:nowrap">${val}</span></div>`).join('')}</div>`
+            : '';
+          const motivo = l.discountReason ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;font-style:italic">${esc(l.discountReason)}</div>` : '';
           const quien = l.collaboratorName || (l.collaboratorId ? fullName(member(l.collaboratorId)) : '');
           const collab = quien ? `<div style="font-size:11px;color:var(--text-muted);margin-top:1px">${esc(quien)}</div>` : '';
           const propina = Number(l.tipAmount||l.tip||0);
@@ -7993,7 +7998,7 @@
               <div style="flex:1"><span style="font-weight:500;font-size:13px">${esc(l.service||'Servicio')}</span>${discBadge}</div>
               <div style="font-size:13px;font-weight:600;white-space:nowrap;margin-left:12px">${money(final)}</div>
             </div>
-            ${compo}${collab}${tipRow}
+            ${compo}${motivo}${collab}${tipRow}
           </div>`;
         }).join('');
 
