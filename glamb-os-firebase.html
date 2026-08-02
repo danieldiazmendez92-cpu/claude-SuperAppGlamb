@@ -7954,27 +7954,73 @@
         const statusBg   = t.status==='partial'?'#fff8e1':t.status==='confirmed'?'#e8f5e9':t.status==='voided'?'#fdecea':'#f5f5f5';
         const hour = t.createdAt ? new Date(t.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'}) : '';
 
-        // Services list
+        // Detalle de cada línea: qué se cobró y cómo se compone ese importe
+        // (servicio + adicionales, o precio de lista − descuento). Antes se leían
+        // l.tip y l.collaboratorName, que no existen: los campos guardados son
+        // tipAmount y collaboratorId, así que ni la propina ni la colaboradora
+        // llegaban a verse nunca.
         const linesHtml = (t.lines||[]).map(l=>{
-          const discBadge = l.discountType && l.discountType!=='none'
-            ? ` <span style="font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:10px;font-weight:600">${l.discountType==='canje'?'Canje':l.discountType==='employee'?`Empleada −${l.discountPct}%`:`Bonif. −${l.discountPct}%`}</span>` : '';
-          const addonsHtml = (l.addons||[]).length ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">+ ${l.addons.map(a=>esc(a.name)).join(', ')}</div>` : '';
-          const tip = l.tip>0 ? `<span style="font-size:11px;color:#5a8a5a"> · Propina ${money(l.tip)}</span>` : '';
-          const collab = l.collaboratorName ? `<span style="font-size:11px;color:var(--text-muted)"> · ${esc(l.collaboratorName)}</span>` : '';
-          return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--line)">
-            <div style="flex:1">
-              <span style="font-weight:500;font-size:13px">${esc(l.service||'Servicio')}</span>${discBadge}${collab}${tip}
-              ${addonsHtml}
+          const final = Number(l.finalPrice||0);
+          const base  = Number(l.basePrice!=null?l.basePrice:final);
+          const addons = l.addons||[];
+          const addonTotal = addons.reduce((s,a)=>s+Number(a.price||0),0);
+          const dt = l.discountType||'none';
+          const discBadge = dt!=='none'
+            ? ` <span style="font-size:10px;background:#fff3cd;color:#856404;padding:1px 6px;border-radius:10px;font-weight:600">${dt==='canje'?'Canje':dt==='employee'?`Empleada −${l.discountPct}%`:`Bonif. −${l.discountPct}%`}</span>` : '';
+          // Composición del importe, en una línea gris debajo del servicio.
+          const partes=[];
+          if(dt==='none'){
+            // finalPrice ya incluye los adicionales: se muestra el servicio solo
+            // y cada adicional con su precio, para que la suma cierre a la vista.
+            if(addonTotal>0) partes.push(`Servicio ${money(final-addonTotal)}`);
+            addons.forEach(a=>partes.push(`${esc(a.name||'Adicional')} ${money(a.price||0)}`));
+          } else if(dt==='canje'){
+            partes.push(`Sin cargo · precio de lista ${money(base)}`);
+            addons.forEach(a=>partes.push(`${esc(a.name||'Adicional')} ${money(a.price||0)}`));
+          } else {
+            partes.push(`Lista ${money(base)}`);
+            if(base>final) partes.push(`Descuento −${money(base-final)}`);
+            addons.forEach(a=>partes.push(`incluye ${esc(a.name||'Adicional')} ${money(a.price||0)}`));
+          }
+          if(l.discountReason) partes.push(esc(l.discountReason));
+          const compo = partes.length ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${partes.join(' · ')}</div>` : '';
+          const quien = l.collaboratorName || (l.collaboratorId ? fullName(member(l.collaboratorId)) : '');
+          const collab = quien ? `<div style="font-size:11px;color:var(--text-muted);margin-top:1px">${esc(quien)}</div>` : '';
+          const propina = Number(l.tipAmount||l.tip||0);
+          const tipRow = propina>0 ? `<div style="display:flex;justify-content:space-between;padding:2px 0 0;font-size:11px;color:#5a8a5a"><span>Propina</span><span>${money(propina)}</span></div>` : '';
+          return `<div style="padding:7px 0;border-bottom:1px solid var(--line)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start">
+              <div style="flex:1"><span style="font-weight:500;font-size:13px">${esc(l.service||'Servicio')}</span>${discBadge}</div>
+              <div style="font-size:13px;font-weight:600;white-space:nowrap;margin-left:12px">${money(final)}</div>
             </div>
-            <div style="font-size:13px;font-weight:600;white-space:nowrap;margin-left:12px">${money(l.finalPrice||0)}</div>
+            ${compo}${collab}${tipRow}
           </div>`;
         }).join('');
 
-        // Payment methods
-        const pays = (state.payments||[]).filter(p=>p.ticketId===t.id&&!p.voided);
+        // Cobros: solo el dinero que entró HOY. El "Anticipo" es la seña ya
+        // cobrada antes y va en su propio renglón del resumen; mostrarlo acá
+        // como un pago más hacía parecer que se había cobrado el doble.
+        const pays = (state.payments||[]).filter(p=>p.ticketId===t.id&&!p.voided&&p.type!=='deposit_applied');
         const paysHtml = pays.length ? pays.map(p=>`<span style="font-size:11px;background:var(--surface);border:0.5px solid var(--line);padding:2px 8px;border-radius:10px">${esc(p.method||'—')} ${money(p.amount)}</span>`).join(' ') : '';
 
-        const seña = t.depositAppliedTotal>0 ? `<div style="font-size:12px;color:#5a8a5a;margin-top:4px">Seña aplicada: −${money(t.depositAppliedTotal)}</div>` : '';
+        // Resumen: de la suma de los servicios hasta lo que se cobró, paso a paso.
+        // Los tickets viejos no guardaban estos totales: se recalculan de las líneas.
+        const nLines = t.lines||[];
+        const servicios = Number(t.servicesTotal!=null?t.servicesTotal:nLines.reduce((a,l)=>a+Number(l.finalPrice||0),0));
+        const propinas  = Number(t.tipsTotal!=null?t.tipsTotal:nLines.reduce((a,l)=>a+Number(l.tipAmount||l.tip||0),0));
+        const bruto     = Number(t.grossTotal!=null?t.grossTotal:servicios+propinas);
+        const senaAplic = Number(t.depositAppliedTotal||0);
+        const fila=(lbl,val,estilo='')=>`<div style="display:flex;justify-content:space-between;gap:12px;font-size:12px;${estilo}"><span>${lbl}</span><span>${val}</span></div>`;
+        // El resumen solo aparece cuando aporta algo: con una sola línea, sin
+        // propinas y sin seña, el importe ya está a la vista y repetirlo estorba.
+        const mostrarResumen = nLines.length>1 || propinas>0 || senaAplic>0;
+        const resumen = mostrarResumen ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+          ${fila('Servicios', money(servicios), 'color:var(--text-muted)')}
+          ${propinas>0?fila('Propinas', money(propinas), 'color:var(--text-muted)'):''}
+          ${propinas>0?fila('Total', money(bruto), 'font-weight:600'):''}
+          ${senaAplic>0?fila('Seña aplicada', '−'+money(senaAplic), 'color:#5a8a5a'):''}
+        </div>` : '';
+        const seña = '';
         const pendiente = t.pendingBalance>0 ? `<div style="font-size:12px;color:#8a5a14;font-weight:600;margin-top:2px">Saldo pendiente: ${money(t.pendingBalance)}</div>` : '';
         const voidInfo = isVoided ? `<div style="font-size:12px;color:#c0392b;margin-top:4px;font-weight:600">Motivo anulación: ${esc(t.voidReason||'—')}</div>` : '';
         const voidBtn = !isVoided ? `<button class="small-btn" data-action="voidTicket" data-id="${t.id}" style="margin-top:10px">Anular ticket</button>` : '';
@@ -7991,11 +8037,12 @@
             </div>
             <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:${statusBg};color:${statusColor}">${statusLabel}</span>
           </div>
-          <div style="margin-bottom:10px">${linesHtml}</div>
-          <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:6px">
+          <div>${linesHtml}</div>
+          ${resumen}
+          <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
             <div>${paysHtml}</div>
             <div style="text-align:right">
-              <div style="font-size:13px;font-weight:700">Total cobrado: ${money(t.amountToCollectToday||t.totalDueToday||0)}</div>
+              <div style="font-size:13px;font-weight:700">Cobrado: ${money(t.amountToCollectToday||t.totalDueToday||0)}</div>
               ${seña}${pendiente}
             </div>
           </div>
