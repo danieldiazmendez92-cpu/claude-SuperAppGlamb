@@ -20,7 +20,7 @@ jobs:
       - name: Run recovery
         env:
           GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_GLAMB_OS }}
-          TURNO_CLIENTE: micaela weiss
+          TURNO_CLIENTE: rainiela
           TICKET_ID: ticketms6eecwtsrfbs
           TICKET_MOTIVO: Inasistencia revertida — la seña se aplica al turno del 01/08
         run: |
