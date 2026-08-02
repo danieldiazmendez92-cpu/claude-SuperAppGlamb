@@ -883,6 +883,57 @@ async function anularTicket() {
   console.log('pagos anulados:', pagos.length);
 }
 
+
+// inspect-senas: SOLO LECTURA. Trazabilidad de las señas de una clienta:
+// cuánto entró, a qué reserva estaba asignada cada una, y a qué ticket se
+// terminó aplicando. Sirve para detectar una seña de un turno futuro que se
+// consumió en el cobro de otro turno.
+async function inspectSenas() {
+  const q = (process.env.TURNO_CLIENTE || '').toLowerCase();
+  const money = (n) => '$' + Number(n || 0).toLocaleString('es-AR');
+  const ar = (t) => { const d = new Date(String(t || '')); return isNaN(d) ? '??' : new Date(d.getTime() - 3 * 3600000).toISOString().replace('T', ' ').slice(0, 16); };
+  const [cls, aps, tks, pys] = await Promise.all([
+    db.collection('clients').get(), db.collection('appointments').get(),
+    db.collection('salesTickets').get(), db.collection('payments').get(),
+  ]);
+  const clients = {}; cls.docs.forEach((d) => { const c = d.data(); clients[c.id || d.id] = `${c.first || ''} ${c.last || ''}`.trim(); });
+  const ids = Object.keys(clients).filter((id) => clients[id].toLowerCase().includes(q));
+  console.log('clienta(s):', ids.map((i) => clients[i]).join(' | ') || 'ninguna');
+  if (!ids.length) return;
+  const appts = aps.docs.map((d) => d.data()).filter((a) => ids.includes(a.clientId));
+  const tickets = tks.docs.map((d) => d.data());
+  const pays = pys.docs.map((d) => d.data()).filter((p) => ids.includes(p.clientId));
+
+  console.log('\n=== TURNOS ===');
+  appts.sort((a, b) => String(a.date).localeCompare(String(b.date))).forEach((a) => {
+    const key = a.bookingId || a.id;
+    const tk = tickets.filter((t) => t.reservationId === key && t.status !== 'voided');
+    console.log(`  ${a.date} ${a.start} · ${a.service} · estado=${a.status || '—'} · seña en turno=${a.depositAmount != null ? money(a.depositAmount) : '—'} · reserva=${key}`);
+    tk.forEach((t) => console.log(`      ticket ${t.id} ${ar(t.createdAt)} · ${t.status} · bruto ${money(t.grossTotal)} · seña aplicada ${money(t.depositAppliedTotal)}`));
+  });
+
+  console.log('\n=== SEÑAS RECIBIDAS ===');
+  const recibidas = pays.filter((p) => p.type === 'deposit_received');
+  recibidas.forEach((p) => {
+    const destino = p.bookingId ? (appts.find((a) => (a.bookingId || a.id) === p.bookingId) || null) : null;
+    console.log(`  ${ar(p.createdAt)} · ${money(p.amount)} · ${p.method}${p.voided ? ' · ANULADA' : ''}`);
+    console.log(`      asignada a la reserva: ${p.bookingId || '(ninguna — queda como saldo suelto)'}${destino ? ` → turno del ${destino.date} · ${destino.service}` : ''}`);
+  });
+
+  console.log('\n=== SEÑAS APLICADAS A VENTAS ===');
+  pays.filter((p) => p.type === 'deposit_applied').forEach((p) => {
+    const t = tickets.find((x) => x.id === p.ticketId);
+    const destino = t ? appts.find((a) => (a.bookingId || a.id) === t.reservationId) : null;
+    console.log(`  ${ar(p.createdAt)} · ${money(p.amount)}${p.voided ? ' · ANULADA' : ''} · ticket ${p.ticketId || '—'}`);
+    console.log(`      se aplicó al turno: ${destino ? `${destino.date} · ${destino.service}` : '(sin turno asociado)'}`);
+  });
+
+  const rec = recibidas.filter((p) => !p.voided).reduce((a, p) => a + Number(p.amount || 0), 0);
+  const apl = pays.filter((p) => p.type === 'deposit_applied' && !p.voided).reduce((a, p) => a + Number(p.amount || 0), 0);
+  console.log('\n=== SALDO DE SEÑAS ===');
+  console.log('  recibido', money(rec), '− aplicado', money(apl), '=', money(rec - apl));
+}
+
 // inspect-reportes: SOLO LECTURA. Corre la lógica desplegada de los reportes
 // "Servicios" y "Recaudación" sobre los datos REALES y muestra totales + chequeos
 // de coherencia (campos poblados, señas pendientes ≤ cobradas, etc.).
@@ -954,6 +1005,7 @@ async function inspectReportes() {
   if (MODE === 'audit-caja') { await auditCaja(); return; }
   if (MODE === 'audit-fechas') { await auditFechas(); return; }
   if (MODE === 'inspect-turno') { await inspectTurno(); return; }
+  if (MODE === 'inspect-senas') { await inspectSenas(); return; }
   if (MODE === 'anular-ticket' || MODE === 'anular-ticket-apply') { await anularTicket(); return; }
   if (MODE === 'audit-retiros') { await auditRetiros(); return; }
   if (MODE === 'fix-caja-openedat' || MODE === 'fix-caja-openedat-apply') { await fixCajaOpenedAt(); return; }
