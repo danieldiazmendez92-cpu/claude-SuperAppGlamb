@@ -1,231 +1,176 @@
 # GLAMB OS
 
-**GLAMB OS** es el sistema operativo interno de GLAMB: clientes, agenda, equipo, catálogo, ventas y caja en un solo flujo premium.
+Sistema operativo interno de **GLAMB Belgrano** (salón de belleza, Buenos Aires): agenda, caja, clientas, catálogo, equipo, RRHH, finanzas, comunicaciones y consentimientos.
 
-No debe sentirse como un sistema administrativo genérico. Debe sentirse como una herramienta de dirección de un salón de belleza premium.
+**Está en producción y en uso real todos los días.** No es un prototipo. Los datos son reales y no se pueden perder — ya hubo un incidente (ver más abajo).
 
 ---
 
-## Estado actual
+## Lo mínimo que hay que saber antes de tocar nada
 
-| Dato | Valor |
-|------|-------|
-| Etapa | Prototipo HTML funcional |
-| Archivo de trabajo | `glamb-os-working-v6.html` |
-| Branch | `claude/beautiful-fermat-l5mac7` |
-| Líneas aprox. | ~8600 |
-| Publicación futura | Backend Firebase (Firestore + Auth + Hosting) |
+| | |
+|---|---|
+| Archivo principal | `glamb-os-firebase.html` (~14.400 líneas, PWA de un solo archivo) |
+| Rama de desarrollo | `claude/commission-calculation-bug-j29gxr` |
+| Rama de deploy | `claude/beautiful-fermat-l5mac7` (**la única que dispara el despliegue**) |
+| Proyecto Firebase | `glamb-os` · región `southamerica-east1` · plan Blaze |
+| Service Worker | `sw.js` — versión actual `glamb-os-v77` |
+| Cuenta de facturación | `01A173-3BFAB5-90192E` |
 
-> ⚠️ **El prototipo NO está listo para producción ni para datos reales sensibles.**
-> El login y el enmascarado de datos (teléfono/email por rol) son de **presentación**:
-> todo el estado vive en el `localStorage` del navegador, así que un usuario técnico
-> puede leerlo desde la consola. La protección **real** —filtrado server-side por rol,
-> autenticación y datos cifrados— llega con la migración a **Firebase Auth + security
-> rules**. Hasta completar esa etapa, el sistema es solo una demostración funcional.
+### Flujo de trabajo con dos ramas
+
+Se desarrolla en `claude/commission-calculation-bug-j29gxr` y se despliega llevando el commit a `claude/beautiful-fermat-l5mac7`:
+
+```bash
+# 1. Trabajar y commitear en la rama de desarrollo
+git checkout claude/commission-calculation-bug-j29gxr
+# … cambios …
+git commit && git push -u origin claude/commission-calculation-bug-j29gxr
+
+# 2. Llevarlo a deploy
+git checkout claude/beautiful-fermat-l5mac7
+git cherry-pick <sha>
+git push origin claude/beautiful-fermat-l5mac7   # ← esto dispara el deploy
+```
+
+> **Si una sesión nueva asigna otra rama, avisale a Daniel y seguí usando estas dos.** No dispersar commits.
+
+### Antes de cada deploy: subir la versión del Service Worker
+
+`sw.js` tiene `const CACHE = 'glamb-os-vNN'`. **Si no se incrementa, los navegadores siguen sirviendo la versión vieja.** Subir `vNN` → `vNN+1` en cada cambio del HTML.
+
+### Verificar el deploy leyendo el LOG, no el estado
+
+El workflow tiene `continue-on-error: true` en los pasos de Rules y Functions. **GitHub marca el job en verde aunque esos pasos fallen.** Hay que abrir el log y confirmar que dice `✔ Deploy complete!` sin líneas `Error:`. Ya pasó de reportar un deploy exitoso que en realidad había fallado.
 
 ---
 
 ## Arquitectura
 
-Single-file HTML (~8100 líneas) con CSS y JS embebidos. Sin framework, sin build step. Estado persistido en `localStorage`.
+Un solo archivo HTML con CSS y JS embebidos. Sin framework, sin build step. Todo el JS vive en un único IIFE.
 
-Todo el JS vive dentro de un único IIFE. Los handlers usan `data-action` + `ACTION_MAP` — nunca `onclick=` inline. Las mutaciones de estado pasan por funciones centralizadas (`addPayment`, `addAppointment`, `addClient`, etc.).
+**Reglas no negociables:**
+
+1. Todo handler nuevo usa `data-action` + `ACTION_MAP`. **Nunca `onclick=` inline** — las funciones no son globales, no funcionaría.
+2. Todo JS dentro del IIFE existente. Sin funciones globales sueltas.
+3. Las mutaciones de estado pasan por las funciones centralizadas (`addPayment`, `addAppointment`, `addClient`, `addExpense`…).
+4. Los commits terminan con el trailer `Co-Authored-By`. **Nunca** incluir el identificador del modelo (Sonnet/Opus/etc.) en commits, código ni nada que vaya al repo.
+
+### Dónde vive cada dato
+
+El principio: **lo que se escribe seguido y de a un registro por vez va a una colección propia.** Solo cosas chicas y de baja escritura comparten documento.
+
+| Ubicación | Contenido |
+|---|---|
+| Colecciones por-registro (`SYNCED_COLLECTIONS`) | `clients`, `collaborators`, `appointments`, `payments`, `salesTickets`, `pendingCharges`, `blockers`, `cashClosings`, `financeExpenses`, `financeDeductions`, `financeLiquidations` |
+| `clientsPrivate/{id}` | Teléfono y email de clientas — **solo admin lee** |
+| `financePrivate/main` | `taxRecords`, `budgets`, `expenseCategories`, `accounting` — solo admin |
+| `appState/catalog` | Catálogo de servicios (documento propio, anti-pisado) |
+| `appState/config` | `comms`, `athenas`, `reviews`, `cashSession`, `withdrawalReasons`… (`CONFIG_KEYS`) |
+| `appState/main` | El resto de `PERSIST_KEYS` (cosas chicas) |
+| `consentForms` | Consentimientos informados (creación por el salón, firma pública por token) |
+| `surveyResponses` | Respuestas de la encuesta de satisfacción |
+| `mail` / `sentReminders` | Cola de emails (extensión Trigger Email) y deduplicación de envíos |
+| `localStorage` | Config de Athenas (API keys) + copia local del estado |
+
+`saveState()` guarda en localStorage + nube (debounce 800 ms, intervalo 5 s, flush al cerrar la pestaña).
 
 ---
 
-## Módulos
+## Roles y permisos
 
-| Módulo | Estado |
-|--------|--------|
-| Centro de Mando | ✅ KPIs + alertas automáticas + Athenas (asistente IA) |
-| Clientes / CRM | ✅ Perfil, historial con filtros, insights automáticos, tags predictivos, eliminar cliente |
-| Equipo & Accesos | ✅ Colaboradoras + disponibilidad + edición + eliminar colaborador |
-| Catálogo | ✅ Grupos → Servicios → Variantes + Adicionales + propagación de cambios |
-| Agenda | ✅ Vista día + vista semana, drag & drop, bloques premium, popover con acciones, eliminar turno |
-| Ventas & Caja | ✅ Wizard 3 pasos + apertura/cierre/arqueo + registro de gastos + retiros |
-| RRHH | ✅ Liquidaciones + comisiones + deducibles + presentismo/viático editables |
-| Finanzas | ✅ Libro contable, presupuesto mensual por categoría con alertas visuales |
-
----
-
-## Usuarios y permisos (prototipo)
-
-Tres roles. El acceso se deriva del rol del usuario logueado — reemplaza al viejo toggle manual "modo de caja".
-
-| Módulo | 🟢 Admin (Daniel, Eze) | 🟡 Medio (Recepción) | 🔴 Bajo (Colaboradora) |
-|--------|------------------------|----------------------|------------------------|
-| Centro de Mando | Completo (con $) | Simplificado, sin montos | Mínimo |
+| | 🟢 admin | 🟡 medio (recepción) | 🔴 bajo (colaboradora) |
+|---|---|---|---|
 | Agenda | Todos los días | Solo día actual | Solo día actual |
-| Clientes / CRM | Completo (ve datos) | Agendar/consultar, **sin email/tel** | Sin módulo |
-| Caja / Ventas | Completo | Todos los registros | Solo registrar venta |
-| Catálogo / Equipo / RRHH / Finanzas | Completo | — | — |
+| Clientas | Completo, con contacto | Sin email/teléfono | Sin módulo |
+| Caja | Completo | Todos los registros | Solo registrar venta |
+| Finanzas / RRHH / Catálogo / Equipo | Completo | — | — |
+| Comunicaciones | Todas las pestañas | Solo Consentimientos | Solo Consentimientos |
 
-- Login por PIN (demo): Daniel `1111`, Eze `2222`, Recepción `3333`, Ana `4444`.
-- `PERMISSIONS[rol]` define páginas, vista de agenda, visibilidad de datos, alcance de caja y nivel de Centro.
-- `applyPermissions()` aplica los gates en cada `renderAll()`; `showPage()` bloquea módulos no permitidos.
-- **Recordatorio de seguridad:** el enmascarado es cosmético hasta Firebase (ver advertencia arriba).
+`PERMISSIONS[rol]` define páginas, alcance y la clave `commsTabs`. Las colaboradoras y recepción **solo ven los consentimientos que ellas mismas enviaron** (aislamiento por `createdByUid` en las reglas de Firestore).
 
 ---
 
-## Identidad visual — B&W Premium
+## Páginas públicas (sin login)
 
-```
-Background:  #F6F6F4
-Surface:     #FBFBFA
-Surface 2:   #EFEFEC
-Text:        #0E0E0D
-Muted:       #666662
-Soft:        #94948E
-Border:      #E3E3DF
-```
+Se sirven como archivos estáticos desde la raíz. El `rewrite **` de `firebase.json` solo aplica cuando no hay archivo que coincida.
 
-Tipografía: **Cormorant** (títulos) + **DM Sans** (UI)
+| Página | Para qué |
+|---|---|
+| `consentimiento.html` | Consentimiento informado que la clienta firma desde el celular (token en el link). 3 plantillas: láser, microblading, PRP |
+| `survey.html` | Encuesta de satisfacción |
+| `historial-fresha.html` | Buscador del historial de citas de Fresha (12.807 citas, 1.324 clientas, 03/2024–06/2026). Archivo histórico congelado, no se sincroniza |
 
 ---
 
-## Flujos principales implementados
+## Cloud Functions
 
-### Reserva → Venta
-Una reserva con `bookingId` puede tener N servicios y N adicionales.
-Al cobrar desde Agenda → Caja, se precargan todas las líneas + adicionales + seña en un único ticket.
+Región `southamerica-east1`, todas con `minInstances: 0` (no cobran en reposo).
 
-### Seña → Cobro
-La seña se registra contra el **cliente** (sin requerir turno previo).
-`clientAvailableDeposit(clientId)` calcula el saldo disponible = recibido − aplicado.
-Al abrir una venta para ese cliente, la seña se pre-rellena automáticamente.
-Si se paga menos del saldo, se auto-crea un `pendingCharge` por el resto.
+| Función | Disparador | Qué hace |
+|---|---|---|
+| `sendAppointmentReminders` | Cada 15 min | Recordatorio de turno por email |
+| `sendRetentionEmails` | Diario 11:00 AR | Reactivación de clientas inactivas |
+| `sendConsentInvite` | Alta en `consentForms` | Manda el link de firma (server-side, así los roles bajos nunca ven el email de la clienta) |
+| `sendConsentCopy` | Firma del consentimiento | Envía copia a la clienta |
 
-### Centro financiero diario
-Apertura → Cobros → Retiros → Gastos → Cierre con diferencia efectivo en tiempo real.
-KPIs: ingresó hoy, efectivo esperado, gastos+retiros, desglose por método.
-
-### Liquidación de colaboradora
-RRHH → seleccionar colaboradora → período → revisar comisiones → editar presentismo/viático → guardar → marcar como pagada.
+> Los envíos automáticos **no corren más en el navegador**. Corrían en cada dispositivo con la app abierta y la misma clienta llegó a recibir 6 mails en dos minutos.
 
 ---
 
-## Funcionalidades destacadas
+## Herramienta de diagnóstico sobre datos reales
 
-### Athenas — Asistente inteligente
-Panel en Centro de Mando. Calcula en tiempo real:
-- Saludo contextual según la hora del día
-- Clientes en riesgo de abandono (≥28 días sin visita, no en agenda hoy)
-- Huecos en la agenda del día por profesional
-- Alertas de cobros pendientes
-- Botones de copia para enviar por WhatsApp con un clic
+Desde este entorno no hay acceso directo a Firestore ni al sitio publicado (el proxy los bloquea). Para leer o corregir datos de producción se usa:
 
-### CRM con insights automáticos
-`clientInsights(clientId)` calcula:
-- Ticket promedio, frecuencia de visita, días desde última visita, gasto total, servicio más solicitado
-- Tags predictivos: **Riesgo de abandono** (>45 días), **Frecuente** (<21 días), **Alto valor**
+**`tools/finance-recovery/recover.js`** + `.github/workflows/finance-recovery.yml`
 
-### Agenda dual (día / semana)
-- **Vista día**: columnas por profesional con bloques de diseño premium
-- **Vista semana**: grilla 7 columnas (Lun–Dom), hoy resaltado, navegación ±7 días
-- Bloques adaptativos: 4 niveles de densidad según la altura disponible (28px / 44px / 56px / 82px+)
-- Pill de estado coloreado, barra de ocupación por colaboradora
+Se dispara escribiendo el modo en `tools/finance-recovery/MODE` y pusheando a la rama de deploy. El resultado se lee en el log del workflow.
 
-### Presupuesto mensual (Finanzas)
-Barras por categoría de gasto. Verde < 80%, naranja 80–99%, rojo ≥ 100%. Límite editable con un clic.
+**Modos de solo lectura:** `inspect`, `diagnose`, `inspect-caja`, `audit-caja`, `audit-retiros`, `audit-fechas`, `inspect-commissions`, `simulate-commissions`, `inspect-liq-finance`, `inspect-reportes`, `inspect-retention`, `inspect-senas`, `inspect-turno`, `inspect-billing`
 
-### Wizard 3 pasos en Caja
-1. **Cliente** — tarjetas grandes: turno en agenda / cliente existente / cliente nuevo
-2. **Servicios** — líneas de venta + nota interna
-3. **Cobro** — opciones de pago (paga todo / parcial / pendiente) + métodos
+**Modos que escriben** (siempre tienen su par de simulación sin `-apply`): `restore-collections`, `restore-caja`, `fix-liq-expenses`, `fix-caja-openedat`, `fix-retiro-huerfano`, `seed-retention-guards`, `anular-ticket`
 
-Paper ticket sticky en pasos 2 y 3 que se actualiza en tiempo real.
-
-### Bloques de horario en Agenda
-Las colaboradoras pueden tener bloqueos de tiempo (almuerzo, descanso, etc.):
-- Recurrentes (sin fecha) o de un día específico
-- Se crean/editan/eliminan desde la agenda
-- Se muestran con fondo rayado diagonal y etiqueta
-
-### Propagación de cambios en Catálogo
-Al editar precio o nombre de un adicional, el sistema detecta los turnos afectados y ofrece actualizar el precio en agenda y caja.
+> Regla: **correr siempre la simulación primero**, leer el resultado, y recién ahí el `-apply`. Después dejar `MODE` en un modo de solo lectura.
 
 ---
 
-## Modelo de datos clave
+## ⚠️ Incidente de pérdida de datos (11-12/07/2026)
 
-```js
-// Colaboradora
-{
-  id, first, last, phone, email, type, can,
-  groups: ['Manicuria'],
-  groupIds: ['cat123'],
-  serviceIds: ['svc1','svc2'],
-  days: 'Lunes, Martes, ...',
-  hours: '10:00 - 19:00',
-  schedule: {
-    'Lunes': { start: '10:00', end: '19:00' }
-  }
-}
+Se perdieron 10 gastos de Finanzas y un anticipo de sueldo porque `financePrivate/main` era **un solo documento gigante compartido**: un dispositivo con una copia vieja sobrescribió el documento entero. Se recuperó todo vía PITR (7 días de retención).
 
-// Turno
-{
-  id, bookingId, date,
-  memberId, clientId,
-  group, service, variantId, serviceId,
-  start, end,
-  status, deposit, bookingDepositAmount,
-  price, isAdditional, note
-}
+**La causa raíz está corregida** (colecciones por-registro). Si vuelve a aparecer un "esto no está":
 
-// Bloqueo de horario
-{
-  id, memberId, start, end, label,
-  date   // opcional — si está ausente es recurrente
-}
+1. Fijarse si el módulo todavía guarda en un blob compartido (`PERSIST_KEYS`, `CONFIG_KEYS`).
+2. **Antes de asumir pérdida, mirar los datos reales** con `recover.js`. Ya pasó dos veces que el dato estaba perfecto y el problema era la pantalla.
 
-// Pago
-{
-  id, ticketId, clientId,
-  type,   // 'deposit_received' | 'deposit_applied' | 'service'
-  method, amount,
-  reference, note, createdAt
-}
-
-// Ticket de venta
-{
-  id, clientId, appointmentId, origin, status,
-  lines, servicesTotal, tipsTotal, grossTotal,
-  depositAppliedTotal, totalDueToday, pendingBalance,
-  createdBy, createdAt
-}
-
-// Liquidación
-{
-  id, memberId, periodLabel, periodStart, periodEnd,
-  commissions, deductions, presentismo, viatico,
-  totalCommissions, totalDeductions, grossPay, netPay,
-  status, // 'draft' | 'paid'
-  createdAt
-}
-```
+Protecciones vigentes: PITR 7 días · backup JSON manual desde Clientes · guardián que impide que la sesión de caja retroceda a un día anterior.
 
 ---
 
-## Reglas de trabajo
+## Criterios de negocio que ya están decididos
 
-1. **Todo cambio va a `glamb-os-working-v6.html`**
-2. `glamb-os-stable.html` no se modifica sin aprobación explícita
-3. Los commits deben tener autor `Claude <noreply@anthropic.com>` — el stop-hook lo verifica
-4. **Una sola rama de trabajo activa**: `claude/beautiful-fermat-l5mac7`. Si una sesión nueva asigna otra rama, avisar y mergear antes de trabajar — no dispersar commits
-5. Antes de cada commit: `git config user.email noreply@anthropic.com && git config user.name Claude`
-6. Todo handler nuevo usa `data-action` + `ACTION_MAP` — nunca `onclick=` inline
-7. Todo JS dentro del IIFE existente — sin funciones globales sueltas
+- **La seña es un pasivo al recibirse, no un ingreso.** Se reconoce como venta cuando se aplica a un ticket o se retiene por inasistencia.
+- **La propina es de la colaboradora**, no facturación del local. Se excluye de "ventas".
+- **Una seña dejada para un turno futuro no se consume sola** en el cobro de otro turno. El sistema precarga solo el saldo *libre* y avisa lo que está reservado.
+- **El precio escrito a mano en el turno manda** sobre el del catálogo.
+- **El día de un movimiento se calcula en hora argentina**, no en UTC. `createdAt` se guarda en UTC: usar siempre el helper `dayOf(iso)`, nunca `createdAt.slice(0,10)`.
+- **Descuentos en Caja:** `canje` (cobra $0, comisión sobre precio de lista), `employee` (no entra plata, se descuenta del sueldo), `client` (bonificación, comisión sobre precio final).
+- **Reenvío de mail al editar un turno:** solo si cambia fecha u horario.
 
 ---
 
 ## Archivos del repositorio
 
 | Archivo | Descripción |
-|---------|-------------|
-| `glamb-os-firebase.html` | **Versión en migración a Firebase** (Auth + Firestore). Ver `MIGRATION.md` |
-| `glamb-os-working-v6.html` | Prototipo localStorage (respaldo, abre como archivo) |
-| `glamb-os-stable.html` | Copia estable (sincronizar manualmente) |
-| `caja-mockups.html` | 4 mockups de diseño del módulo Caja (referencia) |
-| `MIGRATION.md` | Guía paso a paso de la migración a Firebase |
-| `firestore.rules` | Reglas de seguridad de Firestore (Fase A) |
-| `firebase.json` / `.firebaserc` | Config de deploy (Hosting + Firestore) |
+|---|---|
+| `glamb-os-firebase.html` | La app |
+| `consentimiento.html` · `survey.html` · `historial-fresha.html` | Páginas públicas |
+| `sw.js` · `manifest.json` | PWA |
+| `functions/index.js` | Cloud Functions |
+| `firestore.rules` | Reglas de seguridad |
+| `firebase.json` · `.firebaserc` | Config de deploy |
+| `tools/finance-recovery/` | Diagnóstico y corrección sobre datos reales |
+| `docs/` | Manuales de recepción y colaboradora, presentación de bienvenida |
+| `CONTINUAR-SESION.md` | Contexto para retomar en una sesión nueva |
+| `MIGRATION.md` | Histórico de la migración a Firebase |
+| `glamb-os-working-v6.html` | Prototipo viejo en localStorage (respaldo, no se despliega) |
