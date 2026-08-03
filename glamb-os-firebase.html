@@ -4815,6 +4815,7 @@
     finanzasCustomFrom:'',
     finanzasCustomTo:'',
     finanzasCFOMonth:'',
+    finanzasContadorMonth:'',
     budgets:{},
     expenseCategories:null,
     withdrawalReasons:null,
@@ -4863,7 +4864,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig','accounting'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','finanzasContadorMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig','accounting'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -11699,10 +11700,33 @@
       saveState();
       renderFinanzasCFO();
     }
+    function setFinanzasContadorMonth(val){
+      if(!val) return;
+      state.finanzasContadorMonth=val;
+      saveState();
+      renderFinanzasContador();
+    }
+    function toggleContadorAllMonths(){
+      const curYM=dateKey(new Date()).slice(0,7);
+      setFinanzasContadorMonth(state.finanzasContadorMonth==='all'?curYM:'all');
+    }
     function renderFinanzasContador(){
       const panel=$('finanzas-contador'); if(!panel) return;
       // Gastos propios de Finanzas + gastos provenientes de Caja (solo lectura).
-      const expenses=[...(state.expenses||[]), ...cajaExpensesAsFinance()];
+      const allExpenses=[...(state.expenses||[]), ...cajaExpensesAsFinance()];
+      // Período: sin esto el total mezclaba gastos de todos los meses en una sola cifra.
+      // 'all' = todo el historial; cualquier otro valor es un mes YYYY-MM.
+      const curYM=dateKey(new Date()).slice(0,7);
+      const selRaw=state.finanzasContadorMonth||curYM;
+      const isAll=selRaw==='all';
+      const selMonth=isAll?curYM:selRaw;
+      const expenses=isAll?allExpenses:allExpenses.filter(e=>(e.date||'').startsWith(selMonth));
+      const histTotal=allExpenses.reduce((s,e)=>s+(e.amount||0),0);
+      // El presupuesto es mensual por definición: aunque se esté viendo todo el
+      // historial, se compara siempre contra un mes concreto (el mes en curso).
+      const budgetExpenses=isAll?allExpenses.filter(e=>(e.date||'').startsWith(curYM)):expenses;
+      const monthLabel=new Date(Number(selMonth.slice(0,4)),Number(selMonth.slice(5,7))-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'});
+      const budgetLabel=isAll?new Date(Number(curYM.slice(0,4)),Number(curYM.slice(5,7))-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}):monthLabel;
       const grouped={};
       expenses.forEach(e=>{
         const cat=expenseCats().find(c=>c.id===e.category)||{id:'other',label:'Otros',type:'other'};
@@ -11737,14 +11761,21 @@
           </div>
         </div>
         <div class="fin-section">
-          <div class="fin-section-title">Gastos registrados <span class="fin-badge">${money(total)}</span></div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+            <div class="fin-section-title" style="margin-bottom:0;flex:1;min-width:180px">Gastos ${isAll?'— todo el historial':'de '+monthLabel} <span class="fin-badge">${money(total)}</span></div>
+            <input type="month" value="${selMonth}" max="${curYM}"
+              style="font-size:13px;padding:5px 10px;border:0.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;cursor:pointer;min-width:0;${isAll?'opacity:.5':''}"
+              onchange="setFinanzasContadorMonth(this.value)">
+            <button class="small-btn ${isAll?'primary':''}" data-action="toggleContadorAllMonths">${isAll?'Ver un mes':'Ver todo'}</button>
+          </div>
+          ${isAll?'':`<div class="fin-expense-meta" style="margin:-6px 0 12px">Histórico acumulado: ${money(histTotal)}</div>`}
           ${total>0?`<div style="margin-bottom:12px">
             <div class="fin-summary-row"><strong>Costos fijos</strong><span>${money(byType.fixed)}</span></div>
             <div class="fin-summary-row"><strong>Costos variables</strong><span>${money(byType.variable)}</span></div>
             <div class="fin-summary-row"><strong>Impuestos</strong><span>${money(byType.tax)}</span></div>
             ${byType.other>0?`<div class="fin-summary-row"><strong>Otros</strong><span>${money(byType.other)}</span></div>`:''}
           </div>`:''}
-          ${Object.keys(grouped).length===0?`<p class="fin-empty">Sin gastos registrados aún.<br>Registrá tu primer gasto arriba.</p>`:''}
+          ${Object.keys(grouped).length===0?`<p class="fin-empty">${isAll?'Sin gastos registrados aún.<br>Registrá tu primer gasto arriba.':`Sin gastos en ${monthLabel}.${histTotal>0?`<br>Hay ${money(histTotal)} en otros meses — tocá "Ver todo".`:'<br>Registrá tu primer gasto arriba.'}`}</p>`:''}
           ${Object.values(grouped).map(({cat,items})=>`
             <div class="fin-expense-group">
               <div class="fin-expense-group-header">
@@ -11767,9 +11798,9 @@
           `).join('')}
         </div>
         <div class="fin-section">
-          <div class="fin-section-title">Presupuesto mensual <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— hacé clic en el monto para editar</span></div>
+          <div class="fin-section-title">Presupuesto de ${budgetLabel} <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— hacé clic en el monto para editar</span></div>
           ${expenseCats().filter(c=>c.id!=='other').map(c=>{
-            const spent=expenses.filter(e=>e.category===c.id).reduce((s,e)=>s+(e.amount||0),0);
+            const spent=budgetExpenses.filter(e=>e.category===c.id).reduce((s,e)=>s+(e.amount||0),0);
             const budget=Number((state.budgets||{})[c.id]||0);
             const pct=budget>0?Math.min(150,Math.round(spent/budget*100)):0;
             const barColor=pct>=100?'#c46a6a':pct>=80?'#C2935A':'#3f7d4f';
@@ -11897,6 +11928,9 @@
       addExpense({id:uid('exp'),date,category,description,amount,paymentMethod});
       if($('expDesc')) $('expDesc').value='';
       if($('expAmount')) $('expAmount').value='';
+      // Si el gasto es de otro mes, saltar a ese mes: si no, se guarda bien pero
+      // no aparece en pantalla y parece que se perdió.
+      if(state.finanzasContadorMonth!=='all' && date.slice(0,7)!==(state.finanzasContadorMonth||dateKey(new Date()).slice(0,7))) state.finanzasContadorMonth=date.slice(0,7);
       saveState();
       try{ if(_blobReady) flushCloudNow(); }catch(e){ console.error('[GLAMB] flush gasto falló:',e); } // guardado inmediato: los gastos son críticos, no esperar el debounce
       renderFinanzasContador();
@@ -14275,7 +14309,7 @@ ${context}`;
       setCatalogFilter, setCatalogView,
       showPage, showRrhhTab, showToast,
       toggleAgendaFilters, toggleApptAdditionals, togglePaid,
-      setFinanzasCFOMonth,
+      setFinanzasCFOMonth, setFinanzasContadorMonth,
       // Contabilidad formal (pestaña Libros)
       setFinLibrosTab, setFinLibrosDate, setFinLibrosMonth, setFinLibrosAcc,
       accSaveOpening, accSaveManualEntry, accDeleteManualEntry, accExportDiarioCSV,
@@ -14306,6 +14340,7 @@ ${context}`;
       dpNavYears:              el => dpNavYears(el),
       closePopover:            () => closePopover(),
       registerExpense:         () => registerExpense(),
+      toggleContadorAllMonths: () => toggleContadorAllMonths(),
       addExpenseCategory:      () => addExpenseCategory(),
       deleteExpenseCategory:   el => deleteExpenseCategory(el.dataset.id),
       addWithdrawalReason:     () => addWithdrawalReason(),
