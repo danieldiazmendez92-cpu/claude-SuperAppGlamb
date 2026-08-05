@@ -6962,6 +6962,7 @@
     state.afterClientCreate = null;
     state.saleSource = 'appointment';
     state.saleAppointmentId = null;
+    state.salePendingIds = [];   // pendientes cargados en el formulario de venta (efímero, no se persiste)
     // Turno para el que están armadas las líneas de venta actuales. Permite
     // detectar cuando el select de turnos se actualizó (p.ej. la agenda llegó
     // de Firestore DESPUÉS de armar el formulario) y las líneas quedaron viejas.
@@ -7428,7 +7429,7 @@
       if($('saleExistingPanel')) $('saleExistingPanel').style.display = source === 'existing' ? 'block' : 'none';
       if($('saleNewPanel')) $('saleNewPanel').style.display = source === 'new' ? 'block' : 'none';
       if(source === 'appointment') selectSaleAppointment($('saleAppointmentSelect')?.value || state.saleAppointmentId);
-      if(source === 'existing') { state.saleClient = {clientId:null, clientName:$('saleClientInput')?.value.trim()||''}; }
+      if(source === 'existing') { state.salePendingIds = []; state.saleClient = {clientId:null, clientName:$('saleClientInput')?.value.trim()||''}; }
       if(source === 'new') {
         state.afterClientCreate = 'sale';
         showToast('Creá el cliente y volverás a Caja.');
@@ -7439,6 +7440,7 @@
     function selectSaleAppointment(id){
       const appt = state.appointments.find(a=>a.id===id);
       if(!appt) return;
+      state.salePendingIds = [];   // se rearma abajo para ESTE turno
       state.saleAppointmentId = appt.id;
       const c = client(appt.clientId);
       state.saleClient = {clientId:c.id, clientName:fullName(c)};
@@ -7480,9 +7482,10 @@
         clientPending.filter(p=>!related.some(r=>r.memberId===p.collaboratorId)).forEach(p=>{
           addSaleLine({collaboratorId:p.collaboratorId, group:p.group, service:p.variantId||p.service, finalPrice:p.finalPrice});
         });
-        // Mark pending charges as converted
-        clientPending.forEach(p=>{ p.status='converted'; p.convertedAt=new Date().toISOString(); });
-        if(clientPending.length) saveState();
+        // Quedan anotados como "en cobro"; se marcan cobrados recién al registrar
+        // la venta, para que un formulario abandonado no borre el saldo.
+        state.salePendingIds = clientPending.map(p=>p.id);
+        if(clientPending.length) renderPendingCharges();
       }
       const related = reservationAppointments(appt);
       if($('reservationBanner')){
@@ -7799,8 +7802,22 @@
         addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
       }
       salePayments.forEach(p=>addPayment({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
+      // Los pendientes que se cargaron en este formulario quedan cobrados recién
+      // ahora, con el ticket que los canceló.
+      (state.salePendingIds||[]).forEach(pid=>{
+        const p=state.pendingCharges.find(x=>x.id===pid&&x.status==='pending');
+        if(!p) return;
+        // Red de seguridad: si cambió la clienta después de cargarlo, no es este cobro.
+        if(p.clientId && clientIdForTicket && p.clientId!==clientIdForTicket) return;
+        p.status='converted'; p.convertedBy=cashActorName(); p.convertedAt=new Date().toISOString(); p.convertedTicketId=ticket.id;
+      });
+      state.salePendingIds=[];
       if(isPartial){
-        state.pendingCharges.unshift({id:'pending'+Date.now(),clientId:clientIdForTicket,clientNameSnapshot:clientName,status:'pending',service:'Saldo de visita',group:'',finalPrice:pendingBalance,depositAmount:0,ticketId:ticket.id,reservationId:ticket.reservationId,createdBy:ticket.createdBy,serviceOf:'—',createdAt:new Date().toISOString()});
+        // El saldo hereda la colaboradora y el grupo de la línea de mayor importe:
+        // si va sin dueño, addSaleLine le asigna la primera de la lista al cobrarlo
+        // y la comisión termina en quien no hizo el servicio.
+        const main=[...t.lines].sort((a,b)=>Number(b.finalPrice||0)-Number(a.finalPrice||0))[0]||{};
+        state.pendingCharges.unshift({id:'pending'+Date.now(),clientId:clientIdForTicket,clientNameSnapshot:clientName,status:'pending',service:'Saldo de visita',group:main.group||'',collaboratorId:main.collaboratorId||null,finalPrice:pendingBalance,depositAmount:0,ticketId:ticket.id,reservationId:ticket.reservationId,createdBy:ticket.createdBy,serviceOf:main.collaboratorId?fullName(member(main.collaboratorId)):'—',createdAt:new Date().toISOString()});
       }
       // Líneas con descuento empleada: generar automáticamente el descuento en RRHH (se cobra en la liquidación, no en caja)
       t.lines.filter(l=>l.discountType==='employee' && l.employeeId).forEach(l=>{
@@ -7847,6 +7864,7 @@
     }
     function resetSaleForm(){
       state.saleClient = {clientId:null, clientName:''};
+      state.salePendingIds = [];   // formulario descartado: los pendientes siguen vivos
       state.saleAppointmentId = state.appointments[0]?.id || null;
       if($('saleClientInput')) $('saleClientInput').value='';
       if($('saleClientSuggestions')) $('saleClientSuggestions').classList.remove('open');
@@ -7876,13 +7894,17 @@
       $('saleLines').innerHTML='';
       addSaleLine(p);
       if($('reservationDeposit')) $('reservationDeposit').value = p.depositAmount||0;
-      p.status='converted'; p.convertedBy = cashActorName(); p.convertedAt = new Date().toISOString();
-      saveState(); renderPendingCharges(); updateSaleSummary(); showToast('Pendiente cargado en venta');
+      // El pendiente NO se marca cobrado acá: recién en registerSale. Antes se
+      // marcaba al cargarlo, así que si se cerraba la pantalla o se cortaba la
+      // sesión el saldo desaparecía sin que nadie lo hubiera cobrado.
+      state.salePendingIds = [p.id];
+      renderPendingCharges(); updateSaleSummary(); showToast('Pendiente cargado en venta');
     }
     function renderPendingCharges(){
       if(!$('pendingChargesList')) return;
       const list = state.pendingCharges.filter(p=>p.status==='pending');
-      $('pendingChargesList').innerHTML = list.length ? list.map(p=>`<div class="mini-row"><strong>${p.clientNameSnapshot}</strong><span>${p.service} · ${p.serviceOf||fullName(member(p.collaboratorId))} · ${money(p.finalPrice)}<br>Creado por: ${p.createdBy||'—'} · ${new Date(p.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span><div style="margin-top:8px"><button class="small-btn primary" data-action="injectPending" data-id="${p.id}">Cobrar</button><button class="small-btn" data-action="voidPending" data-id="${p.id}">Anular</button></div></div>`).join('') : '<div class="mini-row"><strong>Sin pendientes</strong><span>No hay servicios pendientes de cobro.</span></div>';
+      const loaded = new Set(state.salePendingIds||[]);
+      $('pendingChargesList').innerHTML = list.length ? list.map(p=>`<div class="mini-row"><strong>${p.clientNameSnapshot}</strong>${loaded.has(p.id)?' <span class="tag" style="font-size:10px">en cobro</span>':''}<span>${p.service} · ${p.serviceOf||fullName(member(p.collaboratorId))} · ${money(p.finalPrice)}<br>Creado por: ${p.createdBy||'—'} · ${new Date(p.createdAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span><div style="margin-top:8px"><button class="small-btn primary" data-action="injectPending" data-id="${p.id}">Cobrar</button><button class="small-btn" data-action="voidPending" data-id="${p.id}">Anular</button></div></div>`).join('') : '<div class="mini-row"><strong>Sin pendientes</strong><span>No hay servicios pendientes de cobro.</span></div>';
     }
     function voidPending(id){const p=state.pendingCharges.find(x=>x.id===id); if(p){p.status='voided'; p.voidedAt=new Date().toISOString(); saveState(); renderPendingCharges(); renderCashKpis(); showToast('Pendiente anulado');}}
     function setCashDailyDate(v){ state.cashDailyDate=v; renderCashDaily(); }
@@ -10729,7 +10751,7 @@
       const liq=state.liquidations.find(l=>l.id===liqId);
       if(!liq) return;
       askPaymentMethodDialog('¿Con qué medio se paga el sueldo de '+liq.collaboratorName+'?', (paymentMethod)=>{
-        liq.status='paid'; liq.paidAt=new Date().toISOString();
+        liq.status='paid'; liq.paidAt=new Date().toISOString(); liq.paymentMethod=paymentMethod;
         // Mark deductions as applied
         (liq.deductionRefs||[]).forEach(dId=>{
           const d=state.payrollDeductions.find(x=>x.id===dId);
@@ -10975,13 +10997,45 @@
       });
       return out;
     }
+    // Gastos que YA son costo de nómina y por lo tanto no deben sumarse otra vez
+    // como gasto común: el neto de cada liquidación pagada (lo cubre finPayrollCost
+    // vía el bruto) y los anticipos/descuentos, que contablemente son un crédito
+    // contra la colaboradora y no un gasto: se recuperan al descontarse del sueldo.
+    // Sin esta exclusión la nómina se restaba dos veces del resultado.
+    function payrollExpenseIds(){
+      const ids=new Set();
+      (state.liquidations||[]).forEach(l=>{ if(l.status==='paid'&&l.expenseId) ids.add(l.expenseId); });
+      (state.payrollDeductions||[]).forEach(d=>{ if(d&&d.expenseId) ids.add(d.expenseId); });
+      return ids;
+    }
     function finExpenses(from,to){
-      const own=(state.expenses||[]).filter(e=>e.date>=from&&e.date<=to).reduce((s,e)=>s+(e.amount||0),0);
+      const skip=payrollExpenseIds();
+      const own=(state.expenses||[]).filter(e=>e.date>=from&&e.date<=to&&!skip.has(e.id)).reduce((s,e)=>s+(e.amount||0),0);
       const caja=cajaExpensesAsFinance().filter(e=>e.date>=from&&e.date<=to).reduce((s,e)=>s+(e.amount||0),0);
       return own+caja;
     }
+    function paidLiquidations(from,to){
+      return (state.liquidations||[]).filter(l=>{ if(l.status!=='paid'||!l.paidAt) return false; const d=dayOf(l.paidAt); return d>=from&&d<=to; });
+    }
+    // Costo laboral del período = BRUTO liquidado, no el neto. Lo que se le
+    // descuenta a la colaboradora (anticipo ya entregado, servicio de empleada)
+    // sigue siendo costo del salón: cambia la forma de pago, no el costo.
+    // Fallback para liquidaciones viejas sin grossPay guardado: se reconstruye
+    // desde el neto + lo descontado, que es la misma cifra.
+    function liqGross(l){ return Number(l.grossPay||0)||(Number(l.netPay||0)+Number(l.totalDeductions||0)); }
     function finPayrollCost(from,to){
-      return (state.liquidations||[]).filter(l=>{ if(l.status!=='paid'||!l.paidAt) return false; const d=dayOf(l.paidAt); return d>=from&&d<=to; }).reduce((s,l)=>s+(l.netPay||0),0);
+      return paidLiquidations(from,to).reduce((s,l)=>s+liqGross(l),0);
+    }
+    // Para el punto de equilibrio: la comisión es costo VARIABLE (solo existe si
+    // hay venta); presentismo, viático y adicionales son fijos.
+    function finPayrollSplit(from,to){
+      let commissions=0, fixed=0;
+      paidLiquidations(from,to).forEach(l=>{
+        const comm=Number(l.totalCommissions||0);
+        commissions+=comm;
+        fixed+=Math.max(0,liqGross(l)-comm);
+      });
+      return {commissions,fixed};
     }
     function finTicketCount(from,to){
       return state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).length;
@@ -11130,11 +11184,24 @@
         if(w.isTipWithdrawal||/propina/i.test(w.reason||'')) out.push(_accE(w.createdAt,'Pago de propina'+(w.note?' — '+w.note:''),'ret:'+w.id,[['propinas',amt,0],['caja',0,amt]]));
         else out.push(_accE(w.createdAt,`Retiro — ${w.reason||''}${w.note?' · '+w.note:''}`,'ret:'+w.id,[['retiros',amt,0],['caja',0,amt]]));
       });
-      // Gastos (Finanzas + Caja).
+      // Gastos (Finanzas + Caja). Se excluyen los que son nómina: el neto de una
+      // liquidación pagada ya sale por su propio asiento, y los anticipos se
+      // asientan abajo como crédito contra la colaboradora, no como gasto.
+      const skipExp=payrollExpenseIds();
       [...(state.expenses||[]).map(e=>({...e,src:'fin'})), ...cajaExpensesAsFinance().map(e=>({...e,src:'caja'}))].forEach(e=>{
-        if(!inR(e.date)) return;
+        if(!inR(e.date)||(e.src==='fin'&&skipExp.has(e.id))) return;
         const amt=Number(e.amount||0); if(!(amt>0)) return;
         out.push(_accE(e.date,`Gasto — ${e.description||''}`,'exp:'+e.src+':'+e.id,[['gasto:'+(e.category||'other'),amt,0],[accMethodAccount(e.paymentMethod),0,amt]]));
+      });
+      // Anticipos y descuentos entregados en plata: nace un crédito contra la
+      // colaboradora que se cancela al liquidarle el sueldo. Sin este asiento la
+      // cuenta "Créditos a empleadas" quedaba con saldo negativo permanente.
+      (state.payrollDeductions||[]).forEach(d=>{
+        if(!d||!d.expenseId||!inR(d.date)) return;
+        const src=(state.expenses||[]).find(e=>e.id===d.expenseId);
+        const amt=Number(d.amount||0); if(!(amt>0)) return;
+        out.push(_accE(d.date,`Anticipo a ${d.description||'colaboradora'}`,'ded:'+d.id,
+          [['empleadas',amt,0],[accMethodAccount(src?src.paymentMethod:'Transferencia'),0,amt]]));
       });
       // Liquidaciones pagadas. Costo = neto pagado + deducciones (las deducciones
       // cancelan el crédito a la empleada nacido en ventas con descuento employee).
@@ -11143,7 +11210,10 @@
         const ded=Number(l.totalDeductions||0), net=Number(l.netPay||0);
         const lines=[['nomina',net+ded,0]];
         if(ded>0.005) lines.push(['empleadas',0,ded]);
-        lines.push(['caja',0,net]);
+        // El sueldo sale del medio con el que se pagó. Antes salía siempre de
+        // caja, así que un sueldo transferido dejaba la caja contable en rojo.
+        const liqExp=l.expenseId?(state.expenses||[]).find(e=>e.id===l.expenseId):null;
+        lines.push([accMethodAccount(l.paymentMethod||(liqExp&&liqExp.paymentMethod)||'Efectivo'),0,net]);
         out.push(_accE(l.paidAt,`Liquidación — ${l.collaboratorName||''}`,'liq:'+l.id,lines));
       });
       // Ajustes manuales.
@@ -11359,13 +11429,20 @@
     }
     // ═══ FIN CONTABILIDAD FORMAL ════════════════════════════════════════
 
-    function finBreakEven(){
-      const {from,to}=finDateRange('month');
-      const allExp=state.expenses||[];
-      const fixedExp=allExp.filter(e=>expenseCats().find(c=>c.id===e.category)?.type==='fixed').reduce((s,e)=>s+(e.amount||0),0);
-      const varExp=allExp.filter(e=>{const t=expenseCats().find(c=>c.id===e.category)?.type;return t==='variable'||t==='tax';}).reduce((s,e)=>s+(e.amount||0),0);
+    // Punto de equilibrio del período pedido (antes sumaba los gastos de TODA la
+    // historia contra los ingresos de un solo mes, ignoraba los gastos de Caja
+    // —los insumos— y contaba las comisiones como costo fijo).
+    function finBreakEven(from,to){
+      if(!from||!to){ const r=finDateRange('month'); from=r.from; to=r.to; }
+      const skip=payrollExpenseIds();
+      const exp=[...(state.expenses||[]).filter(e=>!skip.has(e.id)), ...cajaExpensesAsFinance()]
+        .filter(e=>e.date>=from&&e.date<=to);
+      const byType=t=>exp.filter(e=>(expenseCats().find(c=>c.id===e.category)?.type||'other')===t).reduce((s,e)=>s+(e.amount||0),0);
+      const pay=finPayrollSplit(from,to);
+      const fixedExp=byType('fixed')+pay.fixed;
+      const varExp=byType('variable')+byType('tax');
+      const payroll=pay.commissions;
       const rev=finRevenue(from,to);
-      const payroll=finPayrollCost(from,to);
       const totalVar=varExp+payroll;
       const grossMargin=rev>0?Math.max(0,(rev-totalVar)/rev):0;
       const breakEven=grossMargin>0?Math.round(fixedExp/grossMargin):0;
@@ -11630,7 +11707,7 @@
       const revToday=isCurrentMonth?finRevenue(today,today):null;
       const tickets=finTicketCount(mFrom,mTo), avg=finAvgTicket(mFrom,mTo);
       const mono=finMonotributoCheck();
-      const {breakEven,fixedExp,grossMargin}=finBreakEven();
+      const {breakEven,fixedExp,grossMargin}=finBreakEven(mFrom,mTo);
       const monoAlert=mono.pct>=80?'danger':mono.pct>=60?'warn':'ok';
       const topGroup=finRevenueByGroup(mFrom,mTo)[0];
       const topCollab=finRevenueByCollaborator(mFrom,mTo)[0];
