@@ -11044,16 +11044,70 @@
       const ts=state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to);
       return ts.length?ts.reduce((s,t)=>s+finTicketRevenue(t),0)/ts.length:0;
     }
+    // Tickets del período, ya descontado el saldo impago a prorrata de cada línea.
+    // Sin el prorrateo los desgloses sumaban el precio entero mientras el total de
+    // ingresos le restaba el pendiente: el mix daba más que la facturación y las
+    // barras del Analista se pasaban del 100%. Al cobrarse el saldo entra un ticket
+    // nuevo que aporta su parte, así que el total termina completo igual.
+    function finTicketLines(from,to){
+      const out=[];
+      state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).forEach(t=>{
+        const lines=t.lines||[];
+        const tot=lines.reduce((s,l)=>s+Number(l.finalPrice||0),0);
+        // La base es la misma que usa finTicketRevenue, así el desglose suma
+        // exactamente los ingresos del período y no un número parecido.
+        const base=t.servicesTotal!=null?Number(t.servicesTotal||0):tot;
+        const pend=Math.min(Number(t.pendingBalance||0),base);
+        lines.forEach(l=>{
+          const fp=Number(l.finalPrice||0);
+          const peso=tot>0?fp/tot:0;
+          out.push({line:l, ticket:t, revenue:Math.max(0,(base-pend)*peso)});
+        });
+      });
+      return out;
+    }
+    // Comisión que genera una línea de venta. Mismo criterio que la liquidación:
+    // en un canje la clienta no paga pero la comisión se calcula sobre el precio
+    // de catálogo, así que un canje deja margen negativo. Es correcto: cuesta plata.
+    function finLineCommission(l){
+      const m=member(l.collaboratorId); if(!m) return 0;
+      const pct=getCollaboratorCommission(m,l.group,l.variantId,l.service);
+      const base=l.discountType==='canje'?Number(l.basePrice||0):Number(l.finalPrice||0);
+      return Math.round(base*pct/100);
+    }
     function finRevenueByGroup(from,to){
       const map={};
-      state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to)
-        .forEach(t=>(t.lines||[]).forEach(l=>{const g=l.group||'Sin grupo';map[g]=(map[g]||0)+(l.finalPrice||0);}));
+      finTicketLines(from,to).forEach(({line,revenue})=>{const g=line.group||'Sin grupo';map[g]=(map[g]||0)+revenue;});
       return Object.entries(map).sort((a,b)=>b[1]-a[1]);
     }
     function finRevenueByCollaborator(from,to){
       const map={};
-      state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to)
-        .forEach(t=>(t.lines||[]).forEach(l=>{const m=member(l.collaboratorId);const name=m?fullName(m):'Sin asignar';map[name]=(map[name]||0)+(l.finalPrice||0);}));
+      finTicketLines(from,to).forEach(({line,revenue})=>{const m=member(line.collaboratorId);const name=m?fullName(m):'Sin asignar';map[name]=(map[name]||0)+revenue;});
+      return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    }
+    // Ganancia = lo facturado menos la comisión que se paga por ese servicio. Es el
+    // número que sirve para decidir qué empujar: dos servicios pueden facturar lo
+    // mismo y dejar muy distinto si tienen porcentajes de comisión diferentes.
+    function finMarginByGroup(from,to){
+      const map={};
+      finTicketLines(from,to).forEach(({line,revenue})=>{
+        const g=line.group||'Sin grupo';
+        map[g]=(map[g]||0)+revenue-finLineCommission(line);
+      });
+      return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    }
+    function finMarginByCollaborator(from,to){
+      const map={};
+      finTicketLines(from,to).forEach(({line,revenue})=>{
+        const m=member(line.collaboratorId);const name=m?fullName(m):'Sin asignar';
+        map[name]=(map[name]||0)+revenue-finLineCommission(line);
+      });
+      return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    }
+    // Cuántas veces se vendió cada servicio (unidades, no plata).
+    function finUnitsByGroup(from,to){
+      const map={};
+      finTicketLines(from,to).forEach(({line})=>{const g=line.group||'Sin grupo';map[g]=(map[g]||0)+1;});
       return Object.entries(map).sort((a,b)=>b[1]-a[1]);
     }
     function finPaymentsByMethod(from,to){
@@ -11107,6 +11161,12 @@
       return 'caja';
     }
     function accOpening(){ return (state.accounting && state.accounting.opening) || null; }
+    // Día contable en hora argentina. Los timestamps (createdAt, paidAt) vienen en
+    // UTC y hay que convertirlos: cortarlos a mano mandaba al mes siguiente una
+    // venta del día 31 a las 21:30. Las fechas ya normalizadas (gastos, anticipos,
+    // apertura) llegan como YYYY-MM-DD y se toman tal cual: pasarlas por dayOf las
+    // correría un día para atrás.
+    const accDay=d=>{ const s=String(d||''); return s.length>10 ? dayOf(s) : s.slice(0,10); };
     function _accE(date,desc,ref,lines){
       const ls=lines.filter(l=>Number(l[1]||0)>0.005||Number(l[2]||0)>0.005);
       // Ley de partida doble: TODO asiento debe balancear (Debe = Haber).
@@ -11114,13 +11174,13 @@
       // puente 'ajustes' para que quede visible y auditable.
       const td=ls.reduce((s,l)=>s+Number(l[1]||0),0), th=ls.reduce((s,l)=>s+Number(l[2]||0),0);
       if(Math.abs(td-th)>0.5) ls.push(td<th?['ajustes',th-td,0]:['ajustes',0,td-th]);
-      return {date:(date||'').slice(0,10), desc, ref, lines:ls};
+      return {date:accDay(date), desc, ref, lines:ls};
     }
     // Libro diario completo, ordenado por fecha. [cuenta, debe, haber] por línea.
     function accJournal(){
       const op=accOpening(); if(!op) return [];
       const D0=op.date;
-      const inR=d=>{ const k=(d||'').slice(0,10); return !!k && k>=D0; };
+      const inR=d=>{ const k=accDay(d); return !!k && k>=D0; };
       const out=[];
       out.push(_accE(op.date,'Asiento de apertura','apertura',[
         ['caja',Number(op.caja||0),0],['banco',Number(op.banco||0),0],['mp',Number(op.mp||0),0],
@@ -11248,8 +11308,54 @@
           <div class="fin-section-title" style="margin-top:14px">Pasivo</div>${pasRows||'<div class="mini-row"><span>Sin pasivos</span></div>'}${_accRow('TOTAL PASIVO',pasivo,true)}
           <div class="fin-section-title" style="margin-top:14px">Patrimonio neto</div>
           ${_accRow('Capital inicial',cap)}${Math.abs(ret)>0.5?_accRow('(−) Retiros de socio',-ret):''}${_accRow('Resultado del ejercicio',resultado)}${_accRow('TOTAL PATRIMONIO',patrimonio,true)}
-          <div class="mini-row" style="margin-top:10px"><strong>${cierra?'✓ El balance cierra':'⚠ El balance NO cierra'}</strong><span>Activo ${money(Math.round(activo))} = Pasivo ${money(Math.round(pasivo))} + Patrimonio ${money(Math.round(patrimonio))}</span></div>
+          <div class="mini-row" style="margin-top:10px"><span>Activo ${money(Math.round(activo))} = Pasivo ${money(Math.round(pasivo))} + Patrimonio ${money(Math.round(patrimonio))}${cierra?'':' — ⚠ NO cierra'}</span></div>
+          ${accControlesHtml(upTo,bal)}
         </div>`;
+    }
+    // Controles que SÍ pueden fallar. El cartel "✓ el balance cierra" era decorativo:
+    // como todo asiento se fuerza a balancear (la diferencia va a la cuenta puente),
+    // Activo = Pasivo + Patrimonio es una identidad matemática y el tilde verde
+    // aparecía siempre, aunque los datos de origen estuvieran mal.
+    function accControlesHtml(upTo,bal){
+      const rows=[];
+      // 1. Asientos que no cerraban solos y se taparon con la cuenta puente.
+      const dif=Math.round(bal['ajustes']||0);
+      rows.push(Math.abs(dif)<1
+        ? {ok:true,  t:'Todos los asientos cierran solos', d:'Sin diferencias de registro.'}
+        : {ok:false, t:'Hay asientos que no cerraban', d:`${money(dif)} fueron a "Diferencias de registro". Suele ser un ticket viejo sin desglose.`});
+      // 2. Caja contable contra el último arqueo físico: el único control que
+      //    detecta plata faltante de verdad.
+      const cierres=(state.cashClosings||[]).filter(c=>c.closedAt&&dayOf(c.closedAt)<=upTo).sort((a,b)=>String(a.closedAt).localeCompare(String(b.closedAt)));
+      const ult=cierres[cierres.length-1];
+      if(ult&&ult.countedCash!=null&&!state.cashSession?.isOpen){
+        // Se compara el saldo contable AL DÍA DEL ARQUEO, no al corte del balance:
+        // si no, cualquier movimiento posterior daría una diferencia que no existe.
+        const dCierre=dayOf(ult.closedAt);
+        const cajaAlCierre=(accBalances(dCierre)||{})['caja']||0;
+        const difCaja=Math.round(cajaAlCierre-Number(ult.countedCash||0));
+        rows.push(Math.abs(difCaja)<1
+          ? {ok:true,  t:'La caja contable coincide con el arqueo', d:`Contado el ${dCierre}: ${money(ult.countedCash)}.`}
+          : {ok:false, t:'La caja contable no coincide con el arqueo', d:`Libros ${money(cajaAlCierre)} contra ${money(ult.countedCash)} contados el ${dCierre}. Diferencia ${money(difCaja)}.`});
+      } else {
+        rows.push({ok:null,t:'Caja contra arqueo',d:state.cashSession?.isOpen?'La caja está abierta: se compara con el próximo cierre.':'Todavía no hay un cierre de caja para comparar.'});
+      }
+      // 3. El pasivo por señas contra las señas realmente vivas.
+      const recibidas=state.payments.filter(p=>p.type==='deposit_received'&&!p.voided&&dayOf(p.createdAt)<=upTo).reduce((s,p)=>s+Number(p.amount||0),0);
+      const aplicadas=state.payments.filter(p=>p.type==='deposit_applied'&&!p.voided&&dayOf(p.createdAt)<=upTo).reduce((s,p)=>s+Number(p.amount||0),0);
+      const vivas=recibidas-aplicadas, contable=-(bal['senas']||0);
+      const difS=Math.round(contable-vivas);
+      // El control que importa es que no se apliquen más señas de las que entraron:
+      // ahí el pasivo se da vuelta y queda en saldo deudor, señal de una seña
+      // aplicada que nunca se registró al recibirse. Comparar el saldo contable
+      // contra el cálculo no alcanza: los dos salen de los mismos pagos y siempre
+      // coincidirían, que es justo el vicio del cartel que esto reemplaza.
+      rows.push(vivas<-0.5
+        ? {ok:false, t:'Se aplicaron señas que nunca entraron', d:`Se descontaron ${money(-vivas)} de más: hay señas usadas en una venta que no figuran como recibidas. Revisá los cobros de esas clientas.`}
+        : Math.abs(difS)>=1
+        ? {ok:false, t:'Las señas en haber no cuadran', d:`Libros ${money(contable)} contra ${money(vivas)} reales. Diferencia ${money(difS)}.`}
+        : {ok:true,  t:'Las señas en haber cuadran', d:`${money(vivas)} de señas recibidas y todavía sin aplicar.`});
+      return `<div class="fin-section-title" style="margin-top:16px">Controles</div>`+
+        rows.map(r=>`<div class="mini-row"><strong>${r.ok===null?'•':r.ok?'✓':'⚠'} ${r.t}</strong><span${r.ok===false?' style="color:#c46a6a"':''}>${r.d}</span></div>`).join('');
     }
     function accResultsHtml(){
       const ym=state.finLibrosMonth||dateKey(new Date()).slice(0,7);
@@ -11504,14 +11610,20 @@
         // Medios con que se saldó la venta: pagos service + anticipo aplicado del ticket
         const pays=state.payments.filter(p=>p.ticketId===t.id && !p.voided && (p.type==='service'||p.type==='deposit_applied'));
         const metodos=[...new Set(pays.map(p=>normMethod(p.method)).filter(Boolean))].join(', ')||'—';
-        return {fecha:finTicketDay(t), cliente:t.clientNameSnapshot||fullName(client(t.clientId)), servicio, sena, restante, descuento, conDescuento, total, metodos, pays};
+        return {fecha:finTicketDay(t), cliente:t.clientNameSnapshot||fullName(client(t.clientId)), servicio, sena, restante, descuento, conDescuento, total, devengado:finTicketRevenue(t), pendiente:Number(t.pendingBalance||0), metodos, pays};
       });
       // Resumen: por método sumamos los pagos reales (service + anticipo) de estas ventas.
       const porMetodo={};
       rows.forEach(r=>r.pays.forEach(p=>{ const m=normMethod(p.method); porMetodo[m]=(porMetodo[m]||0)+Number(p.amount||0); }));
+      // "Total facturado" debe coincidir con los Ingresos del tablero: el saldo que
+      // quedó impago no es facturación de esta venta — entra cuando se cobra, como
+      // un ticket nuevo de "Saldo de visita". Sumando el total entero se contaba dos
+      // veces, y éste es el número que un contador toma de base para monotributo o
+      // IIBB: sobredeclarar hace pagar de más.
       const resumen={
         cantidad:rows.length,
-        totalFacturado:rows.reduce((s,r)=>s+r.total,0),
+        totalFacturado:rows.reduce((s,r)=>s+r.devengado,0),
+        pendienteDeCobro:rows.reduce((s,r)=>s+r.pendiente,0),
         porMetodo,
         conDescuento:rows.filter(r=>r.conDescuento).length
       };
@@ -11582,6 +11694,7 @@
         <div class="rep-resumen">
           <span><span class="rep-r-k">Ventas:</span> <span class="rep-r-v">${resumen.cantidad}</span></span>
           <span><span class="rep-r-k">Total facturado:</span> <span class="rep-r-v">${M(resumen.totalFacturado)}</span></span>
+          ${resumen.pendienteDeCobro>0?`<span><span class="rep-r-k">Queda por cobrar:</span> <span class="rep-r-v">${M(resumen.pendienteDeCobro)}</span></span>`:''}
           <span><span class="rep-r-k">Ventas con descuento:</span> <span class="rep-r-v">${resumen.conDescuento}</span></span>
           <span style="flex-basis:100%;height:0"></span>
           <span class="rep-r-k">Total por medio de pago:</span> ${metodoResumen(resumen.porMetodo)}
@@ -11678,6 +11791,7 @@
         L.push([]);
         L.push(['Ventas',rows.length]);
         L.push(['Total facturado','','','','','','', resumen.totalFacturado]);
+        if(resumen.pendienteDeCobro>0) L.push(['Queda por cobrar','','','','','','', resumen.pendienteDeCobro]);
         L.push(['Ventas con descuento', resumen.conDescuento]);
         L.push([]);
         L.push(['Total por medio de pago']);
@@ -11709,8 +11823,9 @@
       const mono=finMonotributoCheck();
       const {breakEven,fixedExp,grossMargin}=finBreakEven(mFrom,mTo);
       const monoAlert=mono.pct>=80?'danger':mono.pct>=60?'warn':'ok';
-      const topGroup=finRevenueByGroup(mFrom,mTo)[0];
-      const topCollab=finRevenueByCollaborator(mFrom,mTo)[0];
+      const topGroup=finMarginByGroup(mFrom,mTo)[0];       // el que más ganancia deja
+      const topSold=finUnitsByGroup(mFrom,mTo)[0];         // el que más veces se vendió
+      const topCollab=finMarginByCollaborator(mFrom,mTo)[0];
       const beReached=breakEven>0?Math.min(100,Math.round((rev/breakEven)*100)):0;
       const monthName=new Date(selY,selM-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'});
       panel.innerHTML=`
@@ -11762,11 +11877,12 @@
           </div>
           <p style="font-size:11px;color:var(--text-muted);margin-top:6px">* Límites orientativos 2025 — verificar en AFIP. No incluye IVA ni IIBB.</p>
         </div>
-        ${topGroup||topCollab?`<div class="fin-section">
+        ${topGroup||topCollab||topSold?`<div class="fin-section">
           <div class="fin-section-title">Destacados del mes</div>
           <div class="fin-highlights">
-            ${topGroup?`<div class="fin-highlight-item"><div class="fin-highlight-label">Servicio más rentable</div><div class="fin-highlight-val">${topGroup[0]}</div><div class="fin-highlight-amt">${money(topGroup[1])}</div></div>`:''}
-            ${topCollab?`<div class="fin-highlight-item"><div class="fin-highlight-label">Colaboradora top</div><div class="fin-highlight-val">${topCollab[0]}</div><div class="fin-highlight-amt">${money(topCollab[1])}</div></div>`:''}
+            ${topGroup?`<div class="fin-highlight-item"><div class="fin-highlight-label">Servicio que más deja</div><div class="fin-highlight-val">${topGroup[0]}</div><div class="fin-highlight-amt">${money(topGroup[1])}</div><div class="fin-highlight-label" style="margin-top:2px">ganancia, ya descontada la comisión</div></div>`:''}
+            ${topSold?`<div class="fin-highlight-item"><div class="fin-highlight-label">Servicio más vendido</div><div class="fin-highlight-val">${topSold[0]}</div><div class="fin-highlight-amt">${topSold[1]} ${topSold[1]===1?'vez':'veces'}</div><div class="fin-highlight-label" style="margin-top:2px">cantidad, no facturación</div></div>`:''}
+            ${topCollab?`<div class="fin-highlight-item"><div class="fin-highlight-label">Colaboradora que más deja</div><div class="fin-highlight-val">${topCollab[0]}</div><div class="fin-highlight-amt">${money(topCollab[1])}</div><div class="fin-highlight-label" style="margin-top:2px">ganancia, ya descontada su comisión</div></div>`:''}
           </div>
         </div>`:''}
       `;
@@ -11926,8 +12042,13 @@
       const rev=finRevenue(from,to), exp=finExpenses(from,to), payroll=finPayrollCost(from,to);
       const net=rev-exp-payroll;
       const byGroup=finRevenueByGroup(from,to);
-      const byCollab=finRevenueByCollaborator(from,to);
+      const byCollab=finMarginByCollaborator(from,to);
       const byMethod=finPaymentsByMethod(from,to);
+      const byMargin=finMarginByGroup(from,to);
+      const byUnits=finUnitsByGroup(from,to);
+      const maxMargin=byMargin.reduce((m,x)=>Math.max(m,x[1]),0);
+      const maxUnits=byUnits.reduce((m,x)=>Math.max(m,x[1]),0);
+      const totalMargin=byMargin.reduce((s,x)=>s+x[1],0);
       const methodTotal=byMethod.reduce((s,[,v])=>s+v.amount,0);
       const methodOps=byMethod.reduce((s,[,v])=>s+v.count,0);
       const periodClients=new Set(state.salesTickets.filter(t=>t.status!=='voided'&&finTicketDay(t)>=from&&finTicketDay(t)<=to).map(t=>t.clientId)).size;
@@ -11960,12 +12081,28 @@
             <div class="fin-bar-amount">${money(v)}</div>
           </div>`).join('')}
         </div>`:''}
+        ${byMargin.length?`<div class="fin-section">
+          <div class="fin-section-title">Ganancia por servicio <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— lo facturado menos la comisión. Total ${money(totalMargin)}</span></div>
+          ${byMargin.map(([g,v])=>`<div class="fin-bar-row">
+            <div class="fin-bar-label">${g}</div>
+            <div class="fin-bar-wrap"><div class="fin-bar-fill" style="width:${maxMargin>0?Math.round((Math.max(0,v)/maxMargin)*100):0}%;${v<0?'background:#c46a6a':''}"></div></div>
+            <div class="fin-bar-amount"${v<0?' style="color:#c46a6a"':''}>${money(v)}</div>
+          </div>`).join('')}
+        </div>`:''}
+        ${byUnits.length?`<div class="fin-section">
+          <div class="fin-section-title">Más vendidos <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— cantidad de servicios, no plata</span></div>
+          ${byUnits.map(([g,n])=>`<div class="fin-bar-row">
+            <div class="fin-bar-label">${g}</div>
+            <div class="fin-bar-wrap"><div class="fin-bar-fill" style="width:${maxUnits>0?Math.round((n/maxUnits)*100):0}%"></div></div>
+            <div class="fin-bar-amount">${n}</div>
+          </div>`).join('')}
+        </div>`:''}
         ${byCollab.length?`<div class="fin-section">
-          <div class="fin-section-title">Ranking colaboradoras</div>
+          <div class="fin-section-title">Ranking colaboradoras <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— por ganancia que deja al salón, ya descontada su comisión</span></div>
           ${byCollab.map(([name,v],i)=>`<div class="fin-bar-row">
             <div class="fin-bar-label">${i+1}. ${name}</div>
-            <div class="fin-bar-wrap"><div class="fin-bar-fill" style="width:${rev>0?Math.round((v/rev)*100):0}%"></div></div>
-            <div class="fin-bar-amount">${money(v)}</div>
+            <div class="fin-bar-wrap"><div class="fin-bar-fill" style="width:${totalMargin>0?Math.round((Math.max(0,v)/totalMargin)*100):0}%;${v<0?'background:#c46a6a':''}"></div></div>
+            <div class="fin-bar-amount"${v<0?' style="color:#c46a6a"':''}>${money(v)}</div>
           </div>`).join('')}
         </div>`:''}
         <div class="fin-section">
