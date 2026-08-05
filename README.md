@@ -10,30 +10,27 @@ Sistema operativo interno de **GLAMB Belgrano** (salón de belleza, Buenos Aires
 
 | | |
 |---|---|
-| Archivo principal | `glamb-os-firebase.html` (~14.400 líneas, PWA de un solo archivo) |
-| Rama de desarrollo | `claude/commission-calculation-bug-j29gxr` |
-| Rama de deploy | `claude/beautiful-fermat-l5mac7` (**la única que dispara el despliegue**) |
+| Archivo principal | `glamb-os-firebase.html` (~14.700 líneas, PWA de un solo archivo) |
+| Rama de trabajo y deploy | `claude/beautiful-fermat-l5mac7` (**la única que dispara el despliegue**) |
 | Proyecto Firebase | `glamb-os` · región `southamerica-east1` · plan Blaze |
-| Service Worker | `sw.js` — versión actual `glamb-os-v77` |
+| Service Worker | `sw.js` — versión actual `glamb-os-v81` |
 | Cuenta de facturación | `01A173-3BFAB5-90192E` |
 
-### Flujo de trabajo con dos ramas
+### Ramas: se trabaja directo sobre la de deploy
 
-Se desarrolla en `claude/commission-calculation-bug-j29gxr` y se despliega llevando el commit a `claude/beautiful-fermat-l5mac7`:
+Desde agosto de 2026 Daniel pidió trabajar **directo en `claude/beautiful-fermat-l5mac7`**, sin rama de desarrollo intermedia:
 
 ```bash
-# 1. Trabajar y commitear en la rama de desarrollo
-git checkout claude/commission-calculation-bug-j29gxr
-# … cambios …
-git commit && git push -u origin claude/commission-calculation-bug-j29gxr
-
-# 2. Llevarlo a deploy
 git checkout claude/beautiful-fermat-l5mac7
-git cherry-pick <sha>
-git push origin claude/beautiful-fermat-l5mac7   # ← esto dispara el deploy
+# … cambios … commit …
+git push -u origin claude/beautiful-fermat-l5mac7   # ← esto publica en producción
 ```
 
-> **Si una sesión nueva asigna otra rama, avisale a Daniel y seguí usando estas dos.** No dispersar commits.
+**Cada push publica en producción.** No hay red de contención: avisale a Daniel y esperá su ok antes de pushear, salvo que ya te lo haya autorizado para ese cambio.
+
+> `claude/commission-calculation-bug-j29gxr` sigue existiendo en el remoto y era la vieja rama de desarrollo del flujo de dos ramas (se commiteaba ahí y se hacía `cherry-pick` a deploy). Quedó desactualizada: no tiene los commits de agosto de 2026. **No la uses sin preguntarle a Daniel primero.** Ojo con `git branch -a`: no lista lo que el clon no trajo. Para ver qué ramas existen de verdad, `git ls-remote --heads origin`.
+
+> **Si una sesión nueva asigna otra rama, avisale a Daniel y seguí usando la de deploy.** No dispersar commits.
 
 ### Antes de cada deploy: subir la versión del Service Worker
 
@@ -150,12 +147,46 @@ Protecciones vigentes: PITR 7 días · backup JSON manual desde Clientes · guar
 ## Criterios de negocio que ya están decididos
 
 - **La seña es un pasivo al recibirse, no un ingreso.** Se reconoce como venta cuando se aplica a un ticket o se retiene por inasistencia.
+- **La seña retenida por inasistencia NO paga comisión.** Es ingreso del local por un servicio que no se prestó: la colaboradora no trabajó esa hora. La línea se marca con `noCommission`; `lineEarnsCommission(ticket,línea)` decide, y reconoce por `origin:'no_show'` las inasistencias anteriores a la regla.
 - **La propina es de la colaboradora**, no facturación del local. Se excluye de "ventas".
 - **Una seña dejada para un turno futuro no se consume sola** en el cobro de otro turno. El sistema precarga solo el saldo *libre* y avisa lo que está reservado.
 - **El precio escrito a mano en el turno manda** sobre el del catálogo.
 - **El día de un movimiento se calcula en hora argentina**, no en UTC. `createdAt` se guarda en UTC: usar siempre el helper `dayOf(iso)`, nunca `createdAt.slice(0,10)`.
 - **Descuentos en Caja:** `canje` (cobra $0, comisión sobre precio de lista), `employee` (no entra plata, se descuenta del sueldo), `client` (bonificación, comisión sobre precio final).
 - **Reenvío de mail al editar un turno:** solo si cambia fecha u horario.
+- **El costo de nómina es el BRUTO liquidado, contado una sola vez.** Lo que se le descuenta a la colaboradora (anticipo ya entregado, servicio de empleada) sigue siendo costo del salón: cambia la forma de pago, no el costo. Como al pagar una liquidación se genera un gasto en Finanzas y los anticipos generan el suyo al entregarse, `payrollExpenseIds()` los excluye de los gastos para que la nómina no se cuente dos veces. **Si tocás esto, no sumes el bruto sin excluir esos gastos.**
+- **Un anticipo es un crédito contra la colaboradora, no un gasto.** Se cancela al descontarse del sueldo. En Libros va a "Créditos a empleadas".
+- **Un saldo pendiente se marca cobrado recién cuando la venta existe** (`registerSale`), nunca al cargarlo en el formulario.
+- **Para decidir qué servicio empujar se mira la GANANCIA, no la facturación.** `finMarginByGroup` descuenta la comisión, que varía por grupo: dos servicios pueden facturar lo mismo y dejar muy distinto. Un canje da margen negativo — es correcto, cuesta plata.
+- **El desglose por servicio/colaboradora descuenta el saldo impago a prorrata** de cada línea, para que sume exactamente los ingresos del período.
+
+---
+
+## Finanzas — cómo está armado
+
+Cinco pestañas: **CFO** (tablero mensual), **Contador** (gastos y presupuesto), **Analista** (análisis por período), **Libros** (contabilidad formal) y **Reportes** (exportables).
+
+Funciones que concentran los criterios. Si cambiás una, revisá las demás — comparten base:
+
+| Función | Qué resuelve |
+|---|---|
+| `finTicketRevenue(t)` | Ingreso reconocido de un ticket: servicios menos el saldo impago (ese se devenga al cobrarse, como ticket nuevo) |
+| `finTicketLines(from,to)` | Líneas del período con el saldo impago ya prorrateado. **Base de todos los desgloses** |
+| `finExpenses` / `payrollExpenseIds` | Gastos del período, excluyendo los que ya son nómina |
+| `finPayrollCost` / `liqGross` | Costo laboral = bruto liquidado (con fallback para liquidaciones viejas sin `grossPay`) |
+| `finPayrollSplit` | Separa comisiones (variable) de presentismo/viático (fijo), para el punto de equilibrio |
+| `finBreakEven(from,to)` | Punto de equilibrio del período pedido, incluyendo gastos de Caja |
+| `finMarginByGroup` / `ByCollaborator` | Ganancia = facturado − comisión |
+| `finUnitsByGroup` | Cuántas veces se vendió cada servicio (unidades, no plata) |
+| `lineEarnsCommission(t,l)` | Si una línea paga comisión (la seña de inasistencia no) |
+
+### Contabilidad formal (pestaña Libros)
+
+Los asientos **se derivan** de lo que el salón ya registra (tickets, señas, propinas, pendientes, gastos, retiros, liquidaciones) desde el asiento de apertura. No se cargan a mano ni se almacenan: solo se guardan la apertura y los ajustes manuales.
+
+- **`accDay(fecha)` — usarla siempre.** Convierte los timestamps UTC a día argentino, pero deja intactas las fechas que ya vienen como `YYYY-MM-DD`. Pasar esas por `dayOf` las corre **un día para atrás**.
+- **`_accE` fuerza a que todo asiento balancee**: la diferencia va a la cuenta puente "Diferencias de registro" para que quede visible en vez de romper el balance.
+- **Por eso `Activo = Pasivo + Patrimonio` es una identidad matemática y no prueba nada.** Los controles que sí pueden fallar están en `accControlesHtml()`: diferencias de registro, caja contable contra el arqueo del último cierre (comparada al día del arqueo) y señas aplicadas sin registro de ingreso. **Si agregás un control, que pueda dar rojo** — un chequeo que siempre da verde es peor que ninguno.
 
 ---
 
@@ -170,6 +201,7 @@ Protecciones vigentes: PITR 7 días · backup JSON manual desde Clientes · guar
 | `firestore.rules` | Reglas de seguridad |
 | `firebase.json` · `.firebaserc` | Config de deploy |
 | `tools/finance-recovery/` | Diagnóstico y corrección sobre datos reales |
+| `.claude/agents/contador-glamb.md` | Agente auditor: estudio contable especializado en pequeños negocios y rubro belleza. Se invoca por nombre para auditar Finanzas |
 | `docs/` | Manuales de recepción y colaboradora, presentación de bienvenida |
 | `CONTINUAR-SESION.md` | Contexto para retomar en una sesión nueva |
 | `MIGRATION.md` | Histórico de la migración a Firebase |
