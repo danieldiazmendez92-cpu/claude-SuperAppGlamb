@@ -8116,7 +8116,30 @@
         t.voidedBy=cashActorName();
         t.voidedAt=new Date().toISOString();
         state.payments.filter(p=>p.ticketId===t.id).forEach(p=>p.voided=true);
-        saveState(); renderAll(); showToast('Ticket anulado');
+        const ahora=new Date().toISOString();
+        const avisos=[];
+        // 1. El saldo que este ticket dejó a cobrar ya no existe: si queda vivo,
+        //    sigue figurando como deuda de la clienta y acreditando Ventas en Libros.
+        state.pendingCharges.filter(p=>p.ticketId===t.id&&p.status==='pending').forEach(p=>{
+          p.status='voided'; p.voidedAt=ahora; avisos.push('se anuló el saldo pendiente');
+        });
+        // 2. Si este ticket había cobrado un saldo anterior, ese saldo vuelve a estar
+        //    impago: la clienta sigue debiéndolo.
+        state.pendingCharges.filter(p=>p.convertedTicketId===t.id&&p.status==='converted').forEach(p=>{
+          p.status='pending'; p.convertedAt=null; p.convertedBy=null; p.convertedTicketId=null;
+          avisos.push('volvió a quedar pendiente el saldo que cobraba');
+        });
+        // 3. El descuento de sueldo por servicio de empleada se anula con el ticket.
+        //    Si ya se descontó en una liquidación pagada no se toca: hay que ajustarlo
+        //    a mano, porque esa plata ya se liquidó.
+        (state.payrollDeductions||[]).slice().forEach(d=>{
+          if(d.ticketId!==t.id||d.type!=='servicio_empleada') return;
+          if(d.appliedToLiquidationId){ avisos.push('OJO: el descuento de sueldo ya se liquidó, ajustalo a mano'); return; }
+          state.payrollDeductions=state.payrollDeductions.filter(x=>x.id!==d.id);
+          avisos.push('se quitó el descuento de sueldo');
+        });
+        saveState(); renderAll();
+        showToast('Ticket anulado'+(avisos.length?' — '+[...new Set(avisos)].join(', '):''));
       });
     }
 
@@ -8825,7 +8848,9 @@
           const ticket={
             id:uid('ticket'), clientId:c.id||null, appointmentId:a.id, reservationId:rKey, origin:'no_show',
             clientNameSnapshot:fullName(c), status:'confirmed',
-            lines:[{collaboratorId:a.memberId, group:a.group||'', service:'Seña por inasistencia', variantId:null, addons:[], finalPrice:sena, tipAmount:0, reference:''}],
+            // noCommission: la seña retenida es ingreso del local por un servicio que
+            // NO se prestó. No paga comisión: la colaboradora no trabajó esa hora.
+            lines:[{collaboratorId:a.memberId, group:a.group||'', service:'Seña por inasistencia', variantId:null, addons:[], finalPrice:sena, tipAmount:0, reference:'', noCommission:true}],
             servicesTotal:sena, tipsTotal:0, grossTotal:sena,
             depositAppliedTotal:applied, amountToCollectToday:Math.max(0,sena-applied),
             pendingBalance:0, totalDueToday:sena,
@@ -10591,14 +10616,17 @@
       // el createdAt crudo (UTC) contra fechas locales: un servicio de las 21:30
       // del último día quedaba fuera del período, y uno de las 21:30 del día
       // anterior al inicio entraba de más.
-      state.salesTickets.filter(t=>{ if(t.status==='voided') return false; const d=dayOf(t.createdAt); return d>=from&&d<=to; }).forEach(t=>{
+      // Mismo criterio de día que Finanzas (finTicketDay): si algún día los tickets
+      // guardan su propia fecha, el período de comisión y el contable no se separan.
+      state.salesTickets.filter(t=>{ if(t.status==='voided') return false; const d=finTicketDay(t); return d>=from&&d<=to; }).forEach(t=>{
         (t.lines||[]).forEach(l=>{
           if(l.collaboratorId!==memberId) return;
+          if(!lineEarnsCommission(t,l)) return;
           const pct=getCollaboratorCommission(m,l.group,l.variantId,l.service);
           // Canje: la clienta no paga, pero la comisión se calcula sobre el precio de catálogo (basePrice).
           const commissionBase = l.discountType==='canje' ? (l.basePrice||0) : (l.finalPrice||0);
           const commAmt=Math.round(commissionBase*pct/100);
-          commissionLines.push({ticketId:t.id,ticketDate:dayOf(t.createdAt),clientName:t.clientNameSnapshot||'—',service:l.service||l.group||'Servicio',group:l.group||'',variantId:l.variantId||'',saleAmount:commissionBase,pct,commissionAmt:commAmt,discountType:l.discountType||'none'});
+          commissionLines.push({ticketId:t.id,ticketDate:finTicketDay(t),clientName:t.clientNameSnapshot||'—',service:l.service||l.group||'Servicio',group:l.group||'',variantId:l.variantId||'',saleAmount:commissionBase,pct,commissionAmt:commAmt,discountType:l.discountType||'none'});
         });
       });
       const totalCommissions=commissionLines.reduce((s,l)=>s+l.commissionAmt,0);
@@ -11066,10 +11094,20 @@
       });
       return out;
     }
+    // ¿Esta línea paga comisión? La seña retenida por inasistencia NO: es ingreso
+    // del local por un servicio que nunca se prestó. Se reconoce por la marca de la
+    // línea y, para las inasistencias ya registradas antes de esta regla, por el
+    // origen del ticket.
+    function lineEarnsCommission(t,l){
+      if(l&&l.noCommission) return false;
+      if(t&&t.origin==='no_show') return false;
+      return true;
+    }
     // Comisión que genera una línea de venta. Mismo criterio que la liquidación:
     // en un canje la clienta no paga pero la comisión se calcula sobre el precio
     // de catálogo, así que un canje deja margen negativo. Es correcto: cuesta plata.
-    function finLineCommission(l){
+    function finLineCommission(l,t){
+      if(!lineEarnsCommission(t,l)) return 0;
       const m=member(l.collaboratorId); if(!m) return 0;
       const pct=getCollaboratorCommission(m,l.group,l.variantId,l.service);
       const base=l.discountType==='canje'?Number(l.basePrice||0):Number(l.finalPrice||0);
@@ -11090,17 +11128,17 @@
     // mismo y dejar muy distinto si tienen porcentajes de comisión diferentes.
     function finMarginByGroup(from,to){
       const map={};
-      finTicketLines(from,to).forEach(({line,revenue})=>{
+      finTicketLines(from,to).forEach(({line,ticket,revenue})=>{
         const g=line.group||'Sin grupo';
-        map[g]=(map[g]||0)+revenue-finLineCommission(line);
+        map[g]=(map[g]||0)+revenue-finLineCommission(line,ticket);
       });
       return Object.entries(map).sort((a,b)=>b[1]-a[1]);
     }
     function finMarginByCollaborator(from,to){
       const map={};
-      finTicketLines(from,to).forEach(({line,revenue})=>{
+      finTicketLines(from,to).forEach(({line,ticket,revenue})=>{
         const m=member(line.collaboratorId);const name=m?fullName(m):'Sin asignar';
-        map[name]=(map[name]||0)+revenue-finLineCommission(line);
+        map[name]=(map[name]||0)+revenue-finLineCommission(line,ticket);
       });
       return Object.entries(map).sort((a,b)=>b[1]-a[1]);
     }
@@ -11918,6 +11956,9 @@
       // El presupuesto es mensual por definición: aunque se esté viendo todo el
       // historial, se compara siempre contra un mes concreto (el mes en curso).
       const budgetExpenses=isAll?allExpenses.filter(e=>(e.date||'').startsWith(curYM)):expenses;
+      const budgetYM=isAll?curYM:selMonth;
+      const budgetFrom=budgetYM+'-01', budgetTo=budgetYM+'-31';
+      const skipPayroll=payrollExpenseIds();
       const monthLabel=new Date(Number(selMonth.slice(0,4)),Number(selMonth.slice(5,7))-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'});
       const budgetLabel=isAll?new Date(Number(curYM.slice(0,4)),Number(curYM.slice(5,7))-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}):monthLabel;
       const grouped={};
@@ -11993,7 +12034,13 @@
         <div class="fin-section">
           <div class="fin-section-title">Presupuesto de ${budgetLabel} <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— hacé clic en el monto para editar</span></div>
           ${expenseCats().filter(c=>c.id!=='other').map(c=>{
-            const spent=budgetExpenses.filter(e=>e.category===c.id).reduce((s,e)=>s+(e.amount||0),0);
+            // La nómina no se presupuestaba: las comisiones —el rubro más grande del
+            // salón— solo aparecían si la liquidación estaba pagada y disfrazadas de
+            // gasto suelto. Para "Sueldos fijos" se usa el costo laboral real (bruto)
+            // del mes, en vez de los gastos, que ya se excluyen para no duplicar.
+            const spent=c.id==='salaries'
+              ? finPayrollCost(budgetFrom,budgetTo)
+              : budgetExpenses.filter(e=>e.category===c.id&&!skipPayroll.has(e.id)).reduce((s,e)=>s+(e.amount||0),0);
             const budget=Number((state.budgets||{})[c.id]||0);
             const pct=budget>0?Math.min(150,Math.round(spent/budget*100)):0;
             const barColor=pct>=100?'#c46a6a':pct>=80?'#C2935A':'#3f7d4f';
@@ -12106,7 +12153,7 @@
           </div>`).join('')}
         </div>`:''}
         <div class="fin-section">
-          <div class="fin-section-title">Flujo por método de pago</div>
+          <div class="fin-section-title">Flujo por método de pago <span style="font-size:11px;font-weight:400;color:var(--text-muted)">— plata que ENTRÓ en el período, no facturación: incluye señas cobradas y no va a coincidir con Ingresos</span></div>
           ${byMethod.length?`
             ${byMethod.map(([m,v])=>`<div class="fin-bar-row">
               <div class="fin-bar-label">${m}</div>
