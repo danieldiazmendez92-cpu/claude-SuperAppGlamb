@@ -1120,13 +1120,18 @@ async function buscarTurnoCliente() {
   for (const cli of candidatas) {
     console.log(`── ${cli.first||''} ${cli.last||''} (id=${cli.id}) ──`);
     const q = db.collection('appointments').where('clientId', '==', cli.id);
+    const erroresVistos = new Map();   // mensaje -> cuántas veces
     const leerEn = async (when) => {
       try {
         return await db.runTransaction(async (t) => {
           const s = await t.get(q);
           return s.docs.map(d => d.data());
         }, { readOnly: true, readTime: Timestamp.fromDate(when) });
-      } catch (e) { return null; }
+      } catch (e) {
+        const msg = String(e.message || e).slice(0, 150);
+        erroresVistos.set(msg, (erroresVistos.get(msg) || 0) + 1);
+        return null;
+      }
     };
 
     const desde = new Date(ahora.getTime() - DIAS*24*3600e3);
@@ -1146,6 +1151,10 @@ async function buscarTurnoCliente() {
       }
     }
     console.log(`  snapshots leídos: ${snapshotsOk}/${marcas.length} (ventana: ${horaAR(desde)} → ahora)`);
+    if (erroresVistos.size) {
+      console.log('  ⚠ Errores durante la lectura histórica (esto le resta confianza al resultado):');
+      for (const [msg, n] of erroresVistos) console.log(`    x${n}: ${msg}`);
+    }
 
     if (!vistos.size) { console.log('  Ningún turno para esta clienta en los últimos', DIAS, 'días.\n'); continue; }
 
