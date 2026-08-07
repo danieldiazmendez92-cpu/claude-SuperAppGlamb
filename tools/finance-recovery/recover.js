@@ -1085,7 +1085,88 @@ async function auditTurnosDia() {
   console.log('dio de alta, que puede no ser la misma persona que lo borró.');
 }
 
+// audit-borrados-hoy — SOLO LECTURA. Responde "¿se borró algún turno hoy?" sin
+// importar para qué día era el turno (audit-turnos-dia solo mira la agenda de un
+// día, así que se le escapa un turno futuro borrado hoy).
+// Compara la colección entera al inicio del día contra ahora — dos lecturas — y
+// para cada turno que falte acota por búsqueda binaria la franja en que
+// desapareció (~6 lecturas más, en vez de un snapshot cada 15 minutos).
+async function auditBorradosHoy() {
+  const ahora = new Date();
+  const hoyAR = new Date(ahora.getTime() - 3*3600e3).toISOString().slice(0,10);
+  const DIA = process.env.AUDIT_DIA || hoyAR;
+  const FILTRO = new RegExp(process.env.AUDIT_FILTRO || 'plasma|prp', 'i');
+  const desde = new Date(`${DIA}T03:00:00Z`);                       // 00:00 AR
+  const hasta = new Date(Math.min(ahora.getTime() - 60e3, desde.getTime() + 27*3600e3));
+  const horaAR = d => new Date(d.getTime() - 3*3600e3).toISOString().slice(11,16);
+  console.log(`=== TURNOS BORRADOS EL ${DIA} (cualquier fecha de turno) ===`);
+  console.log(`Ventana: ${horaAR(desde)} → ${horaAR(hasta)} hora AR\n`);
+
+  const todoEn = async (when) => {
+    try {
+      return await db.runTransaction(async (t) => {
+        const s = await t.get(db.collection('appointments'));
+        return s.docs.map(d => d.data());
+      }, { readOnly: true, readTime: Timestamp.fromDate(when) });
+    } catch (e) { console.log('  (no se pudo leer a las', horaAR(when), '—', String(e.message||e).slice(0,80), ')'); return null; }
+  };
+
+  const A = await todoEn(desde), B = await todoEn(hasta);
+  if (!A || !B) { console.log('FALLÓ la lectura histórica: sin esto no puedo afirmar nada.'); return; }
+  const mapA = new Map(A.map(a => [a.id, a])), mapB = new Map(B.map(a => [a.id, a]));
+  const borrados = [...mapA.values()].filter(a => !mapB.has(a.id));
+  const creados  = [...mapB.values()].filter(a => !mapA.has(a.id));
+
+  // Validación del mecanismo: si detecta altas, es que está leyendo el pasado de
+  // verdad. Sin esto, un "no hay borrados" podría ser simplemente una lectura rota.
+  console.log(`Turnos en la base a las ${horaAR(desde)}: ${A.length} · ahora: ${B.length}`);
+  console.log(`Altas detectadas hoy: ${creados.length} · bajas detectadas hoy: ${borrados.length}`);
+  console.log(creados.length
+    ? `CONTROL OK: la lectura del historial funciona (detectó ${creados.length} alta/s).`
+    : 'CONTROL SIN CONFIRMAR: hoy no hubo altas, así que no puedo probar por esta vía que la lectura detecte cambios.');
+
+  if (!borrados.length) { console.log('\nRESULTADO: no se borró ningún turno hoy.'); }
+  for (const a of borrados) {
+    const marca = FILTRO.test(`${a.service||''} ${a.group||''}`) ? '  ⭐ COINCIDE CON LA BÚSQUEDA' : '';
+    console.log(`\n── BORRADO${marca}`);
+    console.log(`   turno del ${a.date||'?'} ${a.start||''}-${a.end||''} · ${a.service||'(sin servicio)'}${a.group?' ['+a.group+']':''} · estado=${a.status||'—'}`);
+    console.log(`   id=${a.id}${a.createdBy?' · lo había creado: '+a.createdBy:''}`);
+    try {
+      if (a.clientId) {
+        const c = await db.collection('clients').doc(a.clientId).get();
+        const cp = await db.collection('clientsPrivate').doc(a.clientId).get();
+        const d = c.exists ? c.data() : {};
+        console.log('   clienta:', [d.firstName, d.lastName].filter(Boolean).join(' ') || a.clientId, cp.exists ? '· tel ' + (cp.data().phone || '—') : '');
+      }
+      if (a.memberId) {
+        const m = await db.collection('collaborators').doc(a.memberId).get();
+        if (m.exists) console.log('   colaboradora:', [m.data().firstName, m.data().lastName].filter(Boolean).join(' ') || a.memberId);
+      }
+    } catch (e) { console.log('   (no se pudo resolver clienta/colaboradora)'); }
+    // Búsqueda binaria de la franja: existía en `lo`, ya no en `hi`.
+    let lo = desde.getTime(), hi = hasta.getTime();
+    const existeEn = async (ms) => {
+      try {
+        return await db.runTransaction(async (t) => {
+          const s = await t.get(db.collection('appointments').where('id', '==', a.id));
+          return !s.empty;
+        }, { readOnly: true, readTime: Timestamp.fromDate(new Date(ms)) });
+      } catch (e) { return null; }
+    };
+    for (let i = 0; i < 7 && hi - lo > 60e3; i++) {
+      const mid = Math.floor((lo + hi) / 2);
+      const r = await existeEn(mid);
+      if (r === null) break;
+      if (r) lo = mid; else hi = mid;
+    }
+    console.log(`   → se borró entre las ${horaAR(new Date(lo))} y las ${horaAR(new Date(hi))} hora AR`);
+  }
+  console.log('\nNOTA: la app no registra QUIÉN elimina un turno. Esto dice qué se borró');
+  console.log('y en qué franja; el autor hay que deducirlo de quién estaba en ese horario.');
+}
+
 (async () => {
+  if (MODE === 'audit-borrados-hoy') { await auditBorradosHoy(); return; }
   if (MODE === 'audit-turnos-dia') { await auditTurnosDia(); return; }
   if (MODE === 'inspect') { await inspect(); return; }
   if (MODE === 'inspect-commissions') { await inspectCommissions(); return; }
