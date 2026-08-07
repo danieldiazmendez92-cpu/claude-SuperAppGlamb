@@ -992,7 +992,101 @@ async function inspectReportes() {
   console.log('CHEQUEO recaudación sin nombre — ANTES:', sinNombreAntes, '→ AHORA (con fallback ticket):', sinNombreAhora, '/', rpays.length);
 }
 
+// audit-turnos-dia — SOLO LECTURA. Reconstruye la agenda de un día con snapshots
+// PITR y muestra qué turnos se eliminaron, se cancelaron o se movieron, y en qué
+// franja horaria pasó. Un turno eliminado no deja rastro en la base (deleteAppointment
+// lo saca del array), así que la única forma de verlo es comparar el pasado contra
+// el presente.
+// Env: AUDIT_DIA=YYYY-MM-DD (default hoy AR) · AUDIT_PASO=minutos (default 15)
+//      AUDIT_FILTRO=regex para destacar (default plasma|prp)
+async function auditTurnosDia() {
+  const ahora = new Date();
+  const hoyAR = new Date(ahora.getTime() - 3*3600e3).toISOString().slice(0,10);
+  const DIA = process.env.AUDIT_DIA || hoyAR;
+  const PASO = Number(process.env.AUDIT_PASO || 15);
+  const FILTRO = new RegExp(process.env.AUDIT_FILTRO || 'plasma|prp', 'i');
+  console.log(`=== AGENDA DEL ${DIA} — reconstrucción por PITR (paso ${PASO} min) ===`);
+
+  // Solo los turnos de ESE día: sin el filtro cada snapshot leería la agenda entera
+  // y el costo se multiplicaría por la cantidad de snapshots.
+  const qDia = db.collection('appointments').where('date', '==', DIA);
+  const leerEn = async (when) => {
+    try {
+      return await db.runTransaction(async (t) => {
+        const snap = await t.get(qDia);
+        return snap.docs.map(d => d.data());
+      }, { readOnly: true, readTime: Timestamp.fromDate(when) });
+    } catch (e) { return null; }
+  };
+
+  // Desde las 00:00 AR del día hasta ahora (o hasta el fin del día si es pasado).
+  const desde = new Date(`${DIA}T03:00:00Z`);              // 00:00 AR
+  const hasta = new Date(Math.min(ahora.getTime() - 60e3, desde.getTime() + 27*3600e3));
+  const marcas = [];
+  for (let t = desde.getTime(); t <= hasta.getTime(); t += PASO*60e3) marcas.push(new Date(t));
+  marcas.push(new Date(ahora.getTime() - 60e3));
+
+  const linea = a => `${a.start||'??'}-${a.end||'??'} · ${a.service||'(sin servicio)'}${a.group?' ['+a.group+']':''} · estado=${a.status||'—'} · id=${a.id}`;
+  const horaAR = d => new Date(d.getTime() - 3*3600e3).toISOString().slice(11,16);
+
+  let prev = null, prevWhen = null, snapshots = 0;
+  const eventos = [];
+  for (const when of marcas) {
+    const arr = await leerEn(when);
+    if (!arr) continue;                                     // fuera de la ventana PITR
+    snapshots++;
+    const cur = new Map(arr.map(a => [a.id, a]));
+    if (prev) {
+      for (const [id, a] of prev) {
+        if (!cur.has(id)) { eventos.push({ tipo: 'DESAPARECIÓ', a, desde: prevWhen, hasta: when }); continue; }
+        const b = cur.get(id);
+        if ((a.status||'') !== (b.status||'')) eventos.push({ tipo: `estado ${a.status||'—'} → ${b.status||'—'}`, a: b, desde: prevWhen, hasta: when });
+        if ((a.start||'') !== (b.start||'')) eventos.push({ tipo: `horario ${a.start} → ${b.start}`, a: b, desde: prevWhen, hasta: when });
+      }
+      for (const [id, b] of cur) if (!prev.has(id)) eventos.push({ tipo: 'se creó', a: b, desde: prevWhen, hasta: when });
+    }
+    prev = cur; prevWhen = when;
+  }
+  console.log(`Snapshots leídos: ${snapshots} · turnos en la agenda ahora: ${prev ? prev.size : 0}`);
+
+  if (!eventos.length) { console.log('\nSIN CAMBIOS: ningún turno de ese día se creó, movió, canceló ni eliminó.'); }
+  else {
+    console.log(`\n=== ${eventos.length} CAMBIO(S) ===`);
+    for (const ev of eventos) {
+      const marca = FILTRO.test(`${ev.a.service||''} ${ev.a.group||''}`) ? ' ⭐' : '';
+      console.log(`\n[${horaAR(ev.desde)}–${horaAR(ev.hasta)} AR] ${ev.tipo}${marca}`);
+      console.log('   ', linea(ev.a));
+      // Nombre de la clienta y de la colaboradora: se leen de a uno, no la colección entera.
+      try {
+        if (ev.a.clientId) {
+          const c = await db.collection('clients').doc(ev.a.clientId).get();
+          const cp = await db.collection('clientsPrivate').doc(ev.a.clientId).get();
+          const d = c.exists ? c.data() : {};
+          console.log('     clienta:', [d.firstName, d.lastName].filter(Boolean).join(' ') || ev.a.clientId,
+                      cp.exists ? '· tel ' + (cp.data().phone || '—') : '');
+        }
+        if (ev.a.memberId) {
+          const m = await db.collection('collaborators').doc(ev.a.memberId).get();
+          if (m.exists) console.log('     colaboradora:', [m.data().firstName, m.data().lastName].filter(Boolean).join(' ') || ev.a.memberId);
+        }
+      } catch (e) { console.log('     (no se pudo resolver clienta/colaboradora:', String(e.message||e).slice(0,60), ')'); }
+      if (ev.a.createdBy) console.log('     lo había creado:', ev.a.createdBy);
+      if (ev.tipo === 'DESAPARECIÓ') {
+        // ¿Se eliminó de verdad, o lo movieron a otro día? Si sigue existiendo con
+        // otra fecha, no fue una eliminación.
+        const q = await db.collection('appointments').where('id', '==', ev.a.id).get();
+        if (q.empty) console.log('     → ELIMINADO: ya no existe en la base.');
+        else console.log('     → NO fue eliminado: lo movieron al', q.docs[0].data().date, q.docs[0].data().start || '');
+      }
+    }
+  }
+  console.log('\nNOTA: la app no guarda QUIÉN elimina un turno, así que esto dice qué se');
+  console.log('eliminó y en qué franja, pero no el autor. "lo había creado" es quien lo');
+  console.log('dio de alta, que puede no ser la misma persona que lo borró.');
+}
+
 (async () => {
+  if (MODE === 'audit-turnos-dia') { await auditTurnosDia(); return; }
   if (MODE === 'inspect') { await inspect(); return; }
   if (MODE === 'inspect-commissions') { await inspectCommissions(); return; }
   if (MODE === 'simulate-commissions') { await simulateCommissions(); return; }
