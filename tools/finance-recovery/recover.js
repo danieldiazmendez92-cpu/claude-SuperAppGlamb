@@ -1062,12 +1062,12 @@ async function auditTurnosDia() {
           const c = await db.collection('clients').doc(ev.a.clientId).get();
           const cp = await db.collection('clientsPrivate').doc(ev.a.clientId).get();
           const d = c.exists ? c.data() : {};
-          console.log('     clienta:', [d.firstName, d.lastName].filter(Boolean).join(' ') || ev.a.clientId,
+          console.log('     clienta:', [d.first, d.last].filter(Boolean).join(' ') || ev.a.clientId,
                       cp.exists ? '· tel ' + (cp.data().phone || '—') : '');
         }
         if (ev.a.memberId) {
           const m = await db.collection('collaborators').doc(ev.a.memberId).get();
-          if (m.exists) console.log('     colaboradora:', [m.data().firstName, m.data().lastName].filter(Boolean).join(' ') || ev.a.memberId);
+          if (m.exists) console.log('     colaboradora:', [m.data().first, m.data().last].filter(Boolean).join(' ') || ev.a.memberId);
         }
       } catch (e) { console.log('     (no se pudo resolver clienta/colaboradora:', String(e.message||e).slice(0,60), ')'); }
       if (ev.a.createdBy) console.log('     lo había creado:', ev.a.createdBy);
@@ -1083,6 +1083,106 @@ async function auditTurnosDia() {
   console.log('\nNOTA: la app no guarda QUIÉN elimina un turno, así que esto dice qué se');
   console.log('eliminó y en qué franja, pero no el autor. "lo había creado" es quien lo');
   console.log('dio de alta, que puede no ser la misma persona que lo borró.');
+}
+
+// buscar-turno-cliente — SOLO LECTURA. "¿Esta clienta tuvo ALGUNA VEZ un turno
+// que ya no está?" Busca la clienta por nombre, y para cada una que matchee
+// recorre el historial PITR (hasta 7 días, cada 2 horas — la consulta filtra por
+// clientId así que cada lectura es barata) y lista TODOS los turnos que existieron
+// alguna vez, estén o no ahora, marcando los que coinciden con el día buscado o
+// con el filtro de servicio.
+// A diferencia de audit-borrados-hoy (que compara únicamente 00:00 de hoy contra
+// ahora), esto cubre un turno que se haya borrado en cualquier momento de los
+// últimos 7 días, no solo hoy.
+// Env: CLIENTE_NOMBRE (obligatorio) · FECHA_TURNO=YYYY-MM-DD (default hoy AR)
+//      AUDIT_FILTRO=regex (default plasma|prp) · DIAS_ATRAS (default 7)
+async function buscarTurnoCliente() {
+  const NOMBRE = (process.env.CLIENTE_NOMBRE || '').trim();
+  if (!NOMBRE) { console.log('Falta CLIENTE_NOMBRE.'); return; }
+  const ahora = new Date();
+  const hoyAR = new Date(ahora.getTime() - 3*3600e3).toISOString().slice(0,10);
+  const FECHA = process.env.FECHA_TURNO || hoyAR;
+  const FILTRO = new RegExp(process.env.AUDIT_FILTRO || 'plasma|prp', 'i');
+  const DIAS = Number(process.env.DIAS_ATRAS || 7);
+  const horaAR = d => new Date(d.getTime() - 3*3600e3).toISOString().slice(0,16).replace('T',' ');
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  const buscado = norm(NOMBRE);
+
+  console.log(`=== Buscando clienta "${NOMBRE}" ===`);
+  const clientsSnap = await db.collection('clients').get();
+  const candidatas = clientsSnap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(c => { const full = norm(`${c.first||''} ${c.last||''}`); return full.includes(buscado) || buscado.split(' ').every(p => full.includes(p)); });
+
+  if (!candidatas.length) { console.log('No se encontró ninguna clienta con ese nombre.'); return; }
+  console.log(`${candidatas.length} coincidencia(s): ${candidatas.map(c=>`${c.first||''} ${c.last||''} (id=${c.id})`).join(' · ')}\n`);
+
+  for (const cli of candidatas) {
+    console.log(`── ${cli.first||''} ${cli.last||''} (id=${cli.id}) ──`);
+    const q = db.collection('appointments').where('clientId', '==', cli.id);
+    const leerEn = async (when) => {
+      try {
+        return await db.runTransaction(async (t) => {
+          const s = await t.get(q);
+          return s.docs.map(d => d.data());
+        }, { readOnly: true, readTime: Timestamp.fromDate(when) });
+      } catch (e) { return null; }
+    };
+
+    const desde = new Date(ahora.getTime() - DIAS*24*3600e3);
+    const marcas = [];
+    for (let t = desde.getTime(); t < ahora.getTime() - 3600e3; t += 2*3600e3) marcas.push(new Date(t));
+    marcas.push(new Date(ahora.getTime() - 60e3));
+
+    const vistos = new Map();   // id -> {primera, ultima, ultimoDato, sigueAhora}
+    let snapshotsOk = 0;
+    for (const when of marcas) {
+      const arr = await leerEn(when);
+      if (!arr) continue;
+      snapshotsOk++;
+      for (const a of arr) {
+        if (!vistos.has(a.id)) vistos.set(a.id, { primera: when, ultima: when, dato: a });
+        else { const v = vistos.get(a.id); v.ultima = when; v.dato = a; }
+      }
+    }
+    console.log(`  snapshots leídos: ${snapshotsOk}/${marcas.length} (ventana: ${horaAR(desde)} → ahora)`);
+
+    if (!vistos.size) { console.log('  Ningún turno para esta clienta en los últimos', DIAS, 'días.\n'); continue; }
+
+    const actuales = await leerEn(new Date(ahora.getTime() - 30e3)) || [];
+    const idsActuales = new Set(actuales.map(a => a.id));
+
+    for (const [id, v] of vistos) {
+      const a = v.dato;
+      const existe = idsActuales.has(id);
+      const marcaFecha = a.date === FECHA ? '  📅 COINCIDE CON LA FECHA BUSCADA' : '';
+      const marcaServ = FILTRO.test(`${a.service||''} ${a.group||''}`) ? '  ⭐ COINCIDE CON EL SERVICIO' : '';
+      console.log(`\n  · turno ${a.date||'?'} ${a.start||''}-${a.end||''} · ${a.service||'(sin servicio)'}${a.group?' ['+a.group+']':''} · estado=${a.status||'—'}${marcaFecha}${marcaServ}`);
+      console.log(`    id=${id} · ${existe ? 'SIGUE EXISTIENDO ahora' : 'YA NO EXISTE — se eliminó'}`);
+      if (!existe) {
+        // Acotar la franja de borrado por búsqueda binaria entre la última vez
+        // que se lo vio y ahora.
+        let lo = v.ultima.getTime(), hi = ahora.getTime() - 30e3;
+        const existeEn = async (ms) => {
+          try {
+            return await db.runTransaction(async (t) => {
+              const s = await t.get(db.collection('appointments').where('id', '==', id));
+              return !s.empty;
+            }, { readOnly: true, readTime: Timestamp.fromDate(new Date(ms)) });
+          } catch (e) { return null; }
+        };
+        for (let i = 0; i < 8 && hi - lo > 60e3; i++) {
+          const mid = Math.floor((lo + hi) / 2);
+          const r = await existeEn(mid);
+          if (r === null) break;
+          if (r) lo = mid; else hi = mid;
+        }
+        console.log(`    → se eliminó entre las ${horaAR(new Date(lo))} y las ${horaAR(new Date(hi))} hora AR`);
+      }
+    }
+    console.log('');
+  }
+  console.log('NOTA: la app no registra QUIÉN elimina un turno, solo cuándo dejó de existir.');
 }
 
 // audit-borrados-hoy — SOLO LECTURA. Responde "¿se borró algún turno hoy?" sin
@@ -1136,11 +1236,11 @@ async function auditBorradosHoy() {
         const c = await db.collection('clients').doc(a.clientId).get();
         const cp = await db.collection('clientsPrivate').doc(a.clientId).get();
         const d = c.exists ? c.data() : {};
-        console.log('   clienta:', [d.firstName, d.lastName].filter(Boolean).join(' ') || a.clientId, cp.exists ? '· tel ' + (cp.data().phone || '—') : '');
+        console.log('   clienta:', [d.first, d.last].filter(Boolean).join(' ') || a.clientId, cp.exists ? '· tel ' + (cp.data().phone || '—') : '');
       }
       if (a.memberId) {
         const m = await db.collection('collaborators').doc(a.memberId).get();
-        if (m.exists) console.log('   colaboradora:', [m.data().firstName, m.data().lastName].filter(Boolean).join(' ') || a.memberId);
+        if (m.exists) console.log('   colaboradora:', [m.data().first, m.data().last].filter(Boolean).join(' ') || a.memberId);
       }
     } catch (e) { console.log('   (no se pudo resolver clienta/colaboradora)'); }
     // Búsqueda binaria de la franja: existía en `lo`, ya no en `hi`.
@@ -1166,6 +1266,7 @@ async function auditBorradosHoy() {
 }
 
 (async () => {
+  if (MODE === 'buscar-turno-cliente') { await buscarTurnoCliente(); return; }
   if (MODE === 'audit-borrados-hoy') { await auditBorradosHoy(); return; }
   if (MODE === 'audit-turnos-dia') { await auditTurnosDia(); return; }
   if (MODE === 'inspect') { await inspect(); return; }
