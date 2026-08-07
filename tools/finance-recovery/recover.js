@@ -14,6 +14,11 @@ const MODE = process.env.MODE || 'diagnose';
 const creds = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
 const db = new Firestore({ projectId: 'glamb-os', credentials: creds });
 const REF = db.collection('financePrivate').doc('main');
+// Firestore exige que el readTime de una transacción de solo lectura histórica
+// caiga en un minuto exacto (sin segundos ni milisegundos) — si no, tira
+// FAILED_PRECONDITION: "read_time is not a whole minute". Toda lectura PITR de
+// este archivo tiene que pasar su fecha por acá antes de usarla como readTime.
+const alMinuto = d => new Date(Math.floor(d.getTime() / 60000) * 60000);
 
 // inspect: foto del estado actual — doc financePrivate/main + colecciones
 // nuevas por-registro + hitos de migración. Solo lectura.
@@ -1015,7 +1020,7 @@ async function auditTurnosDia() {
       return await db.runTransaction(async (t) => {
         const snap = await t.get(qDia);
         return snap.docs.map(d => d.data());
-      }, { readOnly: true, readTime: Timestamp.fromDate(when) });
+      }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(when)) });
     } catch (e) { return null; }
   };
 
@@ -1126,7 +1131,7 @@ async function buscarTurnoCliente() {
         return await db.runTransaction(async (t) => {
           const s = await t.get(q);
           return s.docs.map(d => d.data());
-        }, { readOnly: true, readTime: Timestamp.fromDate(when) });
+        }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(when)) });
       } catch (e) {
         const msg = String(e.message || e).slice(0, 150);
         erroresVistos.set(msg, (erroresVistos.get(msg) || 0) + 1);
@@ -1134,7 +1139,9 @@ async function buscarTurnoCliente() {
       }
     };
 
-    const desde = new Date(ahora.getTime() - DIAS*24*3600e3);
+    // +1h de margen respecto al límite de retención de PITR: pedir justo el borde
+    // tira "read_time is too old".
+    const desde = new Date(ahora.getTime() - (DIAS*24 - 1)*3600e3);
     const marcas = [];
     for (let t = desde.getTime(); t < ahora.getTime() - 3600e3; t += 2*3600e3) marcas.push(new Date(t));
     marcas.push(new Date(ahora.getTime() - 60e3));
@@ -1177,7 +1184,7 @@ async function buscarTurnoCliente() {
             return await db.runTransaction(async (t) => {
               const s = await t.get(db.collection('appointments').where('id', '==', id));
               return !s.empty;
-            }, { readOnly: true, readTime: Timestamp.fromDate(new Date(ms)) });
+            }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(new Date(ms))) });
           } catch (e) { return null; }
         };
         for (let i = 0; i < 8 && hi - lo > 60e3; i++) {
@@ -1216,7 +1223,7 @@ async function auditBorradosHoy() {
       return await db.runTransaction(async (t) => {
         const s = await t.get(db.collection('appointments'));
         return s.docs.map(d => d.data());
-      }, { readOnly: true, readTime: Timestamp.fromDate(when) });
+      }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(when)) });
     } catch (e) { console.log('  (no se pudo leer a las', horaAR(when), '—', String(e.message||e).slice(0,80), ')'); return null; }
   };
 
@@ -1259,7 +1266,7 @@ async function auditBorradosHoy() {
         return await db.runTransaction(async (t) => {
           const s = await t.get(db.collection('appointments').where('id', '==', a.id));
           return !s.empty;
-        }, { readOnly: true, readTime: Timestamp.fromDate(new Date(ms)) });
+        }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(new Date(ms))) });
       } catch (e) { return null; }
     };
     for (let i = 0; i < 7 && hi - lo > 60e3; i++) {
