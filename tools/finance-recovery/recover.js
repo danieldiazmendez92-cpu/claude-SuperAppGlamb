@@ -1201,6 +1201,88 @@ async function buscarTurnoCliente() {
   console.log('NOTA: la app no registra QUIÉN elimina un turno, solo cuándo dejó de existir.');
 }
 
+// fix-sena-fecha [-apply] — Devuelve a un pago de seña su fecha REAL, la que
+// tenía antes de que una edición de turno lo borrara y lo recreara con la fecha
+// del día de la edición.
+// La fecha original NO se escribe a mano: se busca en el historial PITR el pago
+// de seña del mismo cliente, mismo monto y mismo medio de pago que existía antes
+// y ya no está. Si no la encuentra, no toca nada.
+// Informa además si alguno de los dos días tiene cierre de caja hecho, porque
+// mover la fecha cambia el efectivo esperado de esos días.
+// Env: SENA_PAGO_ID (obligatorio, el pago con la fecha equivocada)
+async function fixSenaFecha() {
+  const APPLY = MODE.endsWith('-apply');
+  const PAGO_ID = (process.env.SENA_PAGO_ID || '').trim();
+  if (!PAGO_ID) { console.log('Falta SENA_PAGO_ID.'); return; }
+  const ahora = new Date();
+  const diaAR = iso => { const d = new Date(iso); return isNaN(d) ? '' : new Date(d.getTime()-3*3600e3).toISOString().slice(0,10); };
+  const arStr = iso => { const d = new Date(iso); return isNaN(d) ? String(iso) : new Date(d.getTime()-3*3600e3).toISOString().slice(0,16).replace('T',' '); };
+
+  console.log(`=== ${APPLY ? 'APLICAR' : 'SIMULACIÓN'} — devolver su fecha real a la seña ${PAGO_ID} ===\n`);
+
+  const snap = await db.collection('payments').where('id', '==', PAGO_ID).get();
+  if (snap.empty) { console.log('No existe ese pago.'); return; }
+  if (snap.size > 1) { console.log('Hay más de un pago con ese id — freno por las dudas.'); return; }
+  const ref = snap.docs[0].ref, pago = snap.docs[0].data();
+  console.log('PAGO ACTUAL:');
+  console.log(`  ${pago.amount} · ${pago.method||'?'} · type=${pago.type} · cliente=${pago.clientId}`);
+  console.log(`  createdAt = ${pago.createdAt}  (${arStr(pago.createdAt)} AR)\n`);
+  if (pago.type !== 'deposit_received') { console.log('No es una seña (deposit_received). Freno.'); return; }
+
+  // Buscar en el historial el pago que fue reemplazado: mismo cliente, mismo
+  // monto, mismo método, id distinto, y que hoy ya no exista.
+  const q = db.collection('payments').where('clientId', '==', pago.clientId);
+  const leerEn = async (when) => {
+    try {
+      return await db.runTransaction(async (t) => {
+        const s = await t.get(q);
+        return s.docs.map(d => d.data());
+      }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(when)) });
+    } catch (e) { return null; }
+  };
+  const actuales = new Set((await leerEn(new Date(ahora.getTime()-60e3)) || []).map(p => p.id));
+  let original = null, vistoEn = null;
+  for (let t = ahora.getTime() - (7*24 - 1)*3600e3; t < ahora.getTime() - 3600e3; t += 2*3600e3) {
+    const arr = await leerEn(new Date(t));
+    if (!arr) continue;
+    const cand = arr.find(p => p.type === 'deposit_received' && !p.voided
+      && p.id !== pago.id && !actuales.has(p.id)
+      && Math.abs(Number(p.amount||0) - Number(pago.amount||0)) < 0.5
+      && (p.method||'') === (pago.method||''));
+    if (cand) { original = cand; vistoEn = new Date(t); break; }
+  }
+  if (!original) { console.log('No encontré en el historial un pago equivalente que haya sido reemplazado. NO TOCO NADA.'); return; }
+
+  console.log('PAGO ORIGINAL ENCONTRADO EN EL HISTORIAL:');
+  console.log(`  id=${original.id} · ${original.amount} · ${original.method} · visto el ${arStr(vistoEn.toISOString())} AR`);
+  console.log(`  createdAt = ${original.createdAt}  (${arStr(original.createdAt)} AR)\n`);
+
+  const diaViejo = diaAR(original.createdAt), diaActual = diaAR(pago.createdAt);
+  if (diaViejo === diaActual) { console.log('Los dos createdAt caen el mismo día: no hay nada que corregir.'); return; }
+
+  console.log('CAMBIO PROPUESTO:');
+  console.log(`  createdAt: ${pago.createdAt}  →  ${original.createdAt}`);
+  console.log(`  el ingreso se mueve del ${diaActual} al ${diaViejo}\n`);
+
+  // Impacto en los cierres de caja de ambos días.
+  const cierres = (await db.collection('cashClosings').get()).docs.map(d => d.data());
+  const esEfectivo = /efectivo/i.test(pago.method || '');
+  console.log('IMPACTO EN CAJA:');
+  console.log(`  medio de pago: ${pago.method}${esEfectivo ? ' → SÍ afecta el efectivo esperado' : ' → no afecta el efectivo en mano'}`);
+  for (const [dia, signo] of [[diaActual, `-${pago.amount}`], [diaViejo, `+${pago.amount}`]]) {
+    const c = cierres.find(x => x.closedAt && diaAR(x.closedAt) === dia);
+    console.log(`  ${dia}: ${c ? `TIENE CIERRE HECHO (contado ${c.countedCash ?? '?'}) — su efectivo esperado cambia en ${signo}` : 'sin cierre registrado'}`);
+  }
+  console.log('');
+
+  if (!APPLY) { console.log('SIMULACIÓN: no se escribió nada. Para aplicar, MODE=fix-sena-fecha-apply'); return; }
+  await ref.update({ createdAt: original.createdAt, fechaCorregidaDesde: pago.createdAt, fechaCorregidaEl: new Date().toISOString() });
+  const despues = (await ref.get()).data();
+  console.log('APLICADO. Estado después:');
+  console.log(`  createdAt = ${despues.createdAt}  (${arStr(despues.createdAt)} AR)`);
+  console.log(`  se dejó registro en fechaCorregidaDesde = ${despues.fechaCorregidaDesde}`);
+}
+
 // inspect-sena-cliente — SOLO LECTURA. Reconstruye la historia de las señas de
 // una clienta. Al editar un turno, el guardado BORRA el pago de seña de esa
 // reserva y lo vuelve a crear con addPayment(), que sin createdAt explícito lo
@@ -1355,6 +1437,7 @@ async function auditBorradosHoy() {
 }
 
 (async () => {
+  if (MODE === 'fix-sena-fecha' || MODE === 'fix-sena-fecha-apply') { await fixSenaFecha(); return; }
   if (MODE === 'inspect-sena-cliente') { await inspectSenaCliente(); return; }
   if (MODE === 'buscar-turno-cliente') { await buscarTurnoCliente(); return; }
   if (MODE === 'audit-borrados-hoy') { await auditBorradosHoy(); return; }

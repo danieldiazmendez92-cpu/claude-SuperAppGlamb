@@ -25,6 +25,7 @@ jobs:
           TICKET_MOTIVO: Inasistencia revertida — la seña se aplica al turno del 01/08
           CLIENTE_NOMBRE: Rainiela
           DIAS_ATRAS: '7'
+          SENA_PAGO_ID: depmst4rez95azlj
         run: |
           cd tools/finance-recovery
           export MODE=$(cat MODE | tr -d ' \n')
