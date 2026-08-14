@@ -9751,10 +9751,31 @@
         });
 
         if(!reservationCharged(oldBookingId)){
-          state.payments=state.payments.filter(p=>!(p.bookingId===oldBookingId&&p.type==='deposit_received'&&!p.voided));
-          if(depositAmount>0&&state.appointmentClient.clientId&&!state.apDepositIsPreExisting){
-            addPayment({id:uid('dep'),bookingId:oldBookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',reference:'Seña de reserva',note:'Seña recibida al agendar'});
-          }else{saveState();}
+          // La seña ya cobrada NO se vuelve a fechar. Antes, editar cualquier cosa
+          // del turno (mover el horario, agregar una nota) borraba el pago de seña
+          // y lo recreaba con la fecha de HOY: la plata que había entrado días
+          // atrás pasaba a contar como ingreso del día de la edición y descuadraba
+          // el efectivo esperado de la caja, en los dos días.
+          const _senasPrevias=state.payments.filter(p=>p.bookingId===oldBookingId&&p.type==='deposit_received'&&!p.voided);
+          const _quiereSena=depositAmount>0&&state.appointmentClient.clientId&&!state.apDepositIsPreExisting;
+          const _totalPrevio=_senasPrevias.reduce((s,p)=>s+Number(p.amount||0),0);
+          const _mismaSena=_quiereSena&&_senasPrevias.length===1
+            &&Math.abs(_totalPrevio-depositAmount)<0.5
+            &&(_senasPrevias[0].method||'')===depositMethod;
+          if(_mismaSena){
+            // No cambió ni el monto ni el medio de pago: el pago queda intacto,
+            // con su fecha real. Este es el caso de casi toda edición de turno.
+            saveState();
+          } else {
+            // Cambió algo de la seña. Se rehace, pero heredando la fecha del pago
+            // original: es una corrección del registro de aquel día, no plata que
+            // entra hoy.
+            const _createdAtOriginal=_senasPrevias.map(p=>p.createdAt).filter(Boolean).sort()[0]||null;
+            state.payments=state.payments.filter(p=>!(p.bookingId===oldBookingId&&p.type==='deposit_received'&&!p.voided));
+            if(_quiereSena){
+              addPayment({id:uid('dep'),bookingId:oldBookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',reference:'Seña de reserva',note:'Seña recibida al agendar',...(_createdAtOriginal?{createdAt:_createdAtOriginal}:{})});
+            }else{saveState();}
+          }
         }
         // Reenviar el mail de confirmación al cliente SOLO si cambió la fecha o
         // el horario. Cambios que no afectan al cliente (seña, adicional, nota,
