@@ -1201,6 +1201,79 @@ async function buscarTurnoCliente() {
   console.log('NOTA: la app no registra QUIÉN elimina un turno, solo cuándo dejó de existir.');
 }
 
+// inspect-sena-cliente — SOLO LECTURA. Reconstruye la historia de las señas de
+// una clienta. Al editar un turno, el guardado BORRA el pago de seña de esa
+// reserva y lo vuelve a crear con addPayment(), que sin createdAt explícito lo
+// fecha HOY: la plata que entró hace días pasa a figurar como ingreso de hoy y
+// descuadra el efectivo esperado de la caja.
+// Recorre el historial PITR y muestra, por cada snapshot, los pagos de seña que
+// existían con su id y su createdAt, para poder ver el momento exacto en que un
+// id desapareció y otro nació con fecha nueva — y recuperar así la fecha real.
+// Env: CLIENTE_NOMBRE (obligatorio) · DIAS_ATRAS (default 7) · PASO_HORAS (default 2)
+async function inspectSenaCliente() {
+  const NOMBRE = (process.env.CLIENTE_NOMBRE || '').trim();
+  if (!NOMBRE) { console.log('Falta CLIENTE_NOMBRE.'); return; }
+  const ahora = new Date();
+  const DIAS = Number(process.env.DIAS_ATRAS || 7);
+  const PASO = Number(process.env.PASO_HORAS || 2);
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  const buscado = norm(NOMBRE);
+  const arStr = iso => { const d = new Date(iso); return isNaN(d) ? String(iso) : new Date(d.getTime()-3*3600e3).toISOString().slice(0,16).replace('T',' '); };
+
+  const clientsSnap = await db.collection('clients').get();
+  const candidatas = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    .filter(c => { const full = norm(`${c.first||''} ${c.last||''}`); return full.includes(buscado) || buscado.split(' ').every(p => full.includes(p)); });
+  if (!candidatas.length) { console.log('No se encontró la clienta.'); return; }
+  console.log(`=== Señas de "${NOMBRE}" — ${candidatas.length} coincidencia(s) ===\n`);
+
+  for (const cli of candidatas) {
+    console.log(`── ${cli.first||''} ${cli.last||''} (id=${cli.id}) ──`);
+    const q = db.collection('payments').where('clientId', '==', cli.id);
+    const errores = new Map();
+    const leerEn = async (when) => {
+      try {
+        return await db.runTransaction(async (t) => {
+          const s = await t.get(q);
+          return s.docs.map(d => d.data());
+        }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(when)) });
+      } catch (e) { const m = String(e.message||e).slice(0,120); errores.set(m,(errores.get(m)||0)+1); return null; }
+    };
+    const senas = arr => (arr||[]).filter(p => p.type === 'deposit_received');
+
+    // Estado actual
+    const hoyArr = await leerEn(new Date(ahora.getTime() - 60e3));
+    console.log('\n  ESTADO ACTUAL:');
+    if (!hoyArr) console.log('    (no se pudo leer)');
+    else if (!senas(hoyArr).length) console.log('    sin señas registradas');
+    else senas(hoyArr).forEach(p => console.log(`    · id=${p.id} · ${p.amount} · ${p.method||'?'} · createdAt=${arStr(p.createdAt)} AR · booking=${p.bookingId||'—'}${p.voided?' · ANULADO':''}`));
+
+    // Historia: solo se imprime cuando el conjunto de (id, createdAt) cambia.
+    console.log('\n  HISTORIA (solo los momentos en que cambió):');
+    const marcas = [];
+    for (let t = ahora.getTime() - (DIAS*24 - 1)*3600e3; t < ahora.getTime() - 3600e3; t += PASO*3600e3) marcas.push(new Date(t));
+    let firma = null, ok = 0;
+    for (const when of marcas) {
+      const arr = await leerEn(when);
+      if (!arr) continue;
+      ok++;
+      const s = senas(arr);
+      const f = s.map(p => `${p.id}|${p.amount}|${p.createdAt}`).sort().join(',');
+      if (f !== firma) {
+        console.log(`\n   [${arStr(when.toISOString())} AR] ${s.length} seña(s):`);
+        s.forEach(p => console.log(`      · id=${p.id} · ${p.amount} · ${p.method||'?'} · createdAt=${arStr(p.createdAt)} AR${p.voided?' · ANULADO':''}`));
+        if (!s.length) console.log('      (ninguna)');
+        firma = f;
+      }
+    }
+    console.log(`\n  snapshots leídos: ${ok}/${marcas.length}`);
+    if (errores.size) { console.log('  ⚠ errores de lectura:'); for (const [m,n] of errores) console.log(`    x${n}: ${m}`); }
+    console.log('');
+  }
+  console.log('CÓMO LEERLO: si un id desaparece y aparece otro con createdAt más nuevo,');
+  console.log('esa seña fue borrada y recreada al editar el turno. El createdAt viejo es');
+  console.log('la fecha REAL en que entró la plata.');
+}
+
 // audit-borrados-hoy — SOLO LECTURA. Responde "¿se borró algún turno hoy?" sin
 // importar para qué día era el turno (audit-turnos-dia solo mira la agenda de un
 // día, así que se le escapa un turno futuro borrado hoy).
@@ -1282,6 +1355,7 @@ async function auditBorradosHoy() {
 }
 
 (async () => {
+  if (MODE === 'inspect-sena-cliente') { await inspectSenaCliente(); return; }
   if (MODE === 'buscar-turno-cliente') { await buscarTurnoCliente(); return; }
   if (MODE === 'audit-borrados-hoy') { await auditBorradosHoy(); return; }
   if (MODE === 'audit-turnos-dia') { await auditTurnosDia(); return; }
