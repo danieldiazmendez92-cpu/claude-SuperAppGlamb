@@ -4736,6 +4736,13 @@
     payments:[],salesTickets:[],pendingCharges:[],
     cashTab:'register',saleLineSeq:0,paymentLineSeq:0,ledgerDate:'',ledgerSubTab:'efectivo',cashDailyDate:'',cashTicketsDate:'',
     catalog:{
+      // Catálogo de EJEMPLO, solo para arrancar de cero. La marca __seed impide
+      // que se guarde en la nube: el 20/08/2026 un dispositivo que no pudo leer
+      // el catálogo real se quedó con éste en memoria y lo escribió encima,
+      // reemplazando 15 servicios con precios reales por estos 10 de ejemplo.
+      // Al llegar el catálogo real desde Firestore, state.catalog se reemplaza
+      // entero y la marca desaparece: recién ahí el equipo puede guardar.
+      __seed:true,
       groups:[
         {id:'cat1',name:'Manicuria',type:'service',services:[
           {id:'svc1',name:'Kapping',variants:[
@@ -5376,8 +5383,31 @@
     function saveCatalog(){
       if(!fbReady || !db || !auth || !auth.currentUser || _applyingRemote) return;
       if(_catalogShadow===null) return;             // todavía no cargamos el doc real
+      // BLINDAJE 1: el catálogo de ejemplo NUNCA se sube. Si este equipo lo tiene
+      // en memoria es porque no logró leer el real, no porque alguien lo cargó.
+      if(state.catalog && state.catalog.__seed){
+        console.warn('[GLAMB] guardado de catálogo BLOQUEADO: este equipo tiene el catálogo de ejemplo, no el real.');
+        return;
+      }
       const json=_catalogJSON();
       if(json===null || json===_catalogShadow) return; // sin cambios: no pisamos nada
+      // BLINDAJE 2: un catálogo que se achica de golpe casi siempre es un accidente
+      // (una copia incompleta pisando la buena), no un borrado a mano. Se frena y
+      // se pide confirmación explícita en vez de escribir en silencio.
+      let previo=null; try{ previo=JSON.parse(_catalogShadow); }catch(e){}
+      const nPrevio=_catalogSize(previo), nNuevo=_catalogSize(state.catalog);
+      // Umbral: perder 3 o más servicios de una. Un porcentaje no servía — el
+      // pisado del 20/08 fue de 15 a 10 servicios, una caída del 33% que un
+      // umbral del 40% habría dejado pasar.
+      if(previo && nPrevio>=5 && nNuevo <= nPrevio-3 && !state._catalogAchiqueOk){
+        showConfirm(
+          `⚠ El catálogo pasaría de ${nPrevio} a ${nNuevo} servicios.\n\n`+
+          `Si no estás borrando servicios a propósito, cancelá y recargá la app: `+
+          `este equipo puede tener una copia incompleta y guardarla borraría el catálogo real.`,
+          ()=>{ state._catalogAchiqueOk=true; saveCatalog(); state._catalogAchiqueOk=false; }
+        );
+        return;
+      }
       db.collection('appState').doc('catalog').set({catalog:state.catalog},{merge:false})
         .then(()=>{ _catalogShadow=json; })
         .catch(e=>console.error('[GLAMB] guardado catálogo falló:',e));
@@ -5414,13 +5444,23 @@
         let blobCat; try{ const s=await stateDoc.get(); if(s.exists) blobCat=(s.data()||{}).catalog; }catch(e){}
         const local=state.catalog;
         const seed=(_catalogSize(local) >= _catalogSize(blobCat)) ? local : blobCat;
-        state.catalog=seed;
-        await ref.set({catalog:seed!==undefined?seed:{}},{merge:false});
-        _catalogShadow=JSON.stringify(state.catalog!==undefined?state.catalog:{});
+        // La marca __seed no viaja a la nube: el doc sembrado es el catálogo real
+        // del salón desde ese momento y tiene que poder editarse.
+        const sembrado=Object.assign({}, seed!==undefined?seed:{}); delete sembrado.__seed;
+        state.catalog=sembrado;
+        await ref.set({catalog:sembrado},{merge:false});
+        _catalogShadow=JSON.stringify(state.catalog);
         console.log('[GLAMB] migración catálogo completada ('+_catalogSize(state.catalog)+' servicios)');
       }catch(e){
         console.error('[GLAMB] migración/carga catálogo falló:',e);
-        _catalogShadow=_catalogJSON(); // permitir guardar igual desde este equipo
+        // BLINDAJE 3: si no se pudo LEER el catálogo real, este equipo NO puede
+        // escribirlo. Antes se hacía lo contrario (_catalogShadow=_catalogJSON(),
+        // "permitir guardar igual desde este equipo") y eso convertía una falla de
+        // red pasajera en la pérdida del catálogo: el equipo se quedaba con el de
+        // ejemplo y lo subía encima del bueno. Dejarlo en null hace que saveCatalog
+        // corte al principio.
+        _catalogShadow=null;
+        try{ showToast('No se pudo cargar el catálogo. Recargá la app antes de editarlo.'); }catch(_){}
       }
     }
 
@@ -5502,7 +5542,13 @@
         console.log('[GLAMB] migración config completada');
       }catch(e){
         console.error('[GLAMB] migración/carga config falló:',e);
-        _configShadow=_configJSON(); // permitir guardar igual desde este equipo
+        // Mismo blindaje que el catálogo: si no se pudo LEER la config real, este
+        // equipo no la escribe. Antes permitía guardar igual, y una falla de red
+        // alcanzaba para pisar la configuración compartida con lo que hubiera en
+        // memoria. Preferimos que este equipo no pueda guardar (se recarga y
+        // listo) antes que arriesgar la config de todos.
+        _configShadow=null;
+        try{ showToast('No se pudo cargar la configuración. Recargá la app.'); }catch(_){}
       }
     }
     async function ensureUserRole(user){
