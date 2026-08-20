@@ -1201,6 +1201,73 @@ async function buscarTurnoCliente() {
   console.log('NOTA: la app no registra QUIÉN elimina un turno, solo cuándo dejó de existir.');
 }
 
+// inspect-catalogo — SOLO LECTURA. Estado actual de appState/catalog y su
+// historia PITR. Sirve para distinguir dos cosas muy distintas: que el catálogo
+// real se haya perdido en la base, o que la app de un dispositivo esté mostrando
+// el catálogo semilla del código sin haber pisado nada todavía.
+async function inspectCatalogo() {
+  const ahora = new Date();
+  const ref = db.collection('appState').doc('catalog');
+  const resumen = c => {
+    const gs = (c && c.groups) || [];
+    let svc = 0, vars = 0;
+    gs.forEach(g => ((g && g.services) || []).forEach(s => { svc++; vars += ((s && s.variants) || []).length; }));
+    return { grupos: gs.length, servicios: svc, variantes: vars };
+  };
+  const arStr = d => new Date(d.getTime() - 3*3600e3).toISOString().slice(0, 16).replace('T', ' ');
+
+  console.log('=== CATÁLOGO ACTUAL EN LA BASE (appState/catalog) ===');
+  const snap = await ref.get();
+  if (!snap.exists) { console.log('  ⚠ EL DOCUMENTO NO EXISTE.'); }
+  else {
+    const cat = (snap.data() || {}).catalog;
+    if (cat === undefined) console.log('  ⚠ el documento existe pero no tiene la clave "catalog".');
+    else {
+      const r = resumen(cat);
+      console.log(`  ${r.grupos} grupos · ${r.servicios} servicios · ${r.variantes} variantes`);
+      ((cat.groups) || []).forEach(g => {
+        console.log(`  · ${g.name} (${g.type || '?'})`);
+        ((g.services) || []).forEach(s => {
+          const v = (s.variants || []).map(x => `${x.name} $${x.price}`).join(' · ');
+          console.log(`      ${s.name}: ${v || '(sin variantes)'}`);
+        });
+      });
+    }
+  }
+
+  // ¿Es el catálogo semilla del código? Se reconoce por los precios de ejemplo.
+  const cat = snap.exists ? (snap.data() || {}).catalog : null;
+  const plano = JSON.stringify(cat || {});
+  const pistasSeed = ['"Kapping Gel","price":8000', '"price":8000', '"var1"', '"cat1"', '"svc1"'];
+  const pareceSeed = plano.includes('"id":"var1"') && plano.includes('"id":"cat1"') && /"Kapping Gel"[^}]*8000/.test(plano);
+  console.log(`\n  ¿Coincide con el catálogo SEMILLA del código? ${pareceSeed ? '⚠ SÍ — la base tiene el catálogo de ejemplo' : 'no'}`);
+
+  console.log('\n=== HISTORIA (solo los momentos en que cambió) ===');
+  const leerEn = async (when) => {
+    try {
+      return await db.runTransaction(async (t) => {
+        const s = await t.get(ref);
+        return s.exists ? (s.data() || {}).catalog : null;
+      }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(when)) });
+    } catch (e) { return undefined; }
+  };
+  let firma = null, ok = 0, fallos = 0;
+  for (let t = ahora.getTime() - (7*24 - 1)*3600e3; t < ahora.getTime() - 3600e3; t += 3600e3) {
+    const c = await leerEn(new Date(t));
+    if (c === undefined) { fallos++; continue; }
+    ok++;
+    const r = resumen(c);
+    const f = `${r.grupos}|${r.servicios}|${r.variantes}`;
+    if (f !== firma) {
+      console.log(`  [${arStr(new Date(t))} AR] ${r.grupos} grupos · ${r.servicios} servicios · ${r.variantes} variantes`);
+      firma = f;
+    }
+  }
+  console.log(`\n  snapshots leídos: ${ok} (fallidos: ${fallos})`);
+  console.log('\n  Si el número de servicios CAE de golpe, ahí se pisó el catálogo:');
+  console.log('  la hora anterior a esa caída es la versión buena para restaurar.');
+}
+
 // fix-sena-fecha [-apply] — Devuelve a un pago de seña su fecha REAL, la que
 // tenía antes de que una edición de turno lo borrara y lo recreara con la fecha
 // del día de la edición.
@@ -1437,6 +1504,7 @@ async function auditBorradosHoy() {
 }
 
 (async () => {
+  if (MODE === 'inspect-catalogo') { await inspectCatalogo(); return; }
   if (MODE === 'fix-sena-fecha' || MODE === 'fix-sena-fecha-apply') { await fixSenaFecha(); return; }
   if (MODE === 'inspect-sena-cliente') { await inspectSenaCliente(); return; }
   if (MODE === 'buscar-turno-cliente') { await buscarTurnoCliente(); return; }
