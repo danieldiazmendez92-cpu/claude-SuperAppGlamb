@@ -1201,6 +1201,65 @@ async function buscarTurnoCliente() {
   console.log('NOTA: la app no registra QUIÉN elimina un turno, solo cuándo dejó de existir.');
 }
 
+// restore-catalogo [-apply] — Devuelve appState/catalog a la última versión buena
+// que exista en el historial PITR. "Buena" = la que tiene MÁS servicios que la
+// actual: el pisado siempre deja menos (el catálogo de ejemplo tiene 10 contra
+// los 15 reales). Ubica el momento del pisado por búsqueda binaria.
+async function restoreCatalogo() {
+  const APPLY = MODE.endsWith('-apply');
+  const ref = db.collection('appState').doc('catalog');
+  const cuenta = c => { let n = 0; ((c && c.groups) || []).forEach(g => n += ((g && g.services) || []).length); return n; };
+  const vars = c => { let n = 0; ((c && c.groups) || []).forEach(g => ((g && g.services) || []).forEach(s => n += ((s && s.variants) || []).length)); return n; };
+  const arStr = d => new Date(d.getTime() - 3*3600e3).toISOString().slice(0, 16).replace('T', ' ');
+  const leerEn = async (ms) => {
+    try {
+      return await db.runTransaction(async (t) => {
+        const s = await t.get(ref);
+        return s.exists ? (s.data() || {}).catalog : null;
+      }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(new Date(ms))) });
+    } catch (e) { return undefined; }
+  };
+
+  const actual = (await ref.get()).data()?.catalog;
+  const nActual = cuenta(actual);
+  console.log(`=== ${APPLY ? 'APLICAR' : 'SIMULACIÓN'} — restaurar catálogo ===`);
+  console.log(`Catálogo ACTUAL: ${cuenta(actual)} servicios · ${vars(actual)} variantes\n`);
+
+  const ahora = Date.now();
+  let lo = ahora - (7*24 - 1)*3600e3, hi = ahora - 60e3;
+  const bueno = await leerEn(lo);
+  if (bueno === undefined) { console.log('No se pudo leer el inicio de la ventana PITR. Freno.'); return; }
+  if (cuenta(bueno) <= nActual) { console.log(`La versión más vieja disponible tiene ${cuenta(bueno)} servicios, no más que la actual. NO HAY NADA MEJOR QUE RESTAURAR.`); return; }
+  console.log(`Versión buena más antigua disponible (${arStr(new Date(lo))} AR): ${cuenta(bueno)} servicios · ${vars(bueno)} variantes`);
+
+  // Binaria: el último instante en que el catálogo todavía estaba completo.
+  for (let i = 0; i < 20 && hi - lo > 60e3; i++) {
+    const mid = Math.floor((lo + hi) / 2);
+    const c = await leerEn(mid);
+    if (c === undefined) break;
+    if (cuenta(c) > nActual) lo = mid; else hi = mid;
+  }
+  const ultimoBueno = await leerEn(lo);
+  console.log(`\nÚLTIMO MOMENTO CON EL CATÁLOGO COMPLETO: ${arStr(new Date(lo))} AR`);
+  console.log(`  ${cuenta(ultimoBueno)} servicios · ${vars(ultimoBueno)} variantes`);
+  console.log(`SE PISÓ entre las ${arStr(new Date(lo))} y las ${arStr(new Date(hi))} AR\n`);
+
+  console.log('CONTENIDO QUE SE RESTAURARÍA:');
+  ((ultimoBueno.groups) || []).forEach(g => {
+    console.log(`  · ${g.name}`);
+    ((g.services) || []).forEach(s => console.log(`      ${s.name}: ${(s.variants||[]).map(x => `${x.name} $${x.price}`).join(' · ')}`));
+  });
+
+  if (!APPLY) { console.log('\nSIMULACIÓN: no se escribió nada. Para aplicar, MODE=restore-catalogo-apply'); return; }
+  // Se guarda antes una copia del pisado, por si hiciera falta revisarlo.
+  await db.collection('appState').doc('catalog_backup_pisado').set({ catalog: actual, guardadoEl: new Date().toISOString() }, { merge: false });
+  await ref.set({ catalog: ultimoBueno }, { merge: false });
+  const despues = (await ref.get()).data()?.catalog;
+  console.log('\nAPLICADO. Estado después:');
+  console.log(`  ${cuenta(despues)} servicios · ${vars(despues)} variantes`);
+  console.log('  copia del catálogo pisado guardada en appState/catalog_backup_pisado');
+}
+
 // inspect-catalogo — SOLO LECTURA. Estado actual de appState/catalog y su
 // historia PITR. Sirve para distinguir dos cosas muy distintas: que el catálogo
 // real se haya perdido en la base, o que la app de un dispositivo esté mostrando
@@ -1504,6 +1563,7 @@ async function auditBorradosHoy() {
 }
 
 (async () => {
+  if (MODE === 'restore-catalogo' || MODE === 'restore-catalogo-apply') { await restoreCatalogo(); return; }
   if (MODE === 'inspect-catalogo') { await inspectCatalogo(); return; }
   if (MODE === 'fix-sena-fecha' || MODE === 'fix-sena-fecha-apply') { await fixSenaFecha(); return; }
   if (MODE === 'inspect-sena-cliente') { await inspectSenaCliente(); return; }
