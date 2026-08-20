@@ -1201,6 +1201,87 @@ async function buscarTurnoCliente() {
   console.log('NOTA: la app no registra QUIÉN elimina un turno, solo cuándo dejó de existir.');
 }
 
+// forense-pisado — SOLO LECTURA. Intenta responder QUIÉN pisó el catálogo.
+// Firestore no guarda el autor de una escritura y el documento del catálogo
+// tampoco (se escribe {catalog:...} sin metadatos), así que NO hay prueba
+// directa. Lo que sí se puede: ver quién estaba operando en ese minuto, porque
+// los cobros, turnos y tickets guardan createdBy. Es inferencia, no prueba.
+// Revisa además si en la misma ventana se pisó algo más que el catálogo.
+// Env: PISADO_DESDE / PISADO_HASTA (ISO UTC) · MARGEN_MIN (default 20)
+async function forensePisado() {
+  const DESDE = new Date(process.env.PISADO_DESDE || '2026-08-20T16:50:00Z');
+  const HASTA = new Date(process.env.PISADO_HASTA || '2026-08-20T17:05:00Z');
+  const MARGEN = Number(process.env.MARGEN_MIN || 20);
+  const ar = d => new Date(new Date(d).getTime() - 3*3600e3).toISOString().slice(0,16).replace('T',' ');
+  const cuenta = c => { let n=0; ((c&&c.groups)||[]).forEach(g=>n+=((g&&g.services)||[]).length); return n; };
+  console.log(`=== FORENSE DEL PISADO — ventana ${ar(DESDE)} → ${ar(HASTA)} AR ===\n`);
+
+  const docEn = async (col, id, ms) => {
+    try {
+      return await db.runTransaction(async (t) => {
+        const s = await t.get(db.collection(col).doc(id));
+        return s.exists ? s.data() : null;
+      }, { readOnly: true, readTime: Timestamp.fromDate(alMinuto(new Date(ms))) });
+    } catch (e) { return undefined; }
+  };
+
+  // 1. Minuto a minuto: ¿qué documentos compartidos cambiaron?
+  console.log('1) QUÉ CAMBIÓ, MINUTO A MINUTO');
+  let firmaCat = null, firmaCfg = null, firmaMain = null;
+  for (let t = DESDE.getTime(); t <= HASTA.getTime(); t += 60e3) {
+    const [cat, cfg, main] = await Promise.all([
+      docEn('appState','catalog',t), docEn('appState','config',t), docEn('appState','main',t)
+    ]);
+    const fCat = cat===undefined?'?':JSON.stringify(cat&&cat.catalog||null).length+'/'+cuenta(cat&&cat.catalog);
+    const fCfg = cfg===undefined?'?':JSON.stringify(cfg||null).length;
+    const fMain= main===undefined?'?':JSON.stringify(main||null).length;
+    const cambios = [];
+    if (firmaCat!==null && fCat!==firmaCat) cambios.push(`CATÁLOGO ${firmaCat} → ${fCat} (tamaño/servicios)`);
+    if (firmaCfg!==null && fCfg!==firmaCfg) cambios.push(`config ${firmaCfg} → ${fCfg} bytes`);
+    if (firmaMain!==null && fMain!==firmaMain) cambios.push(`appState/main ${firmaMain} → ${fMain} bytes`);
+    if (cambios.length) console.log(`   [${ar(t)} AR] ${cambios.join(' · ')}`);
+    firmaCat=fCat; firmaCfg=fCfg; firmaMain=fMain;
+  }
+
+  // 2. Quién estaba operando: los registros SÍ guardan createdBy.
+  console.log('\n2) QUIÉN ESTABA OPERANDO EN ESA FRANJA (± ' + MARGEN + ' min)');
+  const desdeISO = new Date(DESDE.getTime() - MARGEN*60e3).toISOString();
+  const hastaISO = new Date(HASTA.getTime() + MARGEN*60e3).toISOString();
+  const enVentana = x => x && x >= desdeISO && x <= hastaISO;
+  const actores = new Map();
+  const anota = (quien, que, cuando) => {
+    if (!quien) return;
+    if (!actores.has(quien)) actores.set(quien, []);
+    actores.get(quien).push(`${ar(cuando)} · ${que}`);
+  };
+  for (const [col, campo, etiqueta] of [['payments','createdBy','cobro'],['salesTickets','createdBy','ticket'],['appointments','createdBy','turno'],['pendingCharges','createdBy','pendiente']]) {
+    const s = await db.collection(col).get();
+    s.docs.map(d=>d.data()).forEach(x => { if (enVentana(x.createdAt)) anota(x[campo] || '(sin autor)', `${etiqueta} ${x.id||''}`, x.createdAt); });
+  }
+  if (!actores.size) console.log('   Nadie registró movimientos en esa franja.');
+  for (const [quien, hechos] of actores) {
+    console.log(`   · ${quien} — ${hechos.length} movimiento(s)`);
+    hechos.slice(0,8).forEach(h => console.log(`       ${h}`));
+  }
+
+  // 3. Sesión de caja abierta en ese momento: dice quién tenía la app operativa.
+  console.log('\n3) SESIÓN DE CAJA EN EL MOMENTO DEL PISADO');
+  const cfgEn = await docEn('appState','config', DESDE.getTime() + 4*60e3);
+  const cs = cfgEn && cfgEn.cashSession;
+  console.log(cs ? `   abierta=${cs.isOpen} · abrió: ${cs.openedBy||'?'} · desde ${cs.openedAt?ar(cs.openedAt):'?'}` : '   (sin datos de sesión)');
+
+  // 4. Usuarios dados de alta, para poner nombres a los actores.
+  console.log('\n4) USUARIOS DEL SISTEMA');
+  const us = await db.collection('users').get();
+  us.docs.forEach(d => { const u=d.data(); console.log(`   · ${u.name||'?'} · rol=${u.role||'?'} · ${u.email||''}${u.disabled?' · DESHABILITADO':''}`); });
+
+  console.log('\nLÍMITE: Firestore no guarda quién escribe cada documento, y el catálogo');
+  console.log('se guarda sin autor. Lo de arriba dice quién estaba ACTIVO en la franja,');
+  console.log('que no es lo mismo que quién lo pisó. Para tener autoría real habría que');
+  console.log('activar los Data Access audit logs de Firestore en Google Cloud, o guardar');
+  console.log('un campo con el uid en cada escritura del catálogo.');
+}
+
 // restore-catalogo [-apply] — Devuelve appState/catalog a la última versión buena
 // que exista en el historial PITR. "Buena" = la que tiene MÁS servicios que la
 // actual: el pisado siempre deja menos (el catálogo de ejemplo tiene 10 contra
@@ -1563,6 +1644,7 @@ async function auditBorradosHoy() {
 }
 
 (async () => {
+  if (MODE === 'forense-pisado') { await forensePisado(); return; }
   if (MODE === 'restore-catalogo' || MODE === 'restore-catalogo-apply') { await restoreCatalogo(); return; }
   if (MODE === 'inspect-catalogo') { await inspectCatalogo(); return; }
   if (MODE === 'fix-sena-fecha' || MODE === 'fix-sena-fecha-apply') { await fixSenaFecha(); return; }
