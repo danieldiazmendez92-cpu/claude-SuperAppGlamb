@@ -1201,6 +1201,85 @@ async function buscarTurnoCliente() {
   console.log('NOTA: la app no registra QUIÉN elimina un turno, solo cuándo dejó de existir.');
 }
 
+// validar-ventas-mes — SOLO LECTURA. Desarma el número de "Ventas del mes" del
+// Centro de Mando para poder decir si son ventas cerradas de verdad o si adentro
+// hay señas de turnos que todavía no pasaron.
+// Replica el cálculo exacto de la pantalla y después lo abre por origen, lo cruza
+// contra la plata realmente cobrada y verifica que no se cuelen señas sin aplicar.
+// Env: VENTAS_YM=YYYY-MM (default: mes en curso AR)
+async function validarVentasMes() {
+  const ahora = new Date();
+  const hoyAR = new Date(ahora.getTime() - 3*3600e3).toISOString().slice(0,10);
+  const YM = process.env.VENTAS_YM || hoyAR.slice(0,7);
+  const dia = iso => { const d=new Date(iso); return isNaN(d)?'':new Date(d.getTime()-3*3600e3).toISOString().slice(0,10); };
+  const m = n => '$' + Math.round(Number(n||0)).toLocaleString('es-AR');
+  console.log(`=== VALIDACIÓN DE "VENTAS DEL MES" — ${YM} ===\n`);
+
+  const tickets = (await db.collection('salesTickets').get()).docs.map(d=>d.data());
+  const pagos   = (await db.collection('payments').get()).docs.map(d=>d.data());
+
+  // 1. Mismo cálculo que el Centro de Mando, clavado.
+  const delMes = t => dia(t.createdAt).startsWith(YM);
+  const vivos = tickets.filter(t => (t.status==='confirmed'||t.status==='partial') && delMes(t));
+  const svcTotal = t => Math.max(0,(t.servicesTotal!==undefined ? Number(t.servicesTotal||0)
+      : (Number(t.grossTotal||0)-Number(t.tipsTotal||0))) - Number(t.pendingBalance||0));
+  const total = vivos.reduce((s,t)=>s+svcTotal(t),0);
+  console.log('1) EL NÚMERO DE LA PANTALLA');
+  console.log(`   ${m(total)}  ← ${vivos.length} tickets (confirmados + parciales)\n`);
+
+  // 2. De qué está hecho.
+  const esNoShow = t => t.origin==='no_show';
+  const esSaldo  = t => (t.lines||[]).some(l=>/saldo de visita/i.test(l.service||''));
+  const empleada = t => (t.lines||[]).filter(l=>l.discountType==='employee').reduce((s,l)=>s+Number(l.finalPrice||0),0);
+  let normal=0, noShow=0, saldos=0, emp=0;
+  vivos.forEach(t=>{
+    const v=svcTotal(t);
+    if(esNoShow(t)) noShow+=v; else if(esSaldo(t)) saldos+=v; else normal+=v;
+    emp+=empleada(t);
+  });
+  console.log('2) DE QUÉ ESTÁ HECHO');
+  console.log(`   Servicios prestados y cobrados .......... ${m(normal)}`);
+  console.log(`   Saldos de visitas anteriores cobrados ... ${m(saldos)}`);
+  console.log(`   Señas retenidas por INASISTENCIA ........ ${m(noShow)}   ← turno que NO se realizó`);
+  console.log(`   (dentro del total, servicios a empleadas: ${m(emp)} — se contabilizan como venta pero no entra plata)\n`);
+
+  // 3. Lo que el número descarta.
+  const anulados = tickets.filter(t=>t.status==='voided' && delMes(t));
+  const pendiente = vivos.reduce((s,t)=>s+Number(t.pendingBalance||0),0);
+  const propinas = vivos.reduce((s,t)=>s+Number(t.tipsTotal||0),0);
+  console.log('3) LO QUE QUEDA AFUERA (bien)');
+  console.log(`   Tickets anulados del mes ................ ${anulados.length} (no suman)`);
+  console.log(`   Saldo impago de ventas parciales ........ ${m(pendiente)} (se resta: entra cuando se cobra)`);
+  console.log(`   Propinas ................................ ${m(propinas)} (son de la colaboradora)\n`);
+
+  // 4. La prueba que importa: ¿hay señas de turnos futuros metidas adentro?
+  const recibidas = pagos.filter(p=>p.type==='deposit_received' && !p.voided && dia(p.createdAt).startsWith(YM));
+  const aplicadas = pagos.filter(p=>p.type==='deposit_applied'  && !p.voided && dia(p.createdAt).startsWith(YM));
+  const idsTicketsVivos = new Set(vivos.map(t=>t.id));
+  const sinAplicar = recibidas.filter(p=>!p.ticketId || !idsTicketsVivos.has(p.ticketId));
+  console.log('4) ¿HAY SEÑAS DE TURNOS QUE NO PASARON?');
+  console.log(`   Señas RECIBIDAS en el mes ............... ${m(recibidas.reduce((s,p)=>s+Number(p.amount||0),0))} (${recibidas.length})`);
+  console.log(`   Señas APLICADAS a una venta ............. ${m(aplicadas.reduce((s,p)=>s+Number(p.amount||0),0))} (${aplicadas.length})`);
+  console.log(`   Señas recibidas SIN venta asociada ...... ${m(sinAplicar.reduce((s,p)=>s+Number(p.amount||0),0))} (${sinAplicar.length})`);
+  console.log(`   → esas ${sinAplicar.length} NO están dentro de los ${m(total)}: una seña sola no crea ticket.\n`);
+
+  // 5. Contraste con la plata que realmente entró.
+  const cobrado = pagos.filter(p=>!p.voided && (p.type==='service'||p.type==='deposit_applied') && dia(p.createdAt).startsWith(YM))
+    .reduce((s,p)=>s+Number(p.amount||0),0);
+  console.log('5) CONTRA LA PLATA QUE REALMENTE ENTRÓ');
+  console.log(`   Cobrado en el mes (servicios + señas aplicadas): ${m(cobrado)}`);
+  console.log(`   Ventas del mes: ${m(total)}`);
+  console.log(`   Diferencia: ${m(cobrado-total)}`);
+  console.log('   (no tienen por qué coincidir: una venta de este mes pudo pagarse');
+  console.log('    con una seña de un mes anterior, y una propina cobrada no es venta)\n');
+
+  // 6. Los tickets más grandes, para revisar a ojo.
+  console.log('6) LOS 10 TICKETS MÁS GRANDES DEL MES');
+  vivos.slice().sort((a,b)=>svcTotal(b)-svcTotal(a)).slice(0,10).forEach(t=>{
+    console.log(`   ${dia(t.createdAt)} · ${m(svcTotal(t))} · ${t.clientNameSnapshot||'?'} · ${(t.lines||[]).map(l=>l.service).join(' + ').slice(0,60)}${esNoShow(t)?'  [INASISTENCIA]':''}${t.status==='partial'?'  [PARCIAL]':''}`);
+  });
+}
+
 // forense-pisado — SOLO LECTURA. Intenta responder QUIÉN pisó el catálogo.
 // Firestore no guarda el autor de una escritura y el documento del catálogo
 // tampoco (se escribe {catalog:...} sin metadatos), así que NO hay prueba
@@ -1644,6 +1723,7 @@ async function auditBorradosHoy() {
 }
 
 (async () => {
+  if (MODE === 'validar-ventas-mes') { await validarVentasMes(); return; }
   if (MODE === 'forense-pisado') { await forensePisado(); return; }
   if (MODE === 'restore-catalogo' || MODE === 'restore-catalogo-apply') { await restoreCatalogo(); return; }
   if (MODE === 'inspect-catalogo') { await inspectCatalogo(); return; }
