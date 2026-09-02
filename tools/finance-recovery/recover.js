@@ -1201,20 +1201,25 @@ async function buscarTurnoCliente() {
   console.log('NOTA: la app no registra QUIÉN elimina un turno, solo cuándo dejó de existir.');
 }
 
-// diagnosticar-sena-libre — SOLO LECTURA. Explica por qué una clienta tiene
-// seña "sin aplicar": clientAvailableDeposit() en la app es simplemente
-// (recibido − aplicado) para ese clientId. Este modo separa cada seña recibida
-// que todavía no tiene su deposit_applied y dice a qué le corresponde:
-//   - turno futuro sin cobrar todavía → normal, es plata reservada
-//   - turno pasado que nunca se cobró → posible olvido, revisar
-//   - turno que ya no existe (se borró) → seña huérfana, hay que decidir qué hacer
-//   - sin bookingId → seña libre de mostrador, sin turno asociado
+// diagnosticar-sena-libre — SOLO LECTURA. Muestra los datos REALES de las
+// señas de una clienta, sin inventar relaciones que la app no guarda.
+//
+// Verificado en el código (registerSale y markNoShow): un deposit_applied
+// guarda {ticketId, amount, clientId} — NUNCA el id de la seña recibida de la
+// que "salió" esa plata. clientAvailableDeposit() en la app es (recibido −
+// aplicado) TOTAL para el cliente: pura contabilidad agregada, sin FIFO ni
+// ningún otro orden. Una versión anterior de este diagnóstico asumía FIFO
+// para adivinar qué seña recibida específica quedaba sin cubrir, y esa
+// suposición no es un hecho del sistema — puede (y en un caso real, dio) dar
+// una atribución equivocada.
+//
+// Este modo lista CADA deposit_received y CADA deposit_applied tal cual están
+// guardados, con su ticket/turno real, para que la lectura sea la de los
+// datos y no la de una hipótesis de orden de consumo.
 // Env: CLIENTE_NOMBRE (obligatorio)
 async function diagnosticarSenaLibre() {
   const NOMBRE = (process.env.CLIENTE_NOMBRE || '').trim();
   if (!NOMBRE) { console.log('Falta CLIENTE_NOMBRE.'); return; }
-  const ahora = new Date();
-  const hoyAR = new Date(ahora.getTime() - 3*3600e3).toISOString().slice(0,10);
   const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
   const buscado = norm(NOMBRE);
   const ar = iso => { const d=new Date(iso); return isNaN(d)?String(iso):new Date(d.getTime()-3*3600e3).toISOString().slice(0,16).replace('T',' '); };
@@ -1224,59 +1229,47 @@ async function diagnosticarSenaLibre() {
   const candidatas = clientsSnap.docs.map(d=>({id:d.id, ...d.data()}))
     .filter(c => { const full=norm(`${c.first||''} ${c.last||''}`); return full.includes(buscado) || buscado.split(' ').every(p=>full.includes(p)); });
   if (!candidatas.length) { console.log('No se encontró ninguna clienta con ese nombre.'); return; }
-  console.log(`=== Diagnóstico de seña sin aplicar — ${candidatas.length} coincidencia(s) para "${NOMBRE}" ===\n`);
+  console.log(`=== Señas de "${NOMBRE}" — datos reales, sin inferencias — ${candidatas.length} coincidencia(s) ===\n`);
 
   const appointments = (await db.collection('appointments').get()).docs.map(d=>d.data());
   const salesTickets = (await db.collection('salesTickets').get()).docs.map(d=>d.data());
-  const reservationCharged = key => !!key && salesTickets.some(tk=>tk.reservationId===key && (tk.status==='confirmed'||tk.status==='partial'));
-  // reservationKey en la app real = bookingId si existe, si no el id del turno.
+  const ticketById = new Map(salesTickets.map(t=>[t.id,t]));
   const apptByBooking = new Map();
   appointments.forEach(a => { const k = a.bookingId || a.id; if (!apptByBooking.has(k)) apptByBooking.set(k, []); apptByBooking.get(k).push(a); });
+  const describirTicket = t => t ? `${t.clientNameSnapshot||'?'} · ${(t.lines||[]).map(l=>l.service).join(' + ')||'(sin líneas)'} · total ${m(t.servicesTotal!=null?t.servicesTotal:t.grossTotal)} · estado=${t.status}` : '(ticket no encontrado)';
 
   for (const cli of candidatas) {
     console.log(`── ${cli.first||''} ${cli.last||''} (id=${cli.id}) ──`);
     const pagos = (await db.collection('payments').where('clientId','==',cli.id).get()).docs.map(d=>d.data());
-    const recibidas = pagos.filter(p=>p.type==='deposit_received' && !p.voided).sort((a,b)=>String(a.createdAt||'').localeCompare(b.createdAt||''));
-    const aplicadas = pagos.filter(p=>p.type==='deposit_applied' && !p.voided);
-    const totalRecibido = recibidas.reduce((s,p)=>s+Number(p.amount||0),0);
-    const totalAplicado = aplicadas.reduce((s,p)=>s+Number(p.amount||0),0);
-    console.log(`   Recibido total: ${m(totalRecibido)} · Aplicado total: ${m(totalAplicado)} · SIN APLICAR: ${m(Math.max(0,totalRecibido-totalAplicado))}\n`);
+    const recibidas = pagos.filter(p=>p.type==='deposit_received').sort((a,b)=>String(a.createdAt||'').localeCompare(b.createdAt||''));
+    const aplicadas = pagos.filter(p=>p.type==='deposit_applied').sort((a,b)=>String(a.createdAt||'').localeCompare(b.createdAt||''));
+    const totalRecibido = recibidas.filter(p=>!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+    const totalAplicado = aplicadas.filter(p=>!p.voided).reduce((s,p)=>s+Number(p.amount||0),0);
+    console.log(`   TOTALES (lo que usa la app): recibido ${m(totalRecibido)} − aplicado ${m(totalAplicado)} = sin aplicar ${m(Math.max(0,totalRecibido-totalAplicado))}\n`);
 
-    if (!recibidas.length) { console.log('   No tiene señas recibidas.\n'); continue; }
+    console.log('   SEÑAS RECIBIDAS (deposit_received):');
+    if (!recibidas.length) console.log('     (ninguna)');
+    recibidas.forEach(p => {
+      const rel = p.bookingId ? (apptByBooking.get(p.bookingId)||[]).find(a=>!a.isAdditional) : null;
+      const turno = p.bookingId ? (rel ? `${rel.date} ${rel.start||''} · ${rel.service||'?'} · estado=${rel.status||'—'}` : `bookingId=${p.bookingId} · TURNO YA NO EXISTE en la agenda`) : '(sin turno asociado — seña de mostrador)';
+      console.log(`     ${m(p.amount)} · ${ar(p.createdAt)} · ${p.method||'?'} · id=${p.id}${p.voided?' · ANULADA':''}`);
+      console.log(`       turno: ${turno}`);
+    });
 
-    // Vamos consumiendo "aplicado" contra las señas más viejas primero (FIFO,
-    // igual que hace clientAvailableDeposit a nivel de totales) para mostrar
-    // cuáles de las recibidas concretas quedan sin cubrir.
-    let restanteAplicado = totalAplicado;
-    for (const p of recibidas) {
-      const monto = Number(p.amount||0);
-      const cubierto = Math.min(monto, restanteAplicado);
-      restanteAplicado -= cubierto;
-      const pendiente = monto - cubierto;
-      console.log(`   Seña: ${m(monto)} · recibida ${ar(p.createdAt)} · método ${p.method||'?'} · id=${p.id}`);
-      if (pendiente < 0.5) { console.log('     → ya cubierta por aplicaciones posteriores.\n'); continue; }
-      console.log(`     ${m(pendiente)} de esta seña SIN APLICAR. Por qué:`);
-      if (!p.bookingId) {
-        console.log('     → No tiene turno asociado (bookingId vacío): es una seña libre de mostrador. No hay nada raro, queda disponible para cuando se use.\n');
-        continue;
-      }
-      const relacionados = apptByBooking.get(p.bookingId) || [];
-      if (!relacionados.length) {
-        console.log(`     → El turno asociado (bookingId=${p.bookingId}) YA NO EXISTE en la agenda. Probablemente se borró sin anular la seña. Es una seña HUÉRFANA: hay que decidir si se devuelve, se aplica a otro turno o se retiene.\n`);
-        continue;
-      }
-      const principal = relacionados.find(a=>!a.isAdditional) || relacionados[0];
-      const cobrado = reservationCharged(p.bookingId);
-      const esFuturo = (principal.date||'') >= hoyAR;
-      console.log(`     → Turno: ${principal.date||'?'} ${principal.start||''} · ${principal.service||'(sin servicio)'} · estado=${principal.status||'—'}`);
-      if (cobrado) {
-        console.log('     → El turno YA se cobró (hay un ticket confirmado/parcial), pero la seña no quedó aplicada a él. Revisar ese ticket a mano.\n');
-      } else if (esFuturo) {
-        console.log('     → Es un turno FUTURO todavía no cobrado: esto es NORMAL, la seña está reservada para ese turno.\n');
-      } else {
-        console.log(`     → Es un turno PASADO (${principal.date}) que nunca se cobró ni se marcó inasistencia. Posible olvido: revisar si la clienta vino y no se le cobró, o si faltó y hay que retener/registrar la seña.\n`);
-      }
-    }
+    console.log('\n   SEÑAS APLICADAS (deposit_applied):');
+    if (!aplicadas.length) console.log('     (ninguna)');
+    aplicadas.forEach(p => {
+      const t = p.ticketId ? ticketById.get(p.ticketId) : null;
+      console.log(`     ${m(p.amount)} · ${ar(p.createdAt)} · ticketId=${p.ticketId||'—'} · id=${p.id}${p.voided?' · ANULADA':''}`);
+      console.log(`       ticket: ${describirTicket(t)}`);
+    });
+
+    console.log('\n   ADVERTENCIA: un deposit_applied guarda el ticket y el monto, NUNCA de qué');
+    console.log('   seña recibida específica salió esa plata (verificado en el código: no hay');
+    console.log('   campo que los vincule). Si hay más de una seña recibida, no hay forma de saber');
+    console.log('   cuál "es" la que quedó sin aplicar — el sistema sólo sabe el total agregado.');
+    console.log('   Comparar las fechas y montos de arriba a ojo es más confiable que cualquier');
+    console.log('   suposición de orden que un diagnóstico pueda hacer.\n');
   }
 }
 
