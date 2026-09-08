@@ -1299,9 +1299,17 @@ async function moverTurnoHora() {
   console.log(`=== ${APPLY ? 'APLICAR' : 'SIMULACIÓN'} — mover turno de "${CLIENTE}" con "${COLAB}" el ${FECHA}: ${HORA_ACTUAL} → ${HORA_NUEVA} ===\n`);
 
   const clientsSnap = await db.collection('clients').get();
-  const clienteId = clientsSnap.docs.map(d=>({id:d.id,...d.data()}))
+  const todos = clientsSnap.docs.map(d=>({id:d.id,...d.data()}));
+  const clienteId = todos
     .find(c => { const full=norm(`${c.first||''} ${c.last||''}`); return full.includes(norm(CLIENTE)) || norm(CLIENTE).split(' ').every(p=>full.includes(p)); });
-  if (!clienteId) { console.log('No se encontró la clienta.'); return; }
+  if (!clienteId) {
+    console.log('No se encontró la clienta con ese nombre completo. Busco coincidencias parciales:');
+    const partes = norm(CLIENTE).split(' ').filter(Boolean);
+    const parciales = todos.filter(c => { const full=norm(`${c.first||''} ${c.last||''}`); return partes.some(p=>full.includes(p)); });
+    if (!parciales.length) console.log('  (ninguna coincidencia, ni siquiera parcial)');
+    else parciales.forEach(c => console.log(`  · "${c.first||''} ${c.last||''}" (id=${c.id})`));
+    return;
+  }
 
   const collabsSnap = await db.collection('collaborators').get();
   const colabs = collabsSnap.docs.map(d=>({id:d.id,...d.data()}))
