@@ -23,7 +23,10 @@ jobs:
           TURNO_CLIENTE: rainiela
           TICKET_ID: ticketms6eecwtsrfbs
           TICKET_MOTIVO: Inasistencia revertida — la seña se aplica al turno del 01/08
-          CLIENTE_NOMBRE: Paula Elordi
+          CLIENTE_NOMBRE: Dolores Rodriguez
+          COLABORADORA_NOMBRE: Verolis
+          HORA_ACTUAL: '06:00'
+          HORA_NUEVA: '18:30'
           DIAS_ATRAS: '7'
           SENA_PAGO_ID: depmst4rez95azlj
         run: |

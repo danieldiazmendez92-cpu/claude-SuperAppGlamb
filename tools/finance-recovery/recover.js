@@ -1273,6 +1273,99 @@ async function diagnosticarSenaLibre() {
   }
 }
 
+// mover-turno-hora [-apply] — Cambia el horario de un turno agendado hoy.
+// Replica EXACTAMENTE la lógica de dropAppointment/overlaps de la app (mover
+// un turno arrastrándolo en la agenda): conserva la duración de cada línea,
+// y si el turno tiene adicionales combinados (mismo bookingId) los desplaza
+// junto con el principal, todos con el mismo delta de horario. Valida
+// solapamiento contra los demás turnos de esa colaboradora ese día antes de
+// escribir nada — igual criterio que usa la agenda (overlaps con
+// ignoreBookingId, no compara contra sus propias líneas).
+// Env: CLIENTE_NOMBRE, COLABORADORA_NOMBRE, HORA_ACTUAL (HH:MM), HORA_NUEVA (HH:MM)
+//      MOVER_FECHA=YYYY-MM-DD (default hoy AR)
+async function moverTurnoHora() {
+  const APPLY = MODE.endsWith('-apply');
+  const CLIENTE = (process.env.CLIENTE_NOMBRE || '').trim();
+  const COLAB = (process.env.COLABORADORA_NOMBRE || '').trim();
+  const HORA_ACTUAL = (process.env.HORA_ACTUAL || '').trim();
+  const HORA_NUEVA = (process.env.HORA_NUEVA || '').trim();
+  if (!CLIENTE || !COLAB || !HORA_ACTUAL || !HORA_NUEVA) {
+    console.log('Faltan env vars: CLIENTE_NOMBRE, COLABORADORA_NOMBRE, HORA_ACTUAL, HORA_NUEVA.'); return;
+  }
+  const FECHA = process.env.MOVER_FECHA || new Date(Date.now() - 3*3600e3).toISOString().slice(0,10);
+  const norm = s => (s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+  const mins = t => { const [h,m] = String(t||'0:0').split(':').map(Number); return h*60+m; };
+  const toTime = t => `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
+  console.log(`=== ${APPLY ? 'APLICAR' : 'SIMULACIÓN'} — mover turno de "${CLIENTE}" con "${COLAB}" el ${FECHA}: ${HORA_ACTUAL} → ${HORA_NUEVA} ===\n`);
+
+  const clientsSnap = await db.collection('clients').get();
+  const clienteId = clientsSnap.docs.map(d=>({id:d.id,...d.data()}))
+    .find(c => { const full=norm(`${c.first||''} ${c.last||''}`); return full.includes(norm(CLIENTE)) || norm(CLIENTE).split(' ').every(p=>full.includes(p)); });
+  if (!clienteId) { console.log('No se encontró la clienta.'); return; }
+
+  const collabsSnap = await db.collection('collaborators').get();
+  const colabs = collabsSnap.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(c => { const full=norm(`${c.first||''} ${c.last||''}`); return full.includes(norm(COLAB)); });
+  if (!colabs.length) { console.log('No se encontró ninguna colaboradora con ese nombre.'); return; }
+  if (colabs.length > 1) { console.log('Hay más de una colaboradora que coincide, freno por las dudas:', colabs.map(c=>`${c.first} ${c.last}`).join(', ')); return; }
+  const colabId = colabs[0].id;
+  console.log(`Clienta: ${clienteId.first} ${clienteId.last} (id=${clienteId.id})`);
+  console.log(`Colaboradora: ${colabs[0].first} ${colabs[0].last} (id=${colabId})\n`);
+
+  const todasHoy = (await db.collection('appointments').where('date','==',FECHA).get()).docs.map(d=>({...d.data(), _ref:d.ref}));
+  const delDiaColab = todasHoy.filter(a => a.memberId===colabId);
+  const candidatos = delDiaColab.filter(a => a.clientId===clienteId.id && a.start===HORA_ACTUAL && !a.isAdditional);
+  if (!candidatos.length) {
+    console.log(`No encontré un turno de esta clienta con esta colaboradora a las ${HORA_ACTUAL} el ${FECHA}.`);
+    console.log('Turnos de esta colaboradora ese día:');
+    delDiaColab.forEach(a => console.log(`  · ${a.start}-${a.end} · cliente=${a.clientId} · ${a.service||'?'} · isAdditional=${!!a.isAdditional}`));
+    return;
+  }
+  if (candidatos.length > 1) { console.log('Hay más de un turno que coincide, freno por las dudas.'); return; }
+  const principal = candidatos[0];
+
+  // Turnos combinados: mismo bookingId (o el propio id si no tiene booking).
+  const bookingKey = principal.bookingId || principal.id;
+  const relacionados = todasHoy.filter(a => (a.bookingId || a.id) === bookingKey);
+  const delta = mins(HORA_NUEVA) - mins(HORA_ACTUAL);
+
+  console.log('TURNO(S) A MOVER:');
+  const planes = relacionados.map(a => {
+    const dur = mins(a.end) - mins(a.start);
+    const nuevoStart = toTime(mins(a.start) + delta);
+    const nuevoEnd = toTime(mins(a.end) + delta);
+    console.log(`   ${a.isAdditional?'(adicional) ':''}${a.service||'(sin servicio)'} · ${a.start}-${a.end} → ${nuevoStart}-${nuevoEnd} · id=${a.id}`);
+    return { a, nuevoStart, nuevoEnd };
+  });
+
+  // Validar solapamiento: mismo criterio que overlaps() de la app — incluye
+  // TODOS los turnos de esa colaboradora ese día, salvo los del mismo booking.
+  console.log('\nVALIDACIÓN DE SOLAPAMIENTO:');
+  let choca = false;
+  for (const { a, nuevoStart, nuevoEnd } of planes) {
+    const conflicto = delDiaColab.find(o => {
+      if ((o.bookingId || o.id) === bookingKey) return false;
+      return Math.max(mins(o.start), mins(nuevoStart)) < Math.min(mins(o.end), mins(nuevoEnd));
+    });
+    if (conflicto) {
+      choca = true;
+      console.log(`   ⚠ CHOCA: ${a.service||'?'} (${nuevoStart}-${nuevoEnd}) se cruza con ${conflicto.service||'?'} (${conflicto.start}-${conflicto.end}) de la misma colaboradora.`);
+    } else {
+      console.log(`   ✓ ${a.service||'?'} (${nuevoStart}-${nuevoEnd}) sin cruce.`);
+    }
+  }
+  if (choca) { console.log('\nNO SE MUEVE NADA: hay solapamiento. Elegí otro horario.'); return; }
+
+  console.log(`\n${APPLY ? '' : 'SIMULACIÓN: no se escribió nada. Para aplicar, MODE=mover-turno-hora-apply\n'}`);
+  if (!APPLY) return;
+
+  for (const { a, nuevoStart, nuevoEnd } of planes) {
+    await a._ref.update({ start: nuevoStart, end: nuevoEnd });
+  }
+  console.log('APLICADO. Turno(s) movido(s):');
+  planes.forEach(({a, nuevoStart, nuevoEnd}) => console.log(`   ${a.service||'?'} → ${nuevoStart}-${nuevoEnd}`));
+}
+
 // validar-ventas-mes — SOLO LECTURA. Desarma el número de "Ventas del mes" del
 // Centro de Mando para poder decir si son ventas cerradas de verdad o si adentro
 // hay señas de turnos que todavía no pasaron.
@@ -1795,6 +1888,7 @@ async function auditBorradosHoy() {
 }
 
 (async () => {
+  if (MODE === 'mover-turno-hora' || MODE === 'mover-turno-hora-apply') { await moverTurnoHora(); return; }
   if (MODE === 'diagnosticar-sena-libre') { await diagnosticarSenaLibre(); return; }
   if (MODE === 'validar-ventas-mes') { await validarVentasMes(); return; }
   if (MODE === 'forense-pisado') { await forensePisado(); return; }
