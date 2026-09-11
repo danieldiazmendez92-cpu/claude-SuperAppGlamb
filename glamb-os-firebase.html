@@ -3670,6 +3670,12 @@
                 <div class="ttl">Cliente nuevo</div>
                 <div class="sub">Crear ficha y volver a caja</div>
               </div>
+              <!-- Solo admin: applyPermissions() la muestra/oculta según el rol. -->
+              <div class="wiz-source-card" data-sale-source="backdated" id="saleBackdatedCard" style="display:none;">
+                <div class="icon">🗓️</div>
+                <div class="ttl">Turno de fecha anterior</div>
+                <div class="sub">Cobrar un turno viejo que quedó sin registrar</div>
+              </div>
             </div>
             <section class="card">
               <div id="saleAppointmentPanel">
@@ -3685,6 +3691,25 @@
               </div>
               <div id="saleNewPanel" style="display:none;">
                 <div class="source-helper">Se abrirá el formulario de nuevo cliente. Al guardarlo, volverás a Caja con el cliente seleccionado.</div>
+              </div>
+              <div id="saleBackdatedPanel" style="display:none;">
+                <div class="source-helper" style="margin-bottom:10px;">La venta se va a contabilizar en la fecha del servicio. El dinero, en cambio, entra a la caja de hoy — que es donde está físicamente.</div>
+                <label style="font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);">Turno sin cobrar</label>
+                <select id="saleBackdatedSelect" style="width:100%;margin-top:6px;"></select>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;">
+                  <div style="flex:1;min-width:160px;">
+                    <label style="font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);">Fecha del servicio</label>
+                    <input type="date" id="saleBackdatedDate" style="width:100%;margin-top:6px;">
+                  </div>
+                  <div style="flex:1;min-width:160px;">
+                    <label style="font-size:11px;font-weight:500;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);">Comisión de la colaboradora</label>
+                    <select id="saleBackdatedCommission" style="width:100%;margin-top:6px;">
+                      <option value="service">En el período del servicio</option>
+                      <option value="current">En la liquidación actual</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="saleBackdatedWarnings" style="margin-top:12px;"></div>
               </div>
             </section>
             <div class="wiz-nav">
@@ -5723,6 +5748,14 @@
       if($('cashTicketsDate')) $('cashTicketsDate').style.display = salesOnly ? 'none' : '';
       // Atajos que saltean módulos restringidos: crear colaboradora solo si tiene Equipo
       document.querySelectorAll('[data-open-collaborator]').forEach(b=>{ b.style.display = cfg.pages.includes('team') ? '' : 'none'; });
+      // Cobro de fechas anteriores: solo admin. Cambia facturación y comisiones
+      // de períodos ya cerrados, así que no se expone a recepción ni colaboradoras.
+      const bdCard=$('saleBackdatedCard');
+      if(bdCard){
+        const isAdm = curRole()==='admin';
+        bdCard.style.display = isAdm ? '' : 'none';
+        if(!isAdm && state.saleSource==='backdated') setSaleSource('appointment');
+      }
     }
 
     function renderLogin(){
@@ -7451,6 +7484,10 @@
       $('saleAppointmentSelect').innerHTML = reservations.length
         ? reservations.map(r=>`<option value="${r.id}">${r.start} · ${r.clientName} · ${r.count>1?`[${r.count} servicios] `:''}${servicesShort(r.services)} · ${money(r.total)}</option>`).join('')
         : '<option value="">— Sin turnos pendientes para hoy —</option>';
+      // En modo "fecha anterior" el turno elegido es uno viejo: este armado (que
+      // solo mira los turnos de HOY) no debe pisar state.saleAppointmentId, o el
+      // cobro terminaría atado al turno equivocado.
+      if(state.saleSource==='backdated') return;
       if(reservations.some(r=>r.id===current)) {
         state.saleAppointmentId = current;
         $('saleAppointmentSelect').value = current;
@@ -7470,12 +7507,82 @@
         selectSaleAppointment(state.saleAppointmentId);
       }
     }
+    // ── Cobro de turnos de fechas anteriores (solo admin) ──────────────────
+    // La venta devenga en la FECHA DEL SERVICIO (ticket.date) y la plata entra a
+    // la caja de HOY, que es donde está físicamente. El libro diario parte el
+    // asiento en dos (ver accJournal). Sin esto, retro-fechar el pago lo sacaba
+    // del arqueo y aparecía un sobrante inexplicable al contar el cajón.
+    function isAdminUser(){ return curRole()==='admin'; }
+    // Fecha del asiento de apertura contable. accJournal descarta todo lo
+    // anterior, así que una venta con fecha previa entraría a caja pero no al
+    // libro: por eso abajo es bloqueo y no advertencia.
+    function accountingOpeningDay(){
+      const op = (state.accounting && state.accounting.opening) || null;
+      return op && op.date ? String(op.date).slice(0,10) : '';
+    }
+    // Reservas de días anteriores que nunca se cobraron.
+    function pastUnchargedReservations(){
+      const today = dateKey(new Date());
+      const seen = new Set(), out = [];
+      activeAppointments()
+        .filter(a=>!a.isAdditional && a.date && a.date < today)
+        .sort((a,b)=>String(b.date+(b.start||'')).localeCompare(String(a.date+(a.start||''))))
+        .forEach(a=>{
+          const key = reservationKey(a);
+          if(!key || seen.has(key)) return;
+          seen.add(key);
+          if(reservationCharged(key)) return;
+          const related = reservationAppointments(a);
+          const services = related.map(r=>r.service).join(' + ');
+          const total = related.reduce((s,r)=>s+Number(currentApptPrice(r)||estimateAmount(r)||0),0);
+          out.push({id:a.id, date:a.date, start:related[0]?.start||a.start, clientName:fullName(client(a.clientId)), services, total});
+        });
+      return out;
+    }
+    // Problemas de la fecha elegida. block:true frena el registro; block:false avisa.
+    function backdatedIssues(dateStr){
+      const issues=[], today=dateKey(new Date());
+      if(!dateStr){ issues.push({block:true,msg:'Elegí la fecha en que se hizo el servicio.'}); return issues; }
+      if(dateStr>today) issues.push({block:true,msg:'La fecha del servicio no puede ser futura.'});
+      const op=accountingOpeningDay();
+      if(op && dateStr<op) issues.push({block:true,msg:`Esa fecha es anterior al inicio de la contabilidad (${op}). Cargada así, el dinero entra a la caja pero la venta nunca aparece en los libros. Elegí una fecha del ${op} en adelante.`});
+      if(dateStr.slice(0,7)!==today.slice(0,7)) issues.push({block:false,msg:`El servicio es de un mes anterior (${dateStr.slice(0,7)}). La facturación de ese mes va a cambiar: si ya lo declaraste, revisalo.`});
+      const liq=(state.liquidations||[]).find(l=>l.period&&l.period.from<=dateStr&&l.period.to>=dateStr);
+      if(liq) issues.push({block:false,msg:`Esa fecha cae en una liquidación de sueldos ya generada (${liq.collaboratorName||''} · ${liq.period.label||''}${liq.status==='paid'?' · ya pagada':''}). Mirá abajo en qué liquidación querés que caiga la comisión.`});
+      return issues;
+    }
+    function renderBackdatedWarnings(){
+      const box=$('saleBackdatedWarnings'); if(!box) return;
+      const issues=backdatedIssues($('saleBackdatedDate')?.value||'');
+      box.innerHTML = issues.map(i=>`<div style="padding:10px 12px;border-radius:10px;font-size:12px;margin-bottom:8px;background:${i.block?'#fdecea':'#fff8e1'};border:0.5px solid ${i.block?'#f5c6c0':'#f0dca8'};color:${i.block?'#a5281c':'#8a5a14'};">${i.block?'⛔ ':'⚠️ '}${esc(i.msg)}</div>`).join('');
+    }
+    function fillBackdatedOptions(){
+      const sel=$('saleBackdatedSelect'); if(!sel) return;
+      const list=pastUnchargedReservations();
+      sel.innerHTML = list.length
+        ? list.map(r=>`<option value="${r.id}">${r.date} · ${r.start||''} · ${esc(r.clientName)} · ${esc(servicesShort(r.services))} · ${money(r.total)}</option>`).join('')
+        : '<option value="">— No hay turnos anteriores sin cobrar —</option>';
+      if(!list.length){ state.saleAppointmentId=null; renderBackdatedWarnings(); return; }
+      const cur = list.some(r=>r.id===state.saleAppointmentId) ? state.saleAppointmentId : list[0].id;
+      sel.value = cur;
+      selectBackdatedAppointment(cur);
+    }
+    function selectBackdatedAppointment(id){
+      const appt=state.appointments.find(a=>a.id===id); if(!appt) return;
+      selectSaleAppointment(id);   // reusa la carga de cliente, líneas, precios y seña
+      if($('saleBackdatedDate')){ $('saleBackdatedDate').value=appt.date||''; $('saleBackdatedDate').max=dateKey(new Date()); }
+      renderBackdatedWarnings();
+      updateSaleSummary();
+    }
     function setSaleSource(source){
       state.saleSource = source;
       document.querySelectorAll('[data-sale-source]').forEach(b=>b.classList.toggle('active', b.dataset.saleSource===source));
       if($('saleAppointmentPanel')) $('saleAppointmentPanel').style.display = source === 'appointment' ? 'block' : 'none';
       if($('saleExistingPanel')) $('saleExistingPanel').style.display = source === 'existing' ? 'block' : 'none';
       if($('saleNewPanel')) $('saleNewPanel').style.display = source === 'new' ? 'block' : 'none';
+      if($('saleBackdatedPanel')) $('saleBackdatedPanel').style.display = source === 'backdated' ? 'block' : 'none';
+      if(source === 'backdated' && !isAdminUser()){ showToast('Solo el administrador puede cobrar turnos de fechas anteriores.'); return setSaleSource('appointment'); }
+      if(source === 'backdated'){ state.salePendingIds = []; fillBackdatedOptions(); }
       if(source === 'appointment') selectSaleAppointment($('saleAppointmentSelect')?.value || state.saleAppointmentId);
       if(source === 'existing') { state.salePendingIds = []; state.saleClient = {clientId:null, clientName:$('saleClientInput')?.value.trim()||''}; }
       if(source === 'new') {
@@ -7835,7 +7942,10 @@
       if(!state.cashSession.isOpen && collectSalePayments().some(p=>p.method==='Efectivo'))
         return showToast('La caja no está abierta. Abrila antes de registrar cobros en efectivo.');
       const clientIdForTicket = state.saleClient.clientId || null;
-      const sourceAppointment = state.saleSource==='appointment' ? state.appointments.find(a=>a.id===state.saleAppointmentId) : null;
+      const isBackdated = state.saleSource==='backdated';
+      // El cobro retroactivo también queda atado a su turno: así el turno figura
+      // cobrado en la agenda y no se puede cobrar dos veces (guarda de rKey).
+      const sourceAppointment = (state.saleSource==='appointment'||isBackdated) ? state.appointments.find(a=>a.id===state.saleAppointmentId) : null;
       const rKey = reservationKey(sourceAppointment);
       if(rKey){
         const existing = state.salesTickets.find(tk=>tk.reservationId===rKey && (tk.status==='confirmed'||tk.status==='partial'));
@@ -7844,7 +7954,24 @@
       const salePayments = collectSalePayments();
       const pendingBalance = Math.max(0, t.due - t.payments);
       const isPartial = pendingBalance > 1;
+      let backdatedDay=null, commissionDay=null;
+      if(isBackdated){
+        if(!isAdminUser()) return showToast('Solo el administrador puede cobrar turnos de fechas anteriores.');
+        if(!sourceAppointment) return showToast('Elegí el turno que querés cobrar.');
+        backdatedDay = $('saleBackdatedDate')?.value || '';
+        const blocking = backdatedIssues(backdatedDay).filter(i=>i.block);
+        if(blocking.length) return showToast(blocking[0].msg);
+        // Un saldo pendiente retroactivo devengaría en otra fecha que la venta y
+        // abre un problema aparte: en este modo se cobra el total.
+        if(isPartial) return showToast('En un cobro de fecha anterior hay que cobrar el total. Si necesitás dejar saldo, registralo como venta normal.');
+        if($('saleBackdatedCommission')?.value === 'current') commissionDay = dateKey(new Date());
+      }
       const ticket = {id:uid('ticket'),clientId:clientIdForTicket,appointmentId:sourceAppointment?.id||null,reservationId:reservationKey(sourceAppointment),origin:state.saleSource,clientNameSnapshot:clientName,status:isPartial?'partial':'confirmed',lines:t.lines,servicesTotal:t.services,tipsTotal:t.tips,grossTotal:t.grossTotal,depositAppliedTotal:t.depositApplied,amountToCollectToday:t.payments,pendingBalance,totalDueToday:t.due,note:$('saleNote')?.value||'',createdBy:cashActorName(),createdAt:new Date().toISOString()};
+      if(isBackdated){
+        ticket.date = backdatedDay;                       // devengamiento: día del servicio
+        ticket.backdated = {by:cashActorName(), at:new Date().toISOString()};
+        if(commissionDay) ticket.commissionDate = commissionDay;
+      }
       state.salesTickets.unshift(ticket);
       if(t.depositApplied>0){
         addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
@@ -7911,6 +8038,17 @@
       resetSaleForm(); renderAll(); setCashTab('pending'); showToast('Guardado como pendiente');
     }
     function resetSaleForm(){
+      // El modo "fecha anterior" NO queda pegado: si no, la venta siguiente se
+      // registraría con la fecha vieja que quedó en el campo.
+      if(state.saleSource==='backdated'){
+        state.saleSource='appointment';
+        document.querySelectorAll('.wiz-source-card').forEach(c=>c.classList.toggle('active', c.dataset.saleSource==='appointment'));
+        if($('saleBackdatedPanel')) $('saleBackdatedPanel').style.display='none';
+        if($('saleAppointmentPanel')) $('saleAppointmentPanel').style.display='block';
+        if($('saleBackdatedWarnings')) $('saleBackdatedWarnings').innerHTML='';
+        if($('saleBackdatedDate')) $('saleBackdatedDate').value='';
+        if($('saleBackdatedCommission')) $('saleBackdatedCommission').value='service';
+      }
       state.saleClient = {clientId:null, clientName:''};
       state.salePendingIds = [];   // formulario descartado: los pendientes siguen vivos
       state.saleAppointmentId = state.appointments[0]?.id || null;
@@ -14344,6 +14482,8 @@ ${context}`;
     document.querySelectorAll('[data-sale-source]').forEach(b=>b.onclick=()=>{setSaleSource(b.dataset.saleSource); document.querySelectorAll('.wiz-source-card').forEach(c=>c.classList.toggle('active',c.dataset.saleSource===b.dataset.saleSource));});
     initSaleClientAutocomplete();
     if($('saleAppointmentSelect')) $('saleAppointmentSelect').onchange=()=>selectSaleAppointment($('saleAppointmentSelect').value);
+    if($('saleBackdatedSelect')) $('saleBackdatedSelect').onchange=()=>selectBackdatedAppointment($('saleBackdatedSelect').value);
+    if($('saleBackdatedDate')) $('saleBackdatedDate').onchange=()=>renderBackdatedWarnings();
     ['loginEmail','loginPassword'].forEach(id=>{ if($(id)) $(id).addEventListener('keydown', e=>{ if(e.key==='Enter') loginSubmit(); }); });
     if($('prevDay')) $('prevDay').onclick = () => { const d=state.agenda.view==='week'?-7:-1; state.agenda.currentDate.setDate(state.agenda.currentDate.getDate()+d); updateDateTitle(); renderAgenda(); };
     if($('nextDay')) $('nextDay').onclick = () => { const d=state.agenda.view==='week'?7:1; state.agenda.currentDate.setDate(state.agenda.currentDate.getDate()+d); updateDateTitle(); renderAgenda(); };
