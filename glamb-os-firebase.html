@@ -5811,7 +5811,9 @@
       //  - las señas NO se cuentan al recibirse (son pasivo): entran recién
       //    cuando se aplican a una venta o se retienen por inasistencia.
       const sold = state.salesTickets.filter(t=>t.status==='confirmed'||t.status==='partial');
-      const byPrefix = p => sold.filter(t=>dayOf(t.createdAt).startsWith(p));
+      // Se fecha por finTicketDay (no por createdAt): un cobro retroactivo debe
+      // contar en el mes en que se prestó el servicio, igual que en Finanzas.
+      const byPrefix = p => sold.filter(t=>finTicketDay(t).startsWith(p));
       //  - se resta el saldo pendiente del parcial: al cobrarse genera un
       //    ticket nuevo por ese monto y se contaría dos veces.
       const svcTotal = t => Math.max(0,(t.servicesTotal!==undefined ? Number(t.servicesTotal||0) : (Number(t.grossTotal||0)-Number(t.tipsTotal||0))) - Number(t.pendingBalance||0));
@@ -9333,7 +9335,9 @@
       const today=dateKey(new Date());
       let best=null;
       state.salesTickets.filter(t=>t.clientId===clientId && t.status!=='voided').forEach(t=>{
-        const d=dayOf(t.createdAt);
+        // Fecha del servicio, no la de carga: un cobro retroactivo no debe hacer
+        // parecer que la clienta vino hoy.
+        const d=finTicketDay(t);
         (t.lines||[]).forEach(l=>{ if(l.service && d && (!best||d>best.date)) best={date:d, service:l.service, memberId:l.collaboratorId||null}; });
       });
       state.appointments.filter(a=>a.clientId===clientId && a.service && (a.date||'')<=today && !['cancelled','cancelado','voided','no_show'].includes(a.status)).forEach(a=>{
@@ -10685,7 +10689,7 @@
       // anterior al inicio entraba de más.
       // Mismo criterio de día que Finanzas (finTicketDay): si algún día los tickets
       // guardan su propia fecha, el período de comisión y el contable no se separan.
-      state.salesTickets.filter(t=>{ if(t.status==='voided') return false; const d=finTicketDay(t); return d>=from&&d<=to; }).forEach(t=>{
+      state.salesTickets.filter(t=>{ if(t.status==='voided') return false; const d=finCommissionDay(t); return d>=from&&d<=to; }).forEach(t=>{
         (t.lines||[]).forEach(l=>{
           if(l.collaboratorId!==memberId) return;
           if(!lineEarnsCommission(t,l)) return;
@@ -11056,6 +11060,11 @@
     }
     // Los tickets no guardan campo `date`: la fecha real surge de createdAt (ISO).
     function finTicketDay(t){ return t.date || dayOf(t.createdAt); }
+    // Período en que la comisión se LIQUIDA. Por defecto acompaña al servicio.
+    // Un cobro retroactivo cuyo período de sueldos ya cerró puede guardar
+    // commissionDate para que la comisión caiga en la liquidación vigente en vez
+    // de reabrir una ya pagada (lo decide quien carga el cobro).
+    function finCommissionDay(t){ return t.commissionDate || finTicketDay(t); }
     // Ingreso del ticket = servicios (sin propinas, que son pass-through a la colaboradora);
     // coincide con la suma de finalPrice por línea usada en los desgloses.
     // Ingreso reconocido de un ticket: servicios MENOS el saldo que quedó
@@ -11293,7 +11302,7 @@
       ]));
       // Ventas: Debe medios cobrados + seña aplicada + crédito empleada;
       // Haber ventas (menos saldo pendiente: ese se devenga vía el pendiente) + propinas.
-      state.salesTickets.filter(t=>(t.status==='confirmed'||t.status==='partial')&&inR(t.createdAt)).forEach(t=>{
+      state.salesTickets.filter(t=>(t.status==='confirmed'||t.status==='partial')&&inR(finTicketDay(t))).forEach(t=>{
         // Fallbacks para tickets viejos sin desglose: servicios desde las líneas.
         const svc=(t.servicesTotal!=null)?Number(t.servicesTotal||0):(t.lines||[]).reduce((s,l)=>s+Number(l.finalPrice||0),0);
         const tips=(t.tipsTotal!=null)?Number(t.tipsTotal||0):(t.lines||[]).reduce((s,l)=>s+Number(l.tipAmount||0),0);
@@ -11302,7 +11311,15 @@
         const emp=Math.max(0,(svc+tips)-dep-due); // descuento empleada (se cobra por liquidación)
         const byAcc={};
         state.payments.filter(p=>p.ticketId===t.id&&p.type==='service'&&!p.voided).forEach(p=>{const a=accMethodAccount(p.method); byAcc[a]=(byAcc[a]||0)+Number(p.amount||0);});
-        const lines=Object.entries(byAcc).map(([a,v])=>[a,v,0]);
+        // Cobro retroactivo: el servicio se prestó un día y la plata entró otro.
+        // La venta devenga en la fecha del servicio contra DEUDORES, y el cobro
+        // va en su propio asiento el día que entró (que es el día en que esa
+        // plata aparece en el arqueo). Si ambas fechas coinciden —el 99% de los
+        // casos— se arma un único asiento, exactamente igual que antes.
+        const dSvc=accDay(finTicketDay(t)), dCob=accDay(t.createdAt);
+        const retro = dSvc!==dCob;
+        const cobrado=Object.values(byAcc).reduce((s,v)=>s+Number(v||0),0);
+        const lines = retro ? (cobrado>0.005?[['deudores',cobrado,0]]:[]) : Object.entries(byAcc).map(([a,v])=>[a,v,0]);
         if(dep>0) lines.push(['senas',dep,0]);
         if(emp>0.005) lines.push(['empleadas',emp,0]);
         // El saldo impago reduce primero los servicios; si los supera, reduce
@@ -11310,7 +11327,11 @@
         lines.push(['ventas',0,Math.max(0,svc-pend)]);
         const tipsCobradas=Math.max(0,tips-Math.max(0,pend-svc));
         if(tipsCobradas>0.005) lines.push(['propinas',0,tipsCobradas]);
-        out.push(_accE(t.createdAt,`Venta — ${t.clientNameSnapshot||'Cliente'}${t.status==='partial'?' (parcial)':''}`,'ticket:'+t.id,lines));
+        out.push(_accE(dSvc,`Venta — ${t.clientNameSnapshot||'Cliente'}${t.status==='partial'?' (parcial)':''}${retro?' (servicio '+dSvc+')':''}`,'ticket:'+t.id,lines));
+        if(retro && cobrado>0.005){
+          out.push(_accE(dCob,`Cobro de venta del ${dSvc} — ${t.clientNameSnapshot||'Cliente'}`,'ticketcob:'+t.id,
+            Object.entries(byAcc).map(([a,v])=>[a,v,0]).concat([['deudores',0,cobrado]])));
+        }
       });
       // Señas recibidas: entra dinero, nace el pasivo.
       state.payments.filter(p=>p.type==='deposit_received'&&!p.voided&&inR(p.createdAt)).forEach(p=>{
@@ -13778,7 +13799,9 @@
       // Financial summary by month from tickets
       const ticketsByMonth={};
       state.salesTickets.filter(t=>t.status!=='voided').forEach(t=>{
-        const ym=(t.createdAt||'').slice(0,7); if(!ym) return;
+        // finTicketDay: fecha del servicio y ya normalizada al día AR. Antes se
+        // cortaba el ISO crudo (UTC), que corría de mes los tickets de fin de mes.
+        const ym=finTicketDay(t).slice(0,7); if(!ym) return;
         if(!ticketsByMonth[ym]) ticketsByMonth[ym]={rev:0,count:0};
         ticketsByMonth[ym].rev+=finTicketRevenue(t); ticketsByMonth[ym].count++;
       });
