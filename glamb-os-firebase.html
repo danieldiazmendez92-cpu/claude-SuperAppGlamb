@@ -6012,7 +6012,9 @@
     function clientVisitDays(clientId){
       ensureClientIndex();
       const days = new Set();
-      (_ciTickets.get(clientId)||[]).forEach(t=>{ if(t.createdAt) days.add(dayOf(t.createdAt)); });
+      // Día del SERVICIO: un cobro cargado en otra fecha no debe contar como una
+      // visita del día en que se registró.
+      (_ciTickets.get(clientId)||[]).forEach(t=>{ const d=finTicketDay(t); if(d) days.add(d); });
       const today = dateKey(new Date());
       (_ciAppts.get(clientId)||[]).forEach(a=>{ if(!['cancelled','cancelado','voided'].includes(a.status) && a.date && a.date<=today) days.add(a.date); });
       return [...days].sort();
@@ -6045,7 +6047,9 @@
       const hsc=state.highSpenderConfig||{};
       if(hsc.enabled!==false && Number(hsc.amount)>0){
         const cutoff=Number(hsc.periodDays)>0?new Date(Date.now()-Number(hsc.periodDays)*86400000).toISOString().slice(0,10):null;
-        const periodSpent=(cutoff?tickets.filter(t=>(t.createdAt||t.confirmedAt||'').slice(0,10)>=cutoff):tickets).reduce((s,t)=>s+Number(t.grossTotal||0),0);
+        // finTicketDay ya viene normalizado al día AR. Antes se cortaba el ISO
+        // crudo (UTC), así que un ticket del borde del período caía del lado equivocado.
+        const periodSpent=(cutoff?tickets.filter(t=>finTicketDay(t)>=cutoff):tickets).reduce((s,t)=>s+Number(t.grossTotal||0),0);
         if(periodSpent>=Number(hsc.amount)) tags.push({label:hsc.label||'Alto gasto',cls:'gold'});
       }
       const svcCount={};
@@ -10131,7 +10135,7 @@
         });
         if(filt === 'active' || filt === 'all') {
           clientTickets.filter(t => !linkedTicketIds.has(t.id) && (filt==='all' || t.status!=='voided')).forEach(t => {
-            items.push({ sortKey: (t.createdAt||'').slice(0,16), type: 'ticket', ticket: t });
+            items.push({ sortKey: finTicketDay(t) + ' ' + (t.createdAt||'').slice(11,16), type: 'ticket', ticket: t });
           });
         }
         items.sort((a,b) => b.sortKey.localeCompare(a.sortKey));
@@ -10146,7 +10150,7 @@
           if(item.type === 'ticket') {
             const t = item.ticket;
             const lines = t.lines || [];
-            const dateStr = dayOf(t.createdAt) || '—';
+            const dateStr = finTicketDay(t) || '—';
             const cols = [...new Set(lines.map(l=>(member(l.collaboratorId)?.first||'')).filter(Boolean))].join(', ');
             const svcsHtml = lines.map(l => {
               const addons = (l.addons||[]).map(a=>a.name);
