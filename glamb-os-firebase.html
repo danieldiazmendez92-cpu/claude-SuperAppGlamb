@@ -3508,11 +3508,90 @@
             <button class="btn" id="exportClientsBtn" style="display:none">Exportar CSV</button>
             <button class="btn" id="backupAllBtn" style="display:none">Copia de seguridad</button>
             <button class="btn" id="detectDuplicatesBtn" style="display:none">Detectar duplicados</button>
+            <button class="btn" id="clientTagsSettingsBtn" style="display:none" data-action="toggleClientTagsPanel">⚙ Etiquetas automáticas</button>
             <button class="btn" id="importClientsBtn">Importar CSV</button>
             <button class="btn primary" data-open-client>Nuevo cliente</button>
           </div>
         </div>
         <input type="file" id="clientsImportFile" accept=".csv,.txt" style="display:none">
+
+        <div id="clientTagsPanel" style="display:none;margin-bottom:20px">
+          <div style="margin:8px 0 14px">
+            <h2 style="font-size:15px;font-weight:700;margin:0 0 4px">Etiquetas automáticas</h2>
+            <p style="font-size:13px;color:var(--text-muted);margin:0">Se calculan solas en cada perfil y en esta lista, según los umbrales que definas acá. Los turnos futuros y los movimientos de dinero no se ven afectados.</p>
+          </div>
+
+          <div class="form-card" style="margin-bottom:12px">
+            <div class="form-grid">
+              <div class="field"><label>Frecuente — Estado</label>
+                <select id="ctcFrecuenteEnabled"><option value="true">Activado</option><option value="false">Desactivado</option></select>
+              </div>
+              <div class="field"><label>Nombre de etiqueta</label><input id="ctcFrecuenteLabel" type="text" maxlength="20"></div>
+              <div class="field"><label>Visitas mínimas</label><input id="ctcFrecuenteMinVisits" type="number" min="1" step="1"></div>
+              <div class="field"><label>Días máx. entre visitas</label><input id="ctcFrecuenteMaxDays" type="number" min="1" step="1"></div>
+            </div>
+            <p style="font-size:12px;color:var(--text-muted);margin:10px 0 0">Se marca cuando, en promedio, viene con esa frecuencia o mejor, y tiene al menos esa cantidad de visitas.</p>
+          </div>
+
+          <div class="form-card" style="margin-bottom:12px">
+            <div class="form-grid">
+              <div class="field"><label>Alto valor — Estado</label>
+                <select id="ctcAltoValorEnabled"><option value="true">Activado</option><option value="false">Desactivado</option></select>
+              </div>
+              <div class="field"><label>Nombre de etiqueta</label><input id="ctcAltoValorLabel" type="text" maxlength="20"></div>
+              <div class="field"><label>Veces el ticket promedio del salón</label><input id="ctcAltoValorMultiplier" type="number" min="1" step="0.1"></div>
+            </div>
+            <p style="font-size:12px;color:var(--text-muted);margin:10px 0 0">Se marca cuando el ticket promedio de la clienta es al menos ese múltiplo del promedio general del salón.</p>
+          </div>
+
+          <div class="form-card" style="margin-bottom:12px">
+            <div class="form-grid">
+              <div class="field"><label>Riesgo de abandono — Estado</label>
+                <select id="ctcRiesgoEnabled"><option value="true">Activado</option><option value="false">Desactivado</option></select>
+              </div>
+              <div class="field"><label>Nombre de etiqueta</label><input id="ctcRiesgoLabel" type="text" maxlength="20"></div>
+              <div class="field"><label>Múltiplo de su frecuencia</label><input id="ctcRiesgoMultiplier" type="number" min="1" step="0.1"></div>
+              <div class="field"><label>Mínimo de días</label><input id="ctcRiesgoMinDays" type="number" min="1" step="1"></div>
+              <div class="field"><label>Días por defecto (1ª visita)</label><input id="ctcRiesgoDefaultDays" type="number" min="1" step="1"></div>
+            </div>
+            <p style="font-size:12px;color:var(--text-muted);margin:10px 0 0">Se marca cuando pasó más de ese múltiplo de su frecuencia habitual sin venir (nunca menos que el mínimo). Si solo tiene una visita, se usan los días por defecto.</p>
+          </div>
+
+          <div class="form-card" style="margin-bottom:12px">
+            <div class="form-grid">
+              <div class="field"><label>Alto gasto — Estado</label>
+                <select id="ctcAltoGastoEnabled"><option value="true">Activado</option><option value="false">Desactivado</option></select>
+              </div>
+              <div class="field"><label>Nombre de etiqueta</label><input id="ctcAltoGastoLabel" type="text" maxlength="20"></div>
+              <div class="field"><label>Monto mínimo ($)</label><input id="ctcAltoGastoAmount" type="number" min="0" step="1000"></div>
+              <div class="field"><label>Período</label>
+                <select id="ctcAltoGastoPeriod">
+                  <option value="30">Últimos 30 días</option><option value="60">Últimos 60 días</option>
+                  <option value="90">Últimos 90 días</option><option value="180">Últimos 6 meses</option>
+                  <option value="365">Último año</option><option value="0">Histórico total</option>
+                </select>
+              </div>
+            </div>
+            <p style="font-size:12px;color:var(--text-muted);margin:10px 0 0">Se marca cuando gastó ese monto o más dentro del período elegido.</p>
+          </div>
+
+          <div class="form-card" style="margin-bottom:12px">
+            <div class="form-grid">
+              <div class="field"><label>Nueva — Estado</label>
+                <select id="ctcNuevaEnabled"><option value="true">Activado</option><option value="false">Desactivado</option></select>
+              </div>
+              <div class="field"><label>Nombre de etiqueta</label><input id="ctcNuevaLabel" type="text" maxlength="20"></div>
+              <div class="field"><label>Sin historial — Estado</label>
+                <select id="ctcSinHistorialEnabled"><option value="true">Activado</option><option value="false">Desactivado</option></select>
+              </div>
+              <div class="field"><label>Nombre de etiqueta</label><input id="ctcSinHistorialLabel" type="text" maxlength="20"></div>
+            </div>
+            <p style="font-size:12px;color:var(--text-muted);margin:10px 0 0">Estas dos no tienen umbral: dependen solo de la cantidad de visitas (1 y 0 respectivamente). Podés desactivarlas o renombrarlas.</p>
+          </div>
+
+          <button class="btn primary" id="ctcSaveBtn">Guardar</button>
+        </div>
+
         <div class="searchbar">⌕ <input id="clientSearch" placeholder="Buscar por nombre, WhatsApp o email"></div>
         <div class="cli-filters">
           <div class="cli-quick" id="clientQuickFilters"></div>
@@ -3946,47 +4025,6 @@
         </div>
 
         <div id="catalogContent"></div>
-
-        <div id="highSpenderPanel" style="display:none;padding:0 0 40px">
-          <div style="margin:28px 0 14px;border-top:0.5px solid var(--line);padding-top:20px">
-            <h2 style="font-size:15px;font-weight:700;margin:0 0 4px">Etiqueta automática de alto gasto</h2>
-            <p style="font-size:13px;color:var(--text-muted);margin:0 0 16px">Si un cliente supera el monto en el período indicado, la etiqueta aparece sola en su perfil y en la lista de clientes.</p>
-          </div>
-          <div class="form-card">
-            <div class="form-grid">
-              <div class="field">
-                <label>Estado</label>
-                <select id="hscEnabled">
-                  <option value="true">Activado</option>
-                  <option value="false">Desactivado</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Nombre de etiqueta</label>
-                <input id="hscLabel" type="text" placeholder="Alto gasto" maxlength="20">
-              </div>
-              <div class="field">
-                <label>Monto mínimo ($)</label>
-                <input id="hscAmount" type="number" min="0" step="1000" placeholder="50000">
-              </div>
-              <div class="field">
-                <label>Período</label>
-                <select id="hscPeriod">
-                  <option value="30">Últimos 30 días</option>
-                  <option value="60">Últimos 60 días</option>
-                  <option value="90">Últimos 90 días</option>
-                  <option value="180">Últimos 6 meses</option>
-                  <option value="365">Último año</option>
-                  <option value="0">Histórico total</option>
-                </select>
-              </div>
-            </div>
-            <div style="margin-top:14px;display:flex;align-items:center;gap:12px">
-              <button class="btn primary" id="hscSaveBtn">Guardar</button>
-              <span id="hscPreview" style="font-size:12px;color:var(--text-muted)"></span>
-            </div>
-          </div>
-        </div>
       </section>
 
       <section class="page" id="page-finanzas">
@@ -4909,7 +4947,7 @@
     const uid=p=>p+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
     const STORAGE_KEY='glamb-os-state-v1';
     // Identidad y rol vienen de Firebase Auth + colección `users`, no del blob de estado.
-    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','finanzasContadorMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig','accounting'];
+    const PERSIST_KEYS=['clients','collaborators','appointments','blockers','payments','salesTickets','pendingCharges','catalog','cashSession','cashClosings','payrollDeductions','liquidations','expenses','taxRecords','finanzasTab','finanzasPeriod','finanzasCustomFrom','finanzasCustomTo','finanzasCFOMonth','finanzasContadorMonth','budgets','expenseCategories','withdrawalReasons','ownerName','comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig','clientTagsConfig','accounting'];
 
     // ── Fase 3: entidades "calientes" en colecciones propias (concurrencia) ──
     // Cada entrada {key,coll} mueve un array del estado a una colección de
@@ -4976,7 +5014,7 @@
     // un equipo con copia vieja podía sobrescribirlas al guardar. Ahora viven en
     // appState/config y SOLO las escribe el dispositivo que realmente las cambió
     // (comparamos contra _configShadow, la última versión del server).
-    const CONFIG_KEYS=['comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig','withdrawalReasons','ownerName','cashSession'];
+    const CONFIG_KEYS=['comms','athenas','reviews','surveySettings','sentSurveys','highSpenderConfig','clientTagsConfig','withdrawalReasons','ownerName','cashSession'];
 
     // ── Firebase ──────────────────────────────────────────────────────
     const firebaseConfig = {
@@ -6032,6 +6070,26 @@
       (_ciAppts.get(clientId)||[]).forEach(a=>{ if(!['cancelled','cancelado','voided'].includes(a.status) && a.date && a.date<=today) days.add(a.date); });
       return [...days].sort();
     }
+    // ── Configuración de etiquetas automáticas ──────────────────────────────
+    // Antes solo "Alto gasto" (highSpenderConfig) era ajustable; el resto tenía
+    // sus umbrales fijos en el código. Daniel pidió poder ajustar los 6.
+    // Lazy + cacheado en state: se arma una sola vez, y si ya existe la config
+    // vieja de highSpenderConfig (posiblemente ya personalizada por Daniel) se
+    // usa para sembrar "altoGasto" en vez de resetearla a los valores de fábrica.
+    function clientTagsCfg(){
+      if(!state.clientTagsConfig){
+        const hs=state.highSpenderConfig||{};
+        state.clientTagsConfig={
+          sinHistorial:{enabled:true, label:'Sin historial'},
+          nueva:       {enabled:true, label:'Nueva'},
+          frecuente:   {enabled:true, label:'Frecuente', minVisits:3, maxDays:21},
+          altoValor:   {enabled:true, label:'Alto valor', multiplier:1.4},
+          riesgo:      {enabled:true, label:'Riesgo de abandono', multiplier:1.8, minDays:30, defaultDays:60},
+          altoGasto:   {enabled:hs.enabled!==false, label:hs.label||'Alto gasto', amount:hs.amount!=null?hs.amount:50000, periodDays:hs.periodDays!=null?hs.periodDays:90}
+        };
+      }
+      return state.clientTagsConfig;
+    }
     function clientInsights(clientId){
       ensureClientIndex();
       const days = clientVisitDays(clientId);
@@ -6048,22 +6106,25 @@
       }
       const daysSinceLast = visits ? Math.round((new Date(dateKey(new Date()))-new Date(days[days.length-1]))/msDay) : null;
       const salonAvg = _ciSalonAvg;
+      const cfg = clientTagsCfg();
       const tags = [];
-      if(visits===0) tags.push({label:'Sin historial',cls:'neutral'});
-      else if(visits===1) tags.push({label:'Nueva',cls:'neutral'});
-      if(visits>0){
-        const threshold = frequency ? Math.max(30, frequency*1.8) : 60;
-        if(daysSinceLast>threshold) tags.push({label:'Riesgo de abandono',cls:'risk'});
+      // key = identificador estable para filtros; label = texto configurable por
+      // Daniel. Los filtros NUNCA deben comparar contra label (se puede renombrar).
+      if(visits===0){ if(cfg.sinHistorial.enabled) tags.push({key:'sinHistorial', label:cfg.sinHistorial.label||'Sin historial', cls:'neutral'}); }
+      else if(visits===1){ if(cfg.nueva.enabled) tags.push({key:'nueva', label:cfg.nueva.label||'Nueva', cls:'neutral'}); }
+      if(visits>0 && cfg.riesgo.enabled){
+        const threshold = frequency ? Math.max(Number(cfg.riesgo.minDays||30), frequency*Number(cfg.riesgo.multiplier||1.8)) : Number(cfg.riesgo.defaultDays||60);
+        if(daysSinceLast>threshold) tags.push({key:'riesgo', label:cfg.riesgo.label||'Riesgo de abandono', cls:'risk'});
       }
-      if(frequency!==null && frequency<=21 && visits>=3) tags.push({label:'Frecuente',cls:'good'});
-      if(avgTicket>0 && salonAvg>0 && avgTicket>=salonAvg*1.4) tags.push({label:'Alto valor',cls:'gold'});
-      const hsc=state.highSpenderConfig||{};
+      if(cfg.frecuente.enabled && frequency!==null && frequency<=Number(cfg.frecuente.maxDays||21) && visits>=Number(cfg.frecuente.minVisits||3)) tags.push({key:'frecuente', label:cfg.frecuente.label||'Frecuente', cls:'good'});
+      if(cfg.altoValor.enabled && avgTicket>0 && salonAvg>0 && avgTicket>=salonAvg*Number(cfg.altoValor.multiplier||1.4)) tags.push({key:'altoValor', label:cfg.altoValor.label||'Alto valor', cls:'gold'});
+      const hsc=cfg.altoGasto;
       if(hsc.enabled!==false && Number(hsc.amount)>0){
         const cutoff=Number(hsc.periodDays)>0?new Date(Date.now()-Number(hsc.periodDays)*86400000).toISOString().slice(0,10):null;
         // finTicketDay ya viene normalizado al día AR. Antes se cortaba el ISO
         // crudo (UTC), así que un ticket del borde del período caía del lado equivocado.
         const periodSpent=(cutoff?tickets.filter(t=>finTicketDay(t)>=cutoff):tickets).reduce((s,t)=>s+Number(t.grossTotal||0),0);
-        if(periodSpent>=Number(hsc.amount)) tags.push({label:hsc.label||'Alto gasto',cls:'gold'});
+        if(periodSpent>=Number(hsc.amount)) tags.push({key:'altoGasto', label:hsc.label||'Alto gasto', cls:'gold'});
       }
       const svcCount={};
       state.appointments.filter(a=>a.clientId===clientId&&!['cancelled','cancelado','voided'].includes(a.status)).forEach(a=>{if(a.service)svcCount[a.service]=(svcCount[a.service]||0)+1;});
@@ -6090,7 +6151,9 @@
       visitas: {label:'Más visitas',  fn:(a,b)=>b.ins.visits-a.ins.visits},
       ticket:  {label:'Mayor ticket promedio', fn:(a,b)=>b.ins.avgTicket-a.ins.avgTicket}
     };
-    const _hasInsTag=(ins,label)=>ins.tags.some(t=>t.label===label);
+    // Compara por key, no por label: el label es texto configurable por Daniel
+    // y no debe usarse como identificador estable de un filtro.
+    const _hasInsTag=(ins,key)=>ins.tags.some(t=>t.key===key);
     function _clientFilterState(){
       if(!state.clientFilter) state.clientFilter={quick:'todos',tag:'',min:'',max:'',sort:'nombre',advOpen:false};
       return state.clientFilter;
@@ -6109,8 +6172,8 @@
     }
     const CLIENT_QUICK={
       todos:      {label:'Todos',              test:()=>true},
-      recuperar:  {label:'Por recuperar',      test:(c,ins)=>_hasInsTag(ins,'Riesgo de abandono')},
-      frecuentes: {label:'Frecuentes',         test:(c,ins)=>_hasInsTag(ins,'Frecuente')},
+      recuperar:  {label:'Por recuperar',      test:(c,ins)=>_hasInsTag(ins,'riesgo')},
+      frecuentes: {label:'Frecuentes',         test:(c,ins)=>_hasInsTag(ins,'frecuente')},
       altoGasto:  {label:'Alto gasto / valor', test:(c,ins)=>ins.tags.some(t=>t.cls==='gold')},
       nuevas:     {label:'Nuevas',             test:(c,ins)=>ins.visits<=1},
       sinTurno:   {label:'Sin turno futuro',   test:(c,ins,ctx)=>!ctx.future.has(c.id)},
@@ -6147,7 +6210,8 @@
       qEl.innerHTML=chips+`<span class="cli-chip" data-cli-adv="1">${f.advOpen?'▲':'⚙'} Más filtros</span>`;
       // Etiquetas: las manuales cargadas + las automáticas del sistema
       const manual=new Set(); state.clients.forEach(c=>(c.tags||[]).forEach(t=>t&&manual.add(t)));
-      const autoTags=['Frecuente','Alto valor',(state.highSpenderConfig&&state.highSpenderConfig.label)||'Alto gasto','Riesgo de abandono','Nueva','Sin historial'];
+      const tcfg=clientTagsCfg();
+      const autoTags=Object.values(tcfg).filter(t=>t.enabled).map(t=>t.label);
       const allTags=[...new Set([...manual,...autoTags])].sort();
       aEl.style.display=f.advOpen?'flex':'none';
       if(f.advOpen){
@@ -6181,6 +6245,10 @@
       if(bkBtn) bkBtn.style.display = curRole()==='admin' ? '' : 'none';
       const dupBtn=$('detectDuplicatesBtn');
       if(dupBtn) dupBtn.style.display = curRole()==='admin' ? '' : 'none';
+      const tagsBtn=$('clientTagsSettingsBtn');
+      if(tagsBtn) tagsBtn.style.display = curRole()==='admin' ? '' : 'none';
+      if(curRole()!=='admin' && $('clientTagsPanel')) $('clientTagsPanel').style.display='none';
+      renderClientTagsConfig();
       // La lista de clientes puede ser grande (miles). No la reconstruimos en cada
       // renderAll si no estás en esa pantalla: al entrar, showPage llama a renderAll
       // y se dibuja fresca. Evita trabajo inútil en cada sincronización de fondo.
@@ -6501,7 +6569,6 @@
       return 0;
     }
     function renderCatalog(){
-      renderHighSpenderConfig();
       const view = state.catalogView || 'grid';
       const filter = state.catalogFilter || 'all';
       const catalog = state.catalog;
@@ -6628,43 +6695,54 @@
     function setCatalogView(v){state.catalogView=v;renderCatalog()}
     function setCatalogFilter(f){state.catalogFilter=f;renderCatalog()}
 
-    function renderHighSpenderConfig(){
-      const panel=$('highSpenderPanel');
-      if(!panel) return;
-      panel.style.display = curRole()==='admin' ? '' : 'none';
-      if(curRole()!=='admin') return;
-      const cfg=state.highSpenderConfig||{};
-      if($('hscEnabled')) $('hscEnabled').value=String(cfg.enabled!==false);
-      if($('hscLabel'))   $('hscLabel').value=cfg.label||'Alto gasto';
-      if($('hscAmount'))  $('hscAmount').value=cfg.amount!=null?cfg.amount:50000;
-      if($('hscPeriod'))  $('hscPeriod').value=String(cfg.periodDays!=null?cfg.periodDays:90);
-      if($('hscEnabled')) $('hscEnabled').onchange=updateHscPreview;
-      if($('hscLabel'))   $('hscLabel').oninput=updateHscPreview;
-      if($('hscAmount'))  $('hscAmount').oninput=updateHscPreview;
-      if($('hscPeriod'))  $('hscPeriod').onchange=updateHscPreview;
-      if($('hscSaveBtn')) $('hscSaveBtn').onclick=saveHighSpenderConfig;
-      updateHscPreview();
+    // ── Configuración de etiquetas automáticas (movida de Catálogo a Clientes) ──
+    function toggleClientTagsPanel(){
+      const panel=$('clientTagsPanel'); if(!panel) return;
+      const open = panel.style.display==='none'||!panel.style.display;
+      panel.style.display = open ? '' : 'none';
+      if(open) renderClientTagsConfig();
     }
-    function updateHscPreview(){
-      const el=$('hscPreview'); if(!el) return;
-      const enabled=$('hscEnabled')?.value==='true';
-      if(!enabled){el.textContent='Etiqueta desactivada.';return;}
-      const label=$('hscLabel')?.value||'Alto gasto';
-      const amount=Number($('hscAmount')?.value||0);
-      const period=Number($('hscPeriod')?.value??90);
-      const periodText=period===0?'en total histórico':`en los últimos ${period} días`;
-      el.textContent=`Clientes con más de ${money(amount)} ${periodText} recibirán la etiqueta "${label}".`;
+    function renderClientTagsConfig(){
+      const panel=$('clientTagsPanel');
+      if(!panel || panel.style.display==='none') return;
+      const cfg=clientTagsCfg();
+      const set=(id,val)=>{ const el=$(id); if(el) el.value=val; };
+      set('ctcSinHistorialEnabled', String(cfg.sinHistorial.enabled!==false));
+      set('ctcSinHistorialLabel', cfg.sinHistorial.label||'Sin historial');
+      set('ctcNuevaEnabled', String(cfg.nueva.enabled!==false));
+      set('ctcNuevaLabel', cfg.nueva.label||'Nueva');
+      set('ctcFrecuenteEnabled', String(cfg.frecuente.enabled!==false));
+      set('ctcFrecuenteLabel', cfg.frecuente.label||'Frecuente');
+      set('ctcFrecuenteMinVisits', cfg.frecuente.minVisits!=null?cfg.frecuente.minVisits:3);
+      set('ctcFrecuenteMaxDays', cfg.frecuente.maxDays!=null?cfg.frecuente.maxDays:21);
+      set('ctcAltoValorEnabled', String(cfg.altoValor.enabled!==false));
+      set('ctcAltoValorLabel', cfg.altoValor.label||'Alto valor');
+      set('ctcAltoValorMultiplier', cfg.altoValor.multiplier!=null?cfg.altoValor.multiplier:1.4);
+      set('ctcRiesgoEnabled', String(cfg.riesgo.enabled!==false));
+      set('ctcRiesgoLabel', cfg.riesgo.label||'Riesgo de abandono');
+      set('ctcRiesgoMultiplier', cfg.riesgo.multiplier!=null?cfg.riesgo.multiplier:1.8);
+      set('ctcRiesgoMinDays', cfg.riesgo.minDays!=null?cfg.riesgo.minDays:30);
+      set('ctcRiesgoDefaultDays', cfg.riesgo.defaultDays!=null?cfg.riesgo.defaultDays:60);
+      set('ctcAltoGastoEnabled', String(cfg.altoGasto.enabled!==false));
+      set('ctcAltoGastoLabel', cfg.altoGasto.label||'Alto gasto');
+      set('ctcAltoGastoAmount', cfg.altoGasto.amount!=null?cfg.altoGasto.amount:50000);
+      set('ctcAltoGastoPeriod', String(cfg.altoGasto.periodDays!=null?cfg.altoGasto.periodDays:90));
+      if($('ctcSaveBtn')) $('ctcSaveBtn').onclick=saveClientTagsConfig;
     }
-    function saveHighSpenderConfig(){
-      state.highSpenderConfig={
-        enabled:$('hscEnabled').value==='true',
-        label:($('hscLabel').value||'').trim()||'Alto gasto',
-        amount:Number($('hscAmount').value)||0,
-        periodDays:Number($('hscPeriod').value)
+    function saveClientTagsConfig(){
+      const num=(id,def)=>{ const v=Number($(id)?.value); return isNaN(v)?def:v; };
+      const lbl=(id,def)=>($(id)?.value||'').trim()||def;
+      state.clientTagsConfig={
+        sinHistorial:{enabled:$('ctcSinHistorialEnabled').value==='true', label:lbl('ctcSinHistorialLabel','Sin historial')},
+        nueva:{enabled:$('ctcNuevaEnabled').value==='true', label:lbl('ctcNuevaLabel','Nueva')},
+        frecuente:{enabled:$('ctcFrecuenteEnabled').value==='true', label:lbl('ctcFrecuenteLabel','Frecuente'), minVisits:num('ctcFrecuenteMinVisits',3), maxDays:num('ctcFrecuenteMaxDays',21)},
+        altoValor:{enabled:$('ctcAltoValorEnabled').value==='true', label:lbl('ctcAltoValorLabel','Alto valor'), multiplier:num('ctcAltoValorMultiplier',1.4)},
+        riesgo:{enabled:$('ctcRiesgoEnabled').value==='true', label:lbl('ctcRiesgoLabel','Riesgo de abandono'), multiplier:num('ctcRiesgoMultiplier',1.8), minDays:num('ctcRiesgoMinDays',30), defaultDays:num('ctcRiesgoDefaultDays',60)},
+        altoGasto:{enabled:$('ctcAltoGastoEnabled').value==='true', label:lbl('ctcAltoGastoLabel','Alto gasto'), amount:num('ctcAltoGastoAmount',50000), periodDays:num('ctcAltoGastoPeriod',90)}
       };
       saveState();
       renderAll();
-      showToast('Configuración guardada');
+      showToast('Configuración de etiquetas guardada');
     }
 
     function openCatalogDrawer(type, id){
@@ -14992,6 +15070,7 @@ ${context}`;
       openCatalogDrawer:       () => openCatalogDrawer(),
       correctCashOpening:      () => correctCashOpening(),
       toggleAgendaFilters:     () => toggleAgendaFilters(),
+      toggleClientTagsPanel:   () => toggleClientTagsPanel(),
       toggleDatePicker:        () => toggleDatePicker(),
       dpPrevMonth:             () => dpPrevMonth(),
       dpNextMonth:             () => dpNextMonth(),
