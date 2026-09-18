@@ -4163,6 +4163,14 @@
         <button id="profileContactWA" class="small-btn primary">WhatsApp</button>
         <div class="mini-row"><strong>Email</strong><span id="profileEmail">—</span></div>
       </section>
+      <section class="profile-section" id="profileUpcomingSection">
+        <h3>Próximos turnos</h3>
+        <div id="profileUpcoming"></div>
+      </section>
+      <section class="profile-section" id="profileAccountSection">
+        <h3>Cuenta corriente</h3>
+        <div id="profileAccount"></div>
+      </section>
       <section class="profile-section">
         <h3>Métricas</h3>
         <div class="metric-row">
@@ -4172,7 +4180,8 @@
         </div>
         <div class="metric-row" style="margin-top:8px;">
           <div class="metric-card"><strong id="profileMetricVisits">—</strong><span>Visitas</span></div>
-          <div class="metric-card"><strong id="profileMetricSpent">—</strong><span>Total histórico</span></div>
+          <div class="metric-card" id="profileBilledCard"><strong id="profileMetricBilled">—</strong><span>Facturado</span></div>
+          <div class="metric-card" id="profileCollectedCard"><strong id="profileMetricCollected">—</strong><span>Cobrado</span></div>
         </div>
         <div id="profileDepositBanner" style="display:none;margin-top:10px;align-items:center;gap:8px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:10px 14px;font-size:13px;color:#166534;">
           <span style="font-size:16px;">💰</span>
@@ -4191,6 +4200,10 @@
       <section class="profile-section">
         <h3>Nota clave</h3>
         <div class="key-note" id="profileNote">—</div>
+      </section>
+      <section class="profile-section" id="profileMovementsSection">
+        <h3>Movimientos de dinero</h3>
+        <div id="profileMovements"></div>
       </section>
       <section class="profile-section" id="profileReviewsSection">
         <h3>Reseñas</h3>
@@ -7273,6 +7286,43 @@
       ).reduce((s,p)=>s+Number(p.amount||0),0);
       return Math.max(0, total - committed);
     }
+    // ── Vínculo seña → cobro ──────────────────────────────────────────────
+    // El registro de "seña aplicada" guarda de QUÉ señas salió (sourceDeposits).
+    // Antes no se guardaba nada: con una sola seña se podía adivinar, con varias
+    // era imposible saber cuál se había consumido.
+    // Solo se vinculan las señas marcadas `linkable` (las nuevas). Las anteriores
+    // quedan "sin vincular" a propósito: ese dato nunca existió y reconstruirlo
+    // sería inventarlo.
+    // OJO: esto es anotación de auditoría. NO cambia cuánta seña se aplica —
+    // de eso siguen encargándose clientAvailableDeposit/clientFreeDeposit.
+    function depositRemaining(dep){
+      if(!dep || !dep.linkable) return 0;
+      const usado = state.payments
+        .filter(p=>p.type==='deposit_applied' && !p.voided && Array.isArray(p.sourceDeposits))
+        .reduce((s,p)=>s + p.sourceDeposits.filter(x=>x.id===dep.id).reduce((a,x)=>a+Number(x.amount||0),0), 0);
+      return Math.max(0, Number(dep.amount||0) - usado);
+    }
+    // Qué señas cubren el monto que se está aplicando. Orden definido con Daniel:
+    // primero la seña dejada para ESE turno, después las más viejas.
+    // Puede cubrir solo una parte (o nada): lo no atribuido queda sin vincular.
+    function pickDepositSources(clientId, amount, bookingKey){
+      let resto = Number(amount||0);
+      if(!clientId || !(resto>0)) return [];
+      const candidatas = state.payments
+        .filter(p=>p.type==='deposit_received' && p.clientId===clientId && !p.voided && depositRemaining(p)>0)
+        .sort((a,b)=>{
+          const am=(bookingKey&&a.bookingId===bookingKey)?0:1, bm=(bookingKey&&b.bookingId===bookingKey)?0:1;
+          if(am!==bm) return am-bm;
+          return String(a.createdAt||'').localeCompare(String(b.createdAt||''));
+        });
+      const out=[];
+      for(const dep of candidatas){
+        if(resto<=0.005) break;
+        const toma=Math.min(resto, depositRemaining(dep));
+        if(toma>0.005){ out.push({id:dep.id, amount:Math.round(toma)}); resto-=toma; }
+      }
+      return out;
+    }
     // Aviso en el cobro: qué señas de esta clienta están guardadas para OTROS
     // turnos todavía no cobrados. Esa plata NO se precarga acá (es de esos
     // turnos), pero el campo sigue siendo editable si el salón decide usarla.
@@ -7371,7 +7421,7 @@
       const c = clientId ? state.clients.find(x=>x.id===clientId) : null;
       addPayment({
         id:uid('dep'), ticketId:null, appointmentId:null, clientId:clientId||null,
-        amount, method:$('depositMethod2')?.value||'Transferencia', type:'deposit_received',
+        amount, method:$('depositMethod2')?.value||'Transferencia', type:'deposit_received', linkable:true,
         reference:$('depositNote2')?.value||'',
         note:`Seña recibida${c?' · '+fullName(c):''}`,
         createdAt:new Date().toISOString()
@@ -7978,7 +8028,7 @@
       }
       state.salesTickets.unshift(ticket);
       if(t.depositApplied>0){
-        addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta'});
+        addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:clientIdForTicket||null,amount:t.depositApplied,method:'Anticipo',type:'deposit_applied',reference:'Seña aplicada',note:'Anticipo aplicado a venta',sourceDeposits:pickDepositSources(clientIdForTicket,t.depositApplied,rKey)});
       }
       salePayments.forEach(p=>addPayment({id:'pay'+Date.now()+Math.random(),ticketId:ticket.id,amount:p.amount,method:p.method,type:'service',reference:'',note:'Venta confirmada'}));
       // Los pendientes que se cargaron en este formulario quedan cobrados recién
@@ -9051,7 +9101,7 @@
           state.salesTickets.unshift(ticket);
           if(applied>0){
             // la seña ya estaba en caja: se aplica al ticket (no suma efectivo nuevo)
-            addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:c.id||null,amount:applied,method:'Anticipo',type:'deposit_applied',reference:'Seña por inasistencia',note:'Seña retenida (inasistencia)'});
+            addPayment({id:uid('depapp'),ticketId:ticket.id,clientId:c.id||null,amount:applied,method:'Anticipo',type:'deposit_applied',reference:'Seña por inasistencia',note:'Seña retenida (inasistencia)',sourceDeposits:pickDepositSources(c.id,applied,rKey)});
           } else {
             // no había pago registrado: se reconoce el ingreso ahora
             addPayment({id:uid('pay'),ticketId:ticket.id,clientId:c.id||null,amount:sena,method:a.depositMethod||'Efectivo',type:'service',reference:'Seña por inasistencia',note:'Seña retenida (inasistencia)'});
@@ -9965,7 +10015,7 @@
             const _createdAtOriginal=_senasPrevias.map(p=>p.createdAt).filter(Boolean).sort()[0]||null;
             state.payments=state.payments.filter(p=>!(p.bookingId===oldBookingId&&p.type==='deposit_received'&&!p.voided));
             if(_quiereSena){
-              addPayment({id:uid('dep'),bookingId:oldBookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',reference:'Seña de reserva',note:'Seña recibida al agendar',...(_createdAtOriginal?{createdAt:_createdAtOriginal}:{})});
+              addPayment({id:uid('dep'),bookingId:oldBookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',linkable:true,reference:'Seña de reserva',note:'Seña recibida al agendar',...(_createdAtOriginal?{createdAt:_createdAtOriginal}:{})});
             }else{saveState();}
           }
         }
@@ -10047,7 +10097,7 @@
           });
         });
         if(depositAmount>0&&state.appointmentClient.clientId&&!state.apDepositIsPreExisting){
-          addPayment({id:uid('dep'),bookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',reference:'Seña de reserva',note:'Seña recibida al agendar'});
+          addPayment({id:uid('dep'),bookingId,clientId:state.appointmentClient.clientId,ticketId:null,amount:depositAmount,method:depositMethod,type:'deposit_received',linkable:true,reference:'Seña de reserva',note:'Seña recibida al agendar'});
         }
         closeDrawers();showPage('agenda');showToast('Turno agregado a la agenda');
       }
@@ -10063,6 +10113,110 @@
     }
 
 
+    // ── Cuenta corriente de la clienta ────────────────────────────────────
+    // Facturado: servicios consumidos, sin propinas (la propina es de la
+    // colaboradora, no facturación del salón).
+    // Cobrado: de eso, lo que efectivamente se cobró — mismo criterio que usa
+    // Finanzas (finTicketRevenue), así los dos módulos no se contradicen.
+    // Debe: sale de los saldos pendientes, que es donde el sistema ya registra
+    // la deuda cuando un cobro queda parcial. No se suma también el
+    // pendingBalance del ticket o se contaría la misma plata dos veces.
+    function clientAccount(clientId){
+      const tickets = state.salesTickets.filter(t=>t.clientId===clientId && t.status!=='voided');
+      const billed = tickets.reduce((s,t)=>s+Number(t.servicesTotal!=null?t.servicesTotal:(t.lines||[]).reduce((a,l)=>a+Number(l.finalPrice||0),0)),0);
+      const collected = tickets.reduce((s,t)=>s+finTicketRevenue(t),0);
+      const owed = state.pendingCharges
+        .filter(p=>p.clientId===clientId && p.status==='pending')
+        .reduce((s,p)=>s+Number(p.finalPrice||0),0);
+      return {billed, collected, owed, deposit:clientAvailableDeposit(clientId)};
+    }
+    function renderProfileAccount(clientId, cuenta){
+      const box=$('profileAccount'); if(!box) return;
+      const card=(label,amount,sub,tone)=>{
+        const c = tone==='good' ? {bg:'#f0fdf4',bd:'#bbf7d0',fg:'#166534'} : {bg:'#fdecea',bd:'#f5c6c0',fg:'#a5281c'};
+        return `<div style="flex:1;min-width:130px;background:${c.bg};border:1px solid ${c.bd};border-radius:10px;padding:10px 12px;color:${c.fg}">
+          <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;opacity:.85">${esc(label)}</div>
+          <div style="font-size:18px;font-weight:700;margin-top:2px">${money(amount)}</div>
+          <div style="font-size:11px;opacity:.85;margin-top:1px">${esc(sub)}</div>
+        </div>`;
+      };
+      const parts=[];
+      if(cuenta.deposit>0){
+        // Para qué turno quedó guardada: solo si la seña está atada a un turno sin cobrar.
+        const reserv = state.payments.filter(p=>p.type==='deposit_received'&&p.clientId===clientId&&!p.voided&&p.bookingId&&!reservationCharged(p.bookingId));
+        const ap = reserv.length ? state.appointments.find(x=>(x.bookingId||x.id)===reserv[0].bookingId && !x.isAdditional) : null;
+        parts.push(card('Seña a favor', cuenta.deposit, ap?`Para el turno del ${ap.date}`:'Sin turno asignado', 'good'));
+      }
+      if(cuenta.owed>0.5) parts.push(card('Te debe', cuenta.owed, 'Saldo pendiente de cobro', 'bad'));
+      box.innerHTML = parts.length
+        ? `<div style="display:flex;gap:10px;flex-wrap:wrap">${parts.join('')}</div>`
+        : '<div class="mini-row"><strong>Sin saldos</strong><span>No tiene señas a favor ni deuda pendiente.</span></div>';
+    }
+    // Turnos que todavía no pasaron. Antes caían arriba de "Historial", mezclados
+    // con lo ya ocurrido: se veía primero algo que aún no sucedió.
+    function renderProfileUpcoming(clientId){
+      const box=$('profileUpcoming'); if(!box) return;
+      const today=dateKey(new Date());
+      const seen=new Set(), rows=[];
+      activeAppointments()
+        .filter(a=>a.clientId===clientId && !a.isAdditional && a.date && a.date>=today)
+        .sort((a,b)=>String(a.date+(a.start||'')).localeCompare(String(b.date+(b.start||''))))
+        .forEach(a=>{
+          const key=reservationKey(a);
+          if(!key || seen.has(key) || reservationCharged(key)) return;
+          seen.add(key);
+          const related=reservationAppointments(a);
+          const servicios=related.map(r=>r.service).filter(Boolean).join(' + ')||'Turno';
+          const total=related.reduce((s,r)=>s+Number(currentApptPrice(r)||estimateAmount(r)||0),0);
+          const sena=state.payments.filter(p=>p.type==='deposit_received'&&!p.voided&&p.bookingId===key).reduce((s,p)=>s+Number(p.amount||0),0);
+          const quien=fullName(member(a.memberId))||'Sin profesional';
+          // El monto de la seña es dato de plata: para recepción y colaboradoras
+          // se dice que está paga, sin el importe.
+          const senaTxt = sena>0
+            ? `<span style="color:#166534;font-weight:600">${canSeeClientData()?`Seña de ${money(sena)} paga`:'Con seña'}</span>`
+            : '<span style="color:var(--text-muted)">Sin seña</span>';
+          rows.push(`<div class="history-item"><strong>${esc(servicios)}</strong><span>${a.date} · ${a.start||''} · ${esc(quien)} · ${money(total)} estimado · ${senaTxt}</span></div>`);
+        });
+      box.innerHTML = rows.join('') || '<div class="history-item"><strong>Sin turnos agendados</strong><span>No tiene próximos turnos.</span></div>';
+    }
+    // Detalle de cada movimiento de dinero. Los pagos de tipo servicio no guardan
+    // clientId (solo ticketId), así que se enganchan por el ticket de la clienta.
+    function renderProfileMovements(clientId){
+      const box=$('profileMovements'); if(!box) return;
+      const misTickets=new Set(state.salesTickets.filter(t=>t.clientId===clientId).map(t=>t.id));
+      const depById=id=>state.payments.find(p=>p.id===id);
+      const movs=state.payments
+        .filter(p=>!p.voided && (p.clientId===clientId || (p.ticketId && misTickets.has(p.ticketId))))
+        .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+      if(!movs.length){ box.innerHTML='<div class="history-item"><strong>Sin movimientos</strong><span>Todavía no registró pagos.</span></div>'; return; }
+      box.innerHTML = movs.map(p=>{
+        const d=dayOf(p.createdAt)||'—';
+        const monto=Number(p.amount||0);
+        let titulo, signo, extra='';
+        if(p.type==='deposit_received'){
+          titulo='Seña recibida'; signo='+';
+          const ap=p.bookingId?state.appointments.find(x=>(x.bookingId||x.id)===p.bookingId && !x.isAdditional):null;
+          if(ap) extra=` · para el turno del ${ap.date}`;
+        } else if(p.type==='deposit_applied'){
+          titulo = /inasistencia/i.test(p.reference||'') ? 'Seña retenida por inasistencia' : 'Seña aplicada';
+          signo='−';
+          // El vínculo solo existe para las señas nuevas. Las anteriores no lo
+          // tienen porque ese dato nunca se guardó: se dice, no se inventa.
+          const src=Array.isArray(p.sourceDeposits)?p.sourceDeposits:[];
+          const fechas=src.map(x=>{const d2=depById(x.id); return d2?dayOf(d2.createdAt):null;}).filter(Boolean);
+          extra = fechas.length ? ` · de la seña del ${fechas.join(' y ')}` : ' · sin vincular';
+        } else if(p.type==='tip_in'){
+          titulo='Propina'; signo='+';
+        } else {
+          const tk=p.ticketId?state.salesTickets.find(t=>t.id===p.ticketId):null;
+          const svc=tk?(tk.lines||[]).map(l=>l.service).filter(Boolean).join(' · '):'';
+          titulo=svc||'Cobro'; signo='+';
+        }
+        const metodo=p.method?`<span class="tag neutral" style="font-size:10px;padding:1px 6px">${esc(p.method)}</span> `:'';
+        return `<div class="history-item"><strong>${esc(titulo)}</strong><span>${d} · ${metodo}${signo}${money(monto)}${esc(extra)}</span></div>`;
+      }).join('');
+    }
+
     function openClientProfile(id){
       const c = client(id);
       $('profileAvatar').textContent = initials(c);
@@ -10077,10 +10231,19 @@
       $('profileMetricFreq').textContent = ins.frequency ? `${ins.frequency} días` : '—';
       $('profileMetricLast').textContent = ins.daysSinceLast!==null ? (ins.daysSinceLast===0?'Hoy':`hace ${ins.daysSinceLast} día(s)`) : '—';
       $('profileMetricVisits').textContent = ins.visits || '0';
-      $('profileMetricSpent').textContent = ins.totalSpent ? money(ins.totalSpent) : '—';
-      const profileDeposit = clientAvailableDeposit(c.id);
+      // Facturado = servicios consumidos (sin propinas). Cobrado = lo que de eso
+      // se cobró (mismo criterio que Finanzas). La resta es lo que quedó impago.
+      // Reemplaza al viejo "Total histórico", que sumaba grossTotal: contaba
+      // propinas como facturación y no restaba el saldo que la clienta debía.
+      const cuenta = clientAccount(c.id);
+      $('profileMetricBilled').textContent = cuenta.billed ? money(cuenta.billed) : '—';
+      $('profileMetricCollected').textContent = cuenta.collected ? money(cuenta.collected) : '—';
+      const profileDeposit = cuenta.deposit;
       if($('profileDepositBanner')) $('profileDepositBanner').style.display = profileDeposit > 0 ? 'flex' : 'none';
       if($('profileDepositAmount')) $('profileDepositAmount').textContent = money(profileDeposit);
+      renderProfileUpcoming(c.id);
+      renderProfileAccount(c.id, cuenta);
+      renderProfileMovements(c.id);
       $('profileInsightTags').innerHTML = insightTagsHtml(ins) || '<span class="tag neutral">Sin señales aún</span>';
       let insightText;
       if(ins.tags.some(t=>t.cls==='risk')) insightText = `Atención: suele visitar cada ${ins.frequency||'30+'} días pero lleva ${ins.daysSinceLast} sin venir. Recomendado: contacto proactivo por WhatsApp con propuesta de turno.`;
@@ -10214,6 +10377,12 @@
       $('profileEditClient').onclick = ()=>{ closeDrawers(); editClient(c.id); };
       // Comunicación, reseñas y edición/eliminación → solo admin (evita exponer teléfono/email)
       const _adminOnly = canSeeClientData() ? '' : 'none';
+      // La cuenta corriente y los movimientos son datos de plata: mismo criterio
+      // que el teléfono y el email, que ya están ocultos para los demás roles.
+      ['profileAccountSection','profileMovementsSection','profileBilledCard','profileCollectedCard']
+        .forEach(idSec=>{ const el=$(idSec); if(el) el.style.display = canSeeClientData() ? '' : 'none'; });
+      // El banner de seña ya calculó su propio display arriba; acá solo se tapa.
+      if(!canSeeClientData() && $('profileDepositBanner')) $('profileDepositBanner').style.display='none';
       if($('profileContactWA'))   $('profileContactWA').style.display   = _adminOnly;
       if($('profileMessage'))     $('profileMessage').style.display     = _adminOnly;
       if($('profileAddReview'))   $('profileAddReview').style.display   = _adminOnly;
