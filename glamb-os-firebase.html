@@ -1382,6 +1382,22 @@
       flex-shrink: 0;
     }
 
+    /* Turno con comentario (nota interna) cargado: el título se resalta como
+       con un marcador fluorescente, para que salte a la vista en la agenda sin
+       tener que abrir el turno. Fondo claro + texto oscuro: se lee igual sobre
+       cualquiera de los colores de estado (pagado, VIP, cancelado, grupo). */
+    .appt-client-name.has-note,
+    .appt-title-text.has-note,
+    h3.has-note {
+      background: #E8FF00;
+      color: #171400;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.08), 0 0 6px rgba(232,255,0,0.85);
+      border-radius: 3px;
+      padding: 0 4px;
+    }
+    .appt-client-name.has-note { margin-left: -4px; }
+    h3.has-note { display: inline-block; }
+
     .appt-service {
       display: block;
       font-size: 10.5px;
@@ -8989,6 +9005,10 @@
     // dorado=VIP, atenuado=completado/inasistencia) siguen ganando y no se pisa
     // ninguna información. El borde punteado de "seña pendiente" se conserva
     // porque solo tocamos el COLOR del borde, no su estilo.
+    // ¿Este turno tiene un comentario cargado? Es la nota interna (a.note), no
+    // la nota del cliente (c.note) — el pedido es resaltar el turno puntual,
+    // no todos los turnos de una clienta que tenga una nota en su ficha.
+    function apptHasNote(a){ return !!(a && a.note && a.note.trim()); }
     function apptGroupStyle(a, statusKey, charged, isVip){
       const col = apptGroupColor(a);
       if(!col || charged || isVip || !['confirmed','in_progress'].includes(statusKey)) return '';
@@ -9011,15 +9031,16 @@
       const additionalClass = a.isAdditional ? 'additional' : '';
       const durationMins = mins(a.end) - mins(a.start);
       const gStyle = apptGroupStyle(a, statusKey, charged, vipClass);
+      const noteClass = apptHasNote(a) ? ' has-note' : '';
       if(blockH < 28){
-        return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${paidClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px;${gStyle}"><div class="appt-meta-tiny">${a.start}${!a.isAdditional?' '+fullName(c):''}</div></div>`;
+        return `<div draggable="${a.isAdditional?'false':'true'}" class="appointment-block ${statusClass} ${paidClass} ${vipClass} ${pendingClass} ${additionalClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px;${gStyle}"><div class="appt-meta-tiny">${a.start}${!a.isAdditional?` <span class="appt-title-text${noteClass}">${fullName(c)}</span>`:''}</div></div>`;
       }
       const STATUS_LABELS={confirmed:'Confirmado',in_progress:'En curso',completed:'Completado',cancelled:'Cancelado',no_show:'Inasistencia'};
       const isPendingPay = paid==='pending';
       const pillLabel = charged ? 'Pagado' : (isPendingPay ? 'Pago pendiente' : (STATUS_LABELS[statusKey]||statusKey));
       const pillCls = charged ? 'paid' : (isPendingPay ? 'pay-pending' : statusKey);
       const headerRow = `<div class="appt-header-row"><span class="appt-time-label">${a.start}${durationMins>=30?' · '+durationMins+' min':''}</span>${blockH>=44?`<span class="appt-status-pill ${pillCls}">${pillLabel}</span>`:''}</div>`;
-      const clientRow = !a.isAdditional ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
+      const clientRow = !a.isAdditional ? `<div class="appt-client-name${noteClass}">${fullName(c)}</div>` : '';
       const serviceRow = blockH>=56 ? `<div class="appt-service">${a.service}</div>` : '';
       const bkId = 'BK-'+(a.id||'').slice(-4).toUpperCase();
       const hasFooter = blockH>=82;
@@ -9069,7 +9090,7 @@
       const vipClass = c.tags&&c.tags.includes('VIP') ? 'vip' : '';
       const charged = !['cancelled','cancelado','voided','no_show'].includes(a.status) && reservationCharged(reservationKey(a));
       const gStyle = apptGroupStyle(a, statusKey, charged, vipClass);
-      const clientRow = blockH>=28 ? `<div class="appt-client-name">${fullName(c)}</div>` : '';
+      const clientRow = blockH>=28 ? `<div class="appt-client-name${apptHasNote(a)?' has-note':''}">${fullName(c)}</div>` : '';
       const proRow    = blockH>=52 ? `<div class="appt-professional">${initials(m)}</div>` : '';
       const timeRow   = blockH>=40 ? `<div class="appt-meta-tiny">${a.start}</div>` : '';
       return `<div class="appointment-block ${statusClass} ${vipClass}" data-appt="${a.id}" style="top:${topFor(a.start)}px;height:${blockH}px;${gStyle}">${clientRow}${timeRow}${proRow}</div>`;
@@ -9214,7 +9235,7 @@
             <div class="eyebrow" style="margin:0;">${isCombined?'Turno combinado':'Turno'}</div>
             <button data-action="closePopover" style="background:var(--surface-2);border:0;border-radius:8px;width:28px;height:28px;font-size:16px;color:var(--text-muted);cursor:pointer;flex-shrink:0;">×</button>
           </div>
-          <h3 style="margin:2px 0 1px;">${esc(fullName(c))}</h3>
+          <h3 style="margin:2px 0 1px;" class="${apptHasNote(a)?'has-note':''}">${esc(fullName(c))}</h3>
           <div class="meta" style="margin-bottom:10px;">${maskedPhone(c)}</div>
           ${isCombined
             ? `<div style="background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-bottom:10px;">${related.map(r=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:0.5px solid var(--line);font-size:12px;"><span style="color:var(--text)">${r.service}<br><span style="color:var(--text-muted);font-size:11px;">${fullName(member(r.memberId))} · ${r.start}–${r.end}</span></span><strong style="color:var(--text);font-size:13px;margin-left:8px;flex-shrink:0;">${money(currentApptPrice(r)||0)}</strong></div>`).join('')}<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0 0;font-size:12px;"><span style="color:var(--text-muted);">Total</span><strong>${money(totalCombined)}</strong></div></div>`
