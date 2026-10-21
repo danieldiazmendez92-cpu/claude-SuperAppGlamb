@@ -4502,7 +4502,7 @@
       <section class="form-card">
         <h3>Monto inicial</h3>
         <div class="field"><label>Efectivo inicial</label><input id="cashOpeningAmount" type="number" value="0" min="0"></div>
-        <div class="field"><label>Responsable</label><input id="cashOpeningUser" value="Admin caja"></div>
+        <div class="field"><label>Responsable</label><input id="cashOpeningUser" value="Admin caja" readonly title="Se registra automáticamente con tu usuario."></div>
       </section>
     </div>
     <footer class="drawer-footer"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="confirmCashOpenBtn">Abrir caja</button></footer>
@@ -5803,7 +5803,10 @@
       if(todayOnly && dateKey(state.agenda.currentDate)!==dateKey(new Date())) state.agenda.currentDate = new Date();
       // Caja solo-ventas (rol bajo): registra y revisa SUS tickets, sin arqueo del salón
       const salesOnly = cfg.cash==='sales';
-      ['cashOpenBtn','cashDepositBtn','cashWithdrawalBtn','cashExpenseBtn','cashCloseBtn'].forEach(id=>{ if($(id)) $(id).style.display = salesOnly?'none':''; });
+      // Abrir caja quedó afuera de este bloqueo: ahora cualquier colaboradora
+      // puede abrir el día, aunque retiros/gastos/cierre sigan siendo de admin.
+      if($('cashOpenBtn')) $('cashOpenBtn').style.display = '';
+      ['cashDepositBtn','cashWithdrawalBtn','cashExpenseBtn','cashCloseBtn'].forEach(id=>{ if($(id)) $(id).style.display = salesOnly?'none':''; });
       const bajoTabs = ['register','tickets'];
       document.querySelectorAll('#cashTabs [data-cash-tab]').forEach(b=>{
         b.style.display = (salesOnly && !bajoTabs.includes(b.dataset.cashTab)) ? 'none' : '';
@@ -7288,17 +7291,27 @@
       banner.innerHTML = `<strong>Hay ${pending.length} servicio${pending.length>1?'s':''} pendiente${pending.length>1?'s':''} de cobro</strong> · ${names} · ${money(total)}<br><span style="font-size:11px;color:#9a7a30;">Tocá acá para ver pendientes</span>`;
       banner.onclick = () => setCashTab('pending');
     }
+    // Cualquier rol que vea la página de Caja puede abrir el día (recepción y
+    // colaboradoras incluidas): antes era exclusivo de isCashAdmin(), que
+    // también manda sobre retiros/gastos/anulaciones/cierre — esos siguen
+    // reservados a admin/recepción, no se tocan acá.
+    function canOpenCash(){ return !!curRole(); }
     function openCashSession(){
-      if(!isCashAdmin()) return showToast('Solo admin caja puede abrir caja.');
+      if(!canOpenCash()) return showToast('Iniciá sesión para abrir caja.');
       if(state.cashSession.isOpen) return showToast('La caja ya está abierta.');
       if($('cashOpeningAmount')) $('cashOpeningAmount').value = 0;
-      if($('cashOpeningUser')) $('cashOpeningUser').value = 'Admin caja';
+      // Responsable: SIEMPRE el nombre real de quien tiene la sesión abierta.
+      // Antes era un campo de texto libre (precargado "Admin caja" pero
+      // editable) — cualquiera podía escribir otro nombre. Se deja de solo
+      // lectura y, en confirmCashOpen, se vuelve a tomar de cashActorName()
+      // en vez de leer el valor del campo, para que no haya forma de alterarlo.
+      if($('cashOpeningUser')) $('cashOpeningUser').value = cashActorName();
       openDrawer('cashOpenDrawer');
     }
     function confirmCashOpen(){
       const amount = Number($('cashOpeningAmount')?.value || 0);
       if(!amount && amount !== 0) return showToast('Ingresá un monto válido.');
-      state.cashSession = {isOpen:true, openingAmount:amount, openedBy:$('cashOpeningUser')?.value || 'Admin caja', openedAt:new Date().toISOString(), closedAt:null, countedCash:null, withdrawals:[], expenses:[]};
+      state.cashSession = {isOpen:true, openingAmount:amount, openedBy:cashActorName(), openedAt:new Date().toISOString(), closedAt:null, countedCash:null, withdrawals:[], expenses:[]};
       _cashReminderSent = false;
       closeDrawers();
       renderAll();
@@ -15090,6 +15103,11 @@ ${context}`;
       openNewLiquidation:      () => openNewLiquidation(),
       openCatalogDrawer:       () => openCatalogDrawer(),
       correctCashOpening:      () => correctCashOpening(),
+      // El botón "Abrir caja" de la tarjeta de estado (cuando la caja está
+      // cerrada) nunca estuvo acá: el click no hacía nada para nadie, admin
+      // incluido. No se notaba porque el botón de la barra superior sí
+      // funciona (tiene su propio .onclick). Lo conecto de paso.
+      openCashSession:         () => openCashSession(),
       toggleAgendaFilters:     () => toggleAgendaFilters(),
       toggleClientTagsPanel:   () => toggleClientTagsPanel(),
       toggleDatePicker:        () => toggleDatePicker(),
