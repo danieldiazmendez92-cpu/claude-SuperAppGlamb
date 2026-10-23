@@ -5801,6 +5801,15 @@
       ['prevDay','nextDay','todayBtn'].forEach(id=>{ if($(id)) $(id).style.display = todayOnly?'none':''; });
       if($('dateTitle')) $('dateTitle').style.pointerEvents = todayOnly?'none':'';
       if(todayOnly && dateKey(state.agenda.currentDate)!==dateKey(new Date())) state.agenda.currentDate = new Date();
+      // La vista "Semana" no tenía NINGÚN chequeo de rol: mostraba los 7 días de
+      // la semana sin importar quién estuviera logueado, aunque las flechas de
+      // navegación de día estuvieran ocultas. Se oculta la opción del selector
+      // (capa UI) y además se fuerza state.agenda.view a 'day' acá mismo (capa
+      // de datos): así no alcanza con que el <select> tenga 'week' guardado de
+      // una sesión anterior para volver a ver la semana completa.
+      const weekOpt = document.querySelector('#agendaView option[value="week"]');
+      if(weekOpt) weekOpt.style.display = todayOnly ? 'none' : '';
+      if(todayOnly && state.agenda.view === 'week') state.agenda.view = 'day';
       // Caja solo-ventas (rol bajo): registra y revisa SUS tickets, sin arqueo del salón
       const salesOnly = cfg.cash==='sales';
       // Abrir caja quedó afuera de este bloqueo: ahora cualquier colaboradora
@@ -8859,6 +8868,15 @@
       state.agenda.member = $('memberFilter')?.value || 'Todos';
       state.agenda.role = $('roleView')?.value || 'reception';
       state.agenda.view = $('agendaView')?.value || 'day';
+      // Blindaje continuo (no solo ocultar el botón/opción): un rol con
+      // agenda:'today' nunca debe poder terminar en vista semana ni en una
+      // fecha distinta de hoy, sin importar cómo haya llegado state.agenda a
+      // ese valor. Antes esto solo se reforzaba una vez, en applyPermissions()
+      // al loguearse — acá se repite en CADA render de la agenda.
+      if(permCfg().agenda==='today'){
+        if(state.agenda.view==='week') state.agenda.view='day';
+        if(dateKey(state.agenda.currentDate)!==dateKey(new Date())) state.agenda.currentDate=new Date();
+      }
       if($('onlyWorkingTodayChk')) state.agenda.onlyWorkingToday = $('onlyWorkingTodayChk').checked;
       refreshAgendaFilters();
       const members=visibleMembers();
