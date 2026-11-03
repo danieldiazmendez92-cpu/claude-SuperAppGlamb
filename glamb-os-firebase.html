@@ -1972,6 +1972,8 @@
     .ledger-tbl tr:last-child td{border-bottom:none}
     .ledger-tbl tr.voided td{opacity:.4;text-decoration:line-through}
     .ledger-tbl tr.retiro-row{background:rgba(192,57,43,.03)}
+    .ledger-tbl tr.auto-cierre-row{background:rgba(91,84,144,.07)}
+    .ledger-tbl tr.auto-cierre-row td:nth-child(2){color:#5b5490;font-weight:600}
     .l-in{color:#2d7a4a;font-weight:600}
     .l-out{color:#c0392b;font-weight:600}
     .l-dep{color:#b8760a;font-weight:600}
@@ -7264,16 +7266,55 @@
       return Number(state.cashSession.openingAmount||0) + cashIn - withdrawals - cashExpenses;
     }
 
+    // Discrepancia sin resolver de un cierre automático: la deja guardada
+    // checkCashOpeningDiscrepancy() (Cloud Function) en el propio documento de
+    // cashClosings. Se busca por dato, no por fecha: tiene que seguir visible
+    // aunque hayan pasado varios días, hasta que un admin la cierre.
+    function pendingCashDiscrepancy(){
+      return (state.cashClosings||[]).find(cl=>cl.discrepancy && !cl.discrepancy.acknowledgedBy) || null;
+    }
     function renderCashStatus(){
       if(!$('cashStatus')) return;
       const session = state.cashSession;
+      const disc = pendingCashDiscrepancy();
+      // La alerta es independiente de si la caja está abierta o cerrada ahora:
+      // sigue pendiente hasta que un admin la cierre, sin importar cuántas
+      // aperturas/cierres pasen mientras tanto.
+      const discHtml = disc ? `<div class="mini-row" style="background:#fdecea;border:1px solid #f0b3ac;margin-top:10px">
+        <span style="display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:#a5281c;color:#fff;margin-bottom:6px">⚠ Discrepancia</span>
+        <strong style="color:#a5281c">No coincide con el cierre automático del ${esc(dayOf(disc.closedAt))}</strong>
+        <span>Se esperaba ${money(disc.discrepancy.expected)} · se contó ${money(disc.discrepancy.counted)} · diferencia ${money(disc.discrepancy.diff)} · abrió ${esc(disc.discrepancy.openedBy||'—')}</span>
+        ${curRole()==='admin'?`<div style="margin-top:8px"><button class="small-btn danger" data-action="resolveCashDiscrepancy" data-id="${disc.id}">Cerrar alerta</button></div>`:'<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Solo un administrador puede cerrar esta alerta.</div>'}
+      </div>` : '';
       if(!session.isOpen){
-        $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja cerrada</strong><span>Para registrar ventas del día, primero abrí caja con monto inicial obligatorio.</span><div style="margin-top:8px"><button class="small-btn primary" data-action="openCashSession">Abrir caja</button></div></div>`;
+        // Cierre automático (22:00, nadie cerró a mano): identidad propia —
+        // color y texto distintos de cualquier cierre manual — y aclara que el
+        // monto es el que DEBERÍA haber, no un conteo real.
+        const autoHtml = session.auto ? `<div class="mini-row" style="background:#efedf8;border:1px solid #c9c3e6;margin-bottom:10px">
+          <span style="display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:#5b5490;color:#fff;margin-bottom:6px">🤖 Cierre automático</span>
+          <strong style="color:#5b5490">La caja se cerró sola a las 22:00</strong>
+          <span>Nadie hizo el cierre manual. Efectivo que debería haber: ${money(session.countedCash)} (no es un conteo real).</span>
+        </div>` : '';
+        $('cashStatus').innerHTML = autoHtml+`<div class="mini-row"><strong>Caja cerrada</strong><span>Para registrar ventas del día, primero abrí caja con monto inicial obligatorio.</span><div style="margin-top:8px"><button class="small-btn primary" data-action="openCashSession">Abrir caja</button></div></div>`+discHtml;
         return;
       }
       const expected = cashExpectedAmount();
       const canCorrect = isCashAdmin();
-      $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja abierta</strong><span>Apertura: ${money(session.openingAmount)} · Efectivo esperado ahora: ${money(expected)} · Abrió: ${session.openedBy||'Admin caja'}</span>${canCorrect?'<div style="margin-top:8px"><button class="small-btn" data-action="correctCashOpening">Corregir apertura</button></div>':''}</div>`;
+      $('cashStatus').innerHTML = `<div class="mini-row"><strong>Caja abierta</strong><span>Apertura: ${money(session.openingAmount)} · Efectivo esperado ahora: ${money(expected)} · Abrió: ${session.openedBy||'Admin caja'}</span>${canCorrect?'<div style="margin-top:8px"><button class="small-btn" data-action="correctCashOpening">Corregir apertura</button></div>':''}</div>`+discHtml;
+    }
+    // Solo un administrador puede cerrar una alerta de discrepancia (pedido
+    // explícito: "hasta que un administrador le dé cerrar"). Se guarda quién y
+    // cuándo, y se empuja el registro completo vía syncCollections() — mismo
+    // mecanismo que usa cualquier otro cambio a un cashClosings existente.
+    function resolveCashDiscrepancy(id){
+      if(curRole()!=='admin') return showToast('Solo un administrador puede cerrar esta alerta.');
+      const cl = (state.cashClosings||[]).find(c=>c.id===id);
+      if(!cl || !cl.discrepancy) return;
+      cl.discrepancy.acknowledgedBy = cashActorName();
+      cl.discrepancy.acknowledgedAt = new Date().toISOString();
+      saveState();
+      renderAll();
+      showToast('Alerta cerrada.');
     }
     function correctCashOpening(){
       if(!isCashAdmin()) return showToast('Solo admin/recepción puede corregir la apertura.');
@@ -8590,6 +8631,13 @@
       (state.expenses||[]).filter(e=>e.date===selDate&&/efectivo/i.test(e.paymentMethod||'')).forEach(e=>{
         events.push({ts:selDate+'T00:00:01',tipo:'gasto',label:`Gasto: ${e.category}`,detalle:e.description||'',entra:0,sale:Number(e.amount||0),cashIn:0,cashOut:Number(e.amount||0)});
       });
+      // Cierres de caja del día (manuales y automáticos). No movían plata, solo
+      // dejan la marca en el Ledger — el automático con su propio tipo para que
+      // la fila se pinte distinto.
+      (state.cashClosings||[]).filter(cl=>dayOf(cl.closedAt)===selDate).forEach(cl=>{
+        const diffTxt = Number(cl.difference||0)!==0 ? ` · dif. ${money(cl.difference)}` : ' · sin diferencia';
+        events.push({ts:cl.closedAt, tipo:cl.auto?'cierre-auto':'cierre', label:cl.auto?'🤖 Cierre automático':'Cierre de caja', detalle:`${cl.closedBy||'—'} · esperado ${money(cl.expectedCash)} · contado ${money(cl.countedCash)}${diffTxt}`, entra:0, sale:0, cashIn:0, cashOut:0});
+      });
 
       events.sort((a,b)=>(a.ts||'').localeCompare(b.ts||''));
 
@@ -8598,8 +8646,9 @@
       const rows=events.map(ev=>{
         saldo+=ev.cashIn-ev.cashOut;
         const isRetiro=ev.tipo==='retiro'||ev.tipo==='gasto';
+        const isAutoClose=ev.tipo==='cierre-auto';
         const voided=ev.voided;
-        return `<tr class="${isRetiro?'retiro-row':''}${voided?' voided':''}">
+        return `<tr class="${isRetiro?'retiro-row':''}${isAutoClose?' auto-cierre-row':''}${voided?' voided':''}">
           <td class="nb">${ledgerFmt(ev.ts)}</td>
           <td>${esc(ev.label)}</td>
           <td style="max-width:180px;font-size:11px;color:var(--text-muted)">${ev.detalle}${ev.method&&ev.method!=='—'?` · <em>${esc(ev.method)}</em>`:''}</td>
@@ -15121,6 +15170,7 @@ ${context}`;
       openNewLiquidation:      () => openNewLiquidation(),
       openCatalogDrawer:       () => openCatalogDrawer(),
       correctCashOpening:      () => correctCashOpening(),
+      resolveCashDiscrepancy:  el => resolveCashDiscrepancy(el.dataset.id),
       // El botón "Abrir caja" de la tarjeta de estado (cuando la caja está
       // cerrada) nunca estuvo acá: el click no hacía nada para nadie, admin
       // incluido. No se notaba porque el botón de la barra superior sí

@@ -478,3 +478,190 @@ exports.sendRetentionEmails = onSchedule(
       console.log(`Reactivación: ${sent} enviados, ${skipped} omitidos (ya avisados o sin email).`);
     },
 );
+
+/**
+ * Cierre automático de caja (22:00hs).
+ *
+ * Problema real: a veces nadie hace el cierre manual al final del día, y la
+ * caja queda "abierta" de un día para el otro — las ventas del día siguiente
+ * se mezclan con las de ayer en una sola sesión, y el control de caja pierde
+ * sentido.
+ *
+ * Esta función corre todas las noches. Si la caja sigue abierta, la cierra
+ * ella misma, usando el mismo cálculo que cashExpectedAmount()/sessionCashIn()
+ * del cliente (apertura + cobros en efectivo − retiros − gastos en efectivo).
+ * Ese monto es el EFECTIVO QUE DEBERÍA HABER según el sistema — nadie lo
+ * contó —, nunca un arqueo real: por eso el registro queda marcado `auto:true`
+ * y con countedCash=expectedCash (difference siempre 0, a propósito).
+ *
+ * Si ya estaba cerrada no hace nada: no hay nada que cerrar, y si quedó
+ * abierta varias noches seguidas sin que nadie la reabra, tampoco se generan
+ * cierres de más — recién se vuelve a evaluar cuando alguien la abre de
+ * nuevo (ver checkCashOpeningDiscrepancy).
+ */
+function money(n) {
+  return "$" + Math.round(Number(n || 0)).toLocaleString("es-AR");
+}
+
+exports.autoCloseCashRegister = onSchedule(
+    {
+      schedule: "every day 22:00",
+      timeZone: "America/Argentina/Buenos_Aires",
+      region: "southamerica-east1",
+    },
+    async () => {
+      const cfgRef = db.doc("appState/config");
+      const cfgSnap = await cfgRef.get();
+      const cfg = cfgSnap.exists ? cfgSnap.data() : {};
+      const session = cfg.cashSession;
+      if (!session || !session.isOpen) {
+        console.log("Caja ya cerrada; nada que hacer.");
+        return;
+      }
+
+      const openedAt = session.openedAt || "";
+      const openingAmount = Number(session.openingAmount || 0);
+
+      // Mismo filtro que sessionCashIn() (TODO lo que entra en efectivo, señas
+      // incluidas) y que el paymentsTotal de confirmCashClose() (solo ventas y
+      // anticipos aplicados, cualquier método) — una sola lectura, dos sumas.
+      const paySnap = await db.collection("payments").where("createdAt", ">=", openedAt).get();
+      let cashIn = 0;
+      let paymentsTotal = 0;
+      paySnap.docs.forEach((d) => {
+        const p = d.data() || {};
+        if (p.voided) return;
+        const amt = Number(p.amount || 0);
+        if (p.method === "Efectivo") cashIn += amt;
+        if (p.type === "service" || p.type === "deposit_applied") paymentsTotal += amt;
+      });
+
+      const withdrawalsTotal = (session.withdrawals || []).reduce((s, w) => s + Number(w.amount || 0), 0);
+      const cashExpensesTotal = (session.expenses || [])
+          .filter((e) => e.method === "Efectivo")
+          .reduce((s, e) => s + Number(e.amount || 0), 0);
+      const expectedCash = openingAmount + cashIn - withdrawalsTotal - cashExpensesTotal;
+
+      let pendingCount = 0;
+      try {
+        const pendAgg = await db.collection("pendingCharges").where("status", "==", "pending").count().get();
+        pendingCount = pendAgg.data().count;
+      } catch (e) {
+        console.error("No se pudo contar pendingCharges:", e);
+      }
+
+      const nowIso = new Date().toISOString();
+      const closingId = `close${Date.now()}auto`;
+      const snapshot = {
+        id: closingId,
+        openingAmount,
+        openedAt,
+        openedBy: session.openedBy || null,
+        expectedCash,
+        countedCash: expectedCash,
+        difference: 0,
+        paymentsTotal,
+        withdrawalsTotal,
+        withdrawals: session.withdrawals || [],
+        expenses: session.expenses || [],
+        pendingCount,
+        closedBy: "Cierre automático",
+        note: "Cierre automático a las 22:00 — nadie cerró la caja manualmente. " +
+          "El monto es el efectivo que debería haber según el sistema, no un conteo real.",
+        closedAt: nowIso,
+        auto: true,
+        discrepancyChecked: false,
+      };
+
+      await db.collection("cashClosings").doc(closingId).set(snapshot);
+      await cfgRef.set({
+        cashSession: {
+          ...session,
+          isOpen: false,
+          closedAt: nowIso,
+          countedCash: expectedCash,
+          closedBy: "Cierre automático",
+          auto: true,
+        },
+      }, {merge: true});
+
+      console.log(`Cierre automático: ${money(expectedCash)} esperado (apertura ${money(openingAmount)}).`);
+    },
+);
+
+/**
+ * Discrepancia al reabrir después de un cierre automático.
+ *
+ * Único momento en que se puede comparar el "efectivo que debería haber" del
+ * cierre automático contra plata REAL contada: cuando alguien vuelve a abrir
+ * caja, el monto que carga como apertura es, físicamente, lo que quedó en el
+ * cajón desde el cierre automático (nadie retiró nada en el medio).
+ *
+ * Si la diferencia supera el margen, el aviso queda guardado en el propio
+ * documento de cashClosings (discrepancy.acknowledgedBy queda null hasta que
+ * un admin lo cierre desde la app) y además se manda un email — así Daniel se
+ * entera aunque no tenga la app abierta esa mañana.
+ *
+ * Se evalúa UNA sola vez por cierre automático (discrepancyChecked), tanto si
+ * hay diferencia como si no: así una reapertura posterior el mismo día no
+ * vuelve a compararlo contra un cierre ya resuelto.
+ */
+const DISCREPANCY_THRESHOLD = 10; // pedido explícito de Daniel
+
+exports.checkCashOpeningDiscrepancy = onDocumentUpdated(
+    {document: "appState/{doc}", region: "southamerica-east1"},
+    async (event) => {
+      if (event.params.doc !== "config") return;
+      const before = event.data.before.data() || {};
+      const after = event.data.after.data() || {};
+      const bSess = before.cashSession || {};
+      const aSess = after.cashSession || {};
+
+      const justOpened = aSess.isOpen === true &&
+        (bSess.isOpen !== true || bSess.openedAt !== aSess.openedAt);
+      if (!justOpened) return;
+
+      const lastSnap = await db.collection("cashClosings")
+          .orderBy("closedAt", "desc").limit(1).get();
+      if (lastSnap.empty) return;
+      const lastDoc = lastSnap.docs[0];
+      const last = lastDoc.data() || {};
+      if (!last.auto || last.discrepancyChecked) return;
+
+      const counted = Number(aSess.openingAmount || 0);
+      const expected = Number(last.expectedCash || 0);
+      const diff = counted - expected;
+
+      if (Math.abs(diff) <= DISCREPANCY_THRESHOLD) {
+        await lastDoc.ref.set({discrepancyChecked: true}, {merge: true});
+        return;
+      }
+
+      const discrepancy = {
+        expected,
+        counted,
+        diff,
+        detectedAt: FieldValue.serverTimestamp(),
+        openedBy: aSess.openedBy || null,
+        acknowledgedBy: null,
+        acknowledgedAt: null,
+      };
+      await lastDoc.ref.set({discrepancyChecked: true, discrepancy}, {merge: true});
+
+      const subject = `⚠ Diferencia de caja — se esperaban ${money(expected)} y se contaron ${money(counted)}`;
+      const body = "La caja se cerró sola anoche porque nadie hizo el cierre manual. " +
+        "Hoy, al abrir, el monto contado no coincide con lo que el sistema esperaba.\n\n" +
+        `Se esperaba: ${money(expected)}\n` +
+        `Se contó: ${money(counted)}\n` +
+        `Diferencia: ${money(diff)}\n` +
+        `Abrió: ${aSess.openedBy || "—"}\n\n` +
+        "Revisalo en GLAMB OS, en Caja.";
+      await db.collection("mail").add({
+        to: ["danieldiazmendez92@gmail.com"],
+        message: {subject, html: body.replace(/\n/g, "<br>"), text: body},
+        createdAt: FieldValue.serverTimestamp(),
+      });
+
+      console.log(`Discrepancia de caja detectada: ${money(diff)}.`);
+    },
+);
