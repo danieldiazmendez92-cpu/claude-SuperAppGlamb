@@ -585,7 +585,6 @@ async function _resolveLeilaGiuli() {
 
 async function transferirComisionOct() {
   const APPLY = MODE.endsWith('-apply');
-  const PAY_METHOD = process.env.PAY_METHOD || 'Transferencia';
   console.log(`=== ${APPLY ? 'APLICAR' : 'SIMULACIÓN'} — transferir comisión ${COLAB_ORIGEN} → ${COLAB_DESTINO}, período ${PERIOD_LABEL_LG} ===\n`);
 
   const ctx = await _resolveLeilaGiuli();
@@ -597,9 +596,12 @@ async function transferirComisionOct() {
 
   if (resueltas.some(r => !r.candidato)) { console.log('\nABORTADO: hay líneas que no resolví a exactamente un ticket. Revisá arriba. Nada tocado.'); return; }
   if (leilaLiq.status !== 'paid') { console.log(`\nAVISO: la liquidación de ${COLAB_ORIGEN} NO figura como pagada (status=${leilaLiq.status}). Seguimos igual, pero avisá si esto no es lo esperado.`); }
+  // Daniel decidió (tras ver que Giuli ya tiene su liquidación de octubre PAGADA):
+  // sumar estas líneas a su liquidación existente SIN volver a marcarla pagada ni
+  // tocar Finanzas de su lado — mismo criterio que con el gasto ya pagado de Leila.
+  // No se crea ningún gasto nuevo en Finanzas en esta operación, de ningún lado.
   if (giuliLiq && giuliLiq.status === 'paid') {
-    console.log(`\nABORTADO: ${COLAB_DESTINO} YA tiene una liquidación de ${PERIOD_LABEL_LG} marcada como PAGADA (id=${giuliLiq.id}). Agregar líneas ahí pisaría un pago ya hecho y esto no estaba contemplado. Avisame cómo manejarlo antes de seguir.`);
-    return;
+    console.log(`\nAVISO: ${COLAB_DESTINO} ya tiene su liquidación de ${PERIOD_LABEL_LG} marcada PAGADA (id=${giuliLiq.id}). Se le suman las líneas igual, pero NO se la vuelve a marcar pagada ni se toca/crea ningún gasto de Finanzas de su lado (decisión de Daniel, simétrica a como queda Leila).`);
   }
 
   const movidas = resueltas.map(({ target, candidato }) => {
@@ -645,7 +647,7 @@ async function transferirComisionOct() {
   const giuliGross = giuliPresentismo + giuliViatico + giuliTotalExtras + giuliTotalComisiones;
   const giuliNeto = giuliGross - giuliTotalDeductions;
 
-  console.log(`\n${COLAB_DESTINO} — DESPUÉS: comisiones totales=$${giuliTotalComisiones} (de las cuales $${nuevasCommissionLinesGiuli.reduce((s, l) => s + l.commissionAmt, 0)} son las movidas) neto=$${giuliNeto} · se marcaría PAGADA y generaría un gasto nuevo en Finanzas por ese neto.`);
+  console.log(`\n${COLAB_DESTINO} — DESPUÉS: comisiones totales=$${giuliTotalComisiones} (de las cuales $${nuevasCommissionLinesGiuli.reduce((s, l) => s + l.commissionAmt, 0)} son las movidas) neto=$${giuliNeto} · estado de su liquidación NO cambia, NO se toca ni se crea ningún gasto de Finanzas de su lado.`);
 
   if (!APPLY) { console.log(`\nSIMULACIÓN: no se escribió nada. Para aplicar, MODE=transferir-comision-oct-apply`); return; }
 
@@ -680,14 +682,16 @@ async function transferirComisionOct() {
   }, { merge: true });
   console.log(`Liquidación de ${COLAB_ORIGEN} actualizada (id=${leilaLiq._docId}).`);
 
-  // Liquidación de Giuli (crear o actualizar)
+  // Liquidación de Giuli (crear o actualizar) — SOLO comisiones/totales.
+  // Status, paidAt, paymentMethod y expenseId NO se tocan: si ya estaba pagada
+  // sigue igual, y no se crea ningún gasto nuevo en Finanzas (decisión de Daniel).
   const ahoraIso = new Date().toISOString();
   let giuliLiqId, giuliLiqDocId;
   if (giuliLiq) {
     giuliLiqId = giuliLiq.id; giuliLiqDocId = giuliLiq._docId;
     await db.collection('financeLiquidations').doc(giuliLiqDocId).set({
       commissionLines: giuliCommissionLinesFinal, totalCommissions: giuliTotalComisiones,
-      grossPay: giuliGross, netPay: giuliNeto, status: 'paid', paidAt: ahoraIso, paymentMethod: PAY_METHOD,
+      grossPay: giuliGross, netPay: giuliNeto,
     }, { merge: true });
   } else {
     giuliLiqId = 'liq' + Date.now();
@@ -698,23 +702,14 @@ async function transferirComisionOct() {
       presentismo: 0, viatico: 0, extras: [], totalExtras: 0,
       commissionLines: giuliCommissionLinesFinal, totalCommissions: giuliTotalComisiones,
       deductionRefs: [], deductions: [], totalDeductions: 0,
-      grossPay: giuliGross, netPay: giuliNeto, status: 'paid', paidAt: ahoraIso, paymentMethod: PAY_METHOD,
-      createdAt: ahoraIso,
+      grossPay: giuliGross, netPay: giuliNeto, status: 'borrador', createdAt: ahoraIso,
     };
     await db.collection('financeLiquidations').doc(giuliLiqDocId).set(nuevaLiq);
   }
-  console.log(`Liquidación de ${COLAB_DESTINO} ${giuliLiq ? 'actualizada' : 'creada'} (id=${giuliLiqId}).`);
+  console.log(`Liquidación de ${COLAB_DESTINO} ${giuliLiq ? 'actualizada' : 'creada'} (id=${giuliLiqId}). Sin crear gasto de Finanzas.`);
 
-  // Gasto de Finanzas para Giuli
-  const expId = 'exp' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
-  const expDocId = docIdLG(expId);
-  const exp = { id: expId, date: ahoraIso.slice(0, 10), category: 'salaries', description: `Sueldo ${giuli.first || ''} ${giuli.last || ''} · ${PERIOD_LABEL_LG} (comisión transferida)`.trim(), amount: giuliNeto, paymentMethod: PAY_METHOD };
-  await db.collection('financeExpenses').doc(expDocId).set(exp);
-  await db.collection('financeLiquidations').doc(giuliLiqDocId).set({ expenseId: expId }, { merge: true });
-  console.log(`Gasto de Finanzas creado para ${COLAB_DESTINO}: id=${expId} monto=$${giuliNeto}.`);
-
-  // Completar el backup con las referencias que hacen falta para poder revertir.
-  await BACKUP_DOC_LG.set({ giuliLiqDocId, giuliExpenseDocIdCreado: expDocId }, { merge: true });
+  // Completar el backup con la referencia que hace falta para poder revertir.
+  await BACKUP_DOC_LG.set({ giuliLiqDocId }, { merge: true });
   console.log('\nLISTO. Backup actualizado con las referencias para poder revertir con MODE=revertir-comision-oct-apply cuando lo pidas.');
 }
 
@@ -726,7 +721,7 @@ async function revertirComisionOct() {
   if (!snap.exists) { console.log('No hay backup guardado (appState/backup_leila_giuli_oct2026). No hay nada que revertir, o ya se revirtió antes.'); return; }
   const backup = snap.data();
   if (backup.revertidoEl) { console.log('Este backup YA se usó para revertir, el', backup.revertidoEl, '. No se hace nada de nuevo.'); return; }
-  if (!backup.giuliLiqDocId || !backup.giuliExpenseDocIdCreado) { console.log('El backup está incompleto (faltan las referencias de Giuli) — no se puede revertir con seguridad. Avisame.'); return; }
+  if (!backup.giuliLiqDocId) { console.log('El backup está incompleto (falta la referencia de la liquidación de Giuli) — no se puede revertir con seguridad. Avisame.'); return; }
 
   console.log('Backup guardado el:', backup.guardadoEl);
   console.log('\nSE RESTAURARÍA:');
@@ -736,8 +731,8 @@ async function revertirComisionOct() {
   } else {
     console.log(`  · liquidación de ${COLAB_DESTINO} de ${PERIOD_LABEL_LG}: NO EXISTÍA antes → se borra (doc=${backup.giuliLiqDocId})`);
   }
-  console.log(`  · gasto de Finanzas creado para ${COLAB_DESTINO} → se borra (doc=${backup.giuliExpenseDocIdCreado})`);
   console.log(`  · ${backup.tickets.length} ticket(s): sus líneas vuelven a collaboratorId de ${COLAB_ORIGEN}`);
+  console.log('  (no hay ningún gasto de Finanzas que borrar: esta operación no creó ninguno)');
 
   if (!APPLY) { console.log('\nSIMULACIÓN: no se escribió nada. Para aplicar, MODE=revertir-comision-oct-apply'); return; }
 
@@ -756,9 +751,6 @@ async function revertirComisionOct() {
     await db.collection('financeLiquidations').doc(backup.giuliLiqDocId).delete();
     console.log(`Liquidación de ${COLAB_DESTINO} de ${PERIOD_LABEL_LG} borrada (no existía antes).`);
   }
-
-  await db.collection('financeExpenses').doc(backup.giuliExpenseDocIdCreado).delete();
-  console.log(`Gasto de Finanzas de ${COLAB_DESTINO} borrado.`);
 
   await BACKUP_DOC_LG.set({ revertidoEl: new Date().toISOString() }, { merge: true });
   console.log('\nLISTO. Todo restaurado a como estaba antes de la transferencia.');
