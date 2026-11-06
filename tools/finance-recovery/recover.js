@@ -474,6 +474,296 @@ async function fixLiqExpenses() {
   console.log(APPLY ? 'LISTO.' : 'SIMULACIÓN: nada escrito. Usá fix-liq-expenses-apply.');
 }
 
+// ── transferir-comision-oct / revertir-comision-oct ───────────────────────
+// Caso puntual pedido por Daniel: 5 líneas de comisión de octubre 2026, hoy
+// atribuidas a Leila en una liquidación YA PAGADA, pasan a ser de Giuli
+// (recalculadas a SU %) — en el ticket de venta (de ahí sale Caja/Ledger/
+// historial de la clienta automáticamente, sin tocar nada más) y en la
+// liquidación de cada una. El gasto de Finanzas de Leila YA PAGADO queda
+// intacto (decisión explícita de Daniel). A Giuli se le crea/actualiza su
+// liquidación de octubre, se marca pagada y SÍ genera un gasto nuevo en
+// Finanzas (decisión explícita de Daniel, sabiendo que eso duplica
+// temporalmente el gasto de sueldo de estas líneas en los libros).
+// Reversible: antes de escribir nada se guarda un backup completo en
+// appState/backup_leila_giuli_oct2026; revertir-comision-oct restaura desde
+// ahí cuando Daniel lo pida (no antes — nada se revierte solo).
+const LINEAS_LEILA_A_GIULI = [
+  { fecha: '2026-10-10', cliente: 'Daniela Herrera',    servicio: 'Kapping Polygel',   base: 29000 },
+  { fecha: '2026-10-07', cliente: 'Carolina Biani',     servicio: 'Manos y pies semi', base: 50000 },
+  { fecha: '2026-10-03', cliente: 'Marlene Bienati',    servicio: 'Kapping Acrílico',  base: 32000 },
+  { fecha: '2026-10-03', cliente: 'Rocio Lado',         servicio: 'Kapping Gel',       base: 20000 },
+  { fecha: '2026-10-02', cliente: 'Lucia Ezponda olea', servicio: 'Kapping Polygel',   base: 29000 },
+];
+const COLAB_ORIGEN = 'Leila';
+const COLAB_DESTINO = 'Giuli';
+const PERIOD_LABEL_LG = '2026-10';
+const BACKUP_DOC_LG = db.collection('appState').doc('backup_leila_giuli_oct2026');
+const diaAR_LG = iso => { const d = new Date(String(iso || '')); if (isNaN(d)) return ''; return new Date(d.getTime() - 3 * 3600000).toISOString().slice(0, 10); };
+const normLG = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+const docIdLG = v => String(v).replace(/[\/.]/g, '_');
+
+async function _resolveLeilaGiuli() {
+  const catSnap = await db.collection('appState').doc('catalog').get();
+  const catalog = (catSnap.exists ? (catSnap.data().catalog || catSnap.data()) : {}) || {};
+  const groups = catalog.groups || [];
+  const getVariantFromId = (variantId) => {
+    for (const g of groups) for (const s of (g.services || [])) {
+      const v = (s.variants || []).find(x => x.id === variantId);
+      if (v) return { group: g, service: s, variant: v };
+    }
+    return null;
+  };
+  // Réplica literal de getCollaboratorCommission desplegada en el HTML.
+  const getCollaboratorCommission = (m, groupName, variantId, serviceName) => {
+    if (!m.payroll || !m.payroll.commissions) return 0;
+    const gc = m.payroll.commissions.find(c => c.groupName === groupName || c.groupId === groupName);
+    if (!gc) return 0;
+    if (gc.serviceOverrides && gc.serviceOverrides.length) {
+      let serviceId = null;
+      const vi = variantId ? getVariantFromId(variantId) : null;
+      if (vi) serviceId = vi.service.id;
+      else if (serviceName) {
+        const g = groups.find(x => x.name === groupName || x.id === groupName);
+        if (g) { const s = (g.services || []).find(s => s.name === serviceName || (s.variants || []).some(v => v.name === serviceName)); if (s) serviceId = s.id; }
+      }
+      const ov = gc.serviceOverrides.find(o => (serviceId && o.serviceId === serviceId) || (variantId && o.serviceId === variantId));
+      if (ov) return ov.pct || 0;
+    }
+    return gc.pct || 0;
+  };
+
+  const collabsSnap = await db.collection('collaborators').get();
+  const collabs = collabsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const findColab = name => collabs.filter(c => normLG(`${c.first || ''} ${c.last || ''}`).includes(normLG(name)));
+  const leilaMatches = findColab(COLAB_ORIGEN);
+  const giuliMatches = findColab(COLAB_DESTINO);
+  if (leilaMatches.length !== 1) { console.log(`No encontré exactamente una colaboradora "${COLAB_ORIGEN}" (encontré ${leilaMatches.length}):`, JSON.stringify(leilaMatches.map(c => `${c.first} ${c.last} (${c.id})`))); return null; }
+  if (giuliMatches.length !== 1) { console.log(`No encontré exactamente una colaboradora "${COLAB_DESTINO}" (encontré ${giuliMatches.length}):`, JSON.stringify(giuliMatches.map(c => `${c.first} ${c.last} (${c.id})`))); return null; }
+  const leila = leilaMatches[0], giuli = giuliMatches[0];
+
+  const liqSnap = await db.collection('financeLiquidations').get();
+  const liqs = liqSnap.docs.map(d => ({ _docId: d.id, ...d.data() }));
+  const leilaLiqMatches = liqs.filter(l => l.collaboratorId === leila.id && l.period && l.period.label === PERIOD_LABEL_LG);
+  if (leilaLiqMatches.length !== 1) { console.log(`No encontré exactamente una liquidación de ${COLAB_ORIGEN} para ${PERIOD_LABEL_LG} (encontré ${leilaLiqMatches.length}).`); return null; }
+  const leilaLiq = leilaLiqMatches[0];
+  const giuliLiqMatches = liqs.filter(l => l.collaboratorId === giuli.id && l.period && l.period.label === PERIOD_LABEL_LG);
+  if (giuliLiqMatches.length > 1) { console.log(`Hay MÁS DE UNA liquidación de ${COLAB_DESTINO} para ${PERIOD_LABEL_LG}, freno por las dudas.`); return null; }
+  const giuliLiq = giuliLiqMatches[0] || null;
+
+  const ticketsSnap = await db.collection('salesTickets').get();
+  const tickets = ticketsSnap.docs.map(d => ({ _docId: d.id, ...d.data() }));
+
+  const resueltas = [];
+  for (const target of LINEAS_LEILA_A_GIULI) {
+    const candidatos = [];
+    for (const t of tickets) {
+      if (t.status === 'voided') continue;
+      const fecha = t.date || diaAR_LG(t.createdAt);
+      if (fecha !== target.fecha) continue;
+      const full = normLG(t.clientNameSnapshot || '');
+      const nameOk = full === normLG(target.cliente) || normLG(target.cliente).split(' ').every(p => full.includes(p));
+      if (!nameOk) continue;
+      (t.lines || []).forEach((l, idx) => {
+        if (l.collaboratorId !== leila.id) return;
+        if ((l.service || '') !== target.servicio) return;
+        const base = l.discountType === 'canje' ? Number(l.basePrice || 0) : Number(l.finalPrice || 0);
+        if (base !== Number(target.base)) return;
+        candidatos.push({ ticket: t, lineIdx: idx, line: l });
+      });
+    }
+    if (candidatos.length !== 1) {
+      console.log(`  ⚠ "${target.cliente}" ${target.fecha} "${target.servicio}" $${target.base}: encontré ${candidatos.length} candidato(s) (necesito exactamente 1).`);
+      candidatos.forEach(c => console.log('     candidato: ticket', c.ticket._docId, 'línea', c.lineIdx, JSON.stringify(c.line)));
+      resueltas.push({ target, candidato: null });
+    } else {
+      resueltas.push({ target, candidato: candidatos[0] });
+    }
+  }
+
+  return { leila, giuli, leilaLiq, giuliLiq, resueltas, getCollaboratorCommission };
+}
+
+async function transferirComisionOct() {
+  const APPLY = MODE.endsWith('-apply');
+  const PAY_METHOD = process.env.PAY_METHOD || 'Transferencia';
+  console.log(`=== ${APPLY ? 'APLICAR' : 'SIMULACIÓN'} — transferir comisión ${COLAB_ORIGEN} → ${COLAB_DESTINO}, período ${PERIOD_LABEL_LG} ===\n`);
+
+  const ctx = await _resolveLeilaGiuli();
+  if (!ctx) { console.log('\nABORTADO: no se pudo resolver todo lo necesario. Nada tocado.'); return; }
+  const { leila, giuli, leilaLiq, giuliLiq, resueltas, getCollaboratorCommission } = ctx;
+
+  console.log(`${COLAB_ORIGEN}: ${leila.first} ${leila.last} (id=${leila.id}) · liquidación id=${leilaLiq.id} estado=${leilaLiq.status} comisiones=${(leilaLiq.commissionLines || []).length} netPay=${leilaLiq.netPay}`);
+  console.log(`${COLAB_DESTINO}: ${giuli.first} ${giuli.last} (id=${giuli.id}) · ${giuliLiq ? `ya tiene liquidación id=${giuliLiq.id} estado=${giuliLiq.status} comisiones=${(giuliLiq.commissionLines || []).length}` : 'NO tiene liquidación de este período — se crearía una nueva'}`);
+
+  if (resueltas.some(r => !r.candidato)) { console.log('\nABORTADO: hay líneas que no resolví a exactamente un ticket. Revisá arriba. Nada tocado.'); return; }
+  if (leilaLiq.status !== 'paid') { console.log(`\nAVISO: la liquidación de ${COLAB_ORIGEN} NO figura como pagada (status=${leilaLiq.status}). Seguimos igual, pero avisá si esto no es lo esperado.`); }
+  if (giuliLiq && giuliLiq.status === 'paid') {
+    console.log(`\nABORTADO: ${COLAB_DESTINO} YA tiene una liquidación de ${PERIOD_LABEL_LG} marcada como PAGADA (id=${giuliLiq.id}). Agregar líneas ahí pisaría un pago ya hecho y esto no estaba contemplado. Avisame cómo manejarlo antes de seguir.`);
+    return;
+  }
+
+  const movidas = resueltas.map(({ target, candidato }) => {
+    const { ticket, lineIdx, line } = candidato;
+    const commissionBase = line.discountType === 'canje' ? Number(line.basePrice || 0) : Number(line.finalPrice || 0);
+    const pctGiuli = getCollaboratorCommission(giuli, line.group, line.variantId, line.service);
+    const commissionAmtGiuli = Math.round(commissionBase * pctGiuli / 100);
+    return { target, ticket, lineIdx, line, commissionBase, pctGiuli, commissionAmtGiuli };
+  });
+
+  console.log('\nLÍNEAS A MOVER:');
+  movidas.forEach(mv => {
+    console.log(`  · ${mv.target.fecha} ${mv.target.cliente} "${mv.target.servicio}" — ticket=${mv.ticket._docId} línea=${mv.lineIdx}`);
+    console.log(`      base=$${mv.commissionBase} → % de ${COLAB_DESTINO}=${mv.pctGiuli}% → comisión nueva=$${mv.commissionAmtGiuli}`);
+  });
+
+  const keysAMover = new Set(movidas.map(mv => `${mv.ticket.id || mv.ticket._docId}|${mv.line.service}`));
+  const matchKey = l => `${l.ticketId}|${l.service}`;
+  const leilaCommissionLinesNuevas = (leilaLiq.commissionLines || []).filter(l => !keysAMover.has(matchKey(l)));
+  const leilaSacadas = (leilaLiq.commissionLines || []).filter(l => keysAMover.has(matchKey(l)));
+  if (leilaSacadas.length !== movidas.length) {
+    console.log(`\nABORTADO: esperaba sacar ${movidas.length} línea(s) de la liquidación de ${COLAB_ORIGEN} y encontré ${leilaSacadas.length}. Revisar antes de seguir.`);
+    return;
+  }
+  const leilaTotalComisionesNueva = leilaCommissionLinesNuevas.reduce((s, l) => s + Number(l.commissionAmt || 0), 0);
+  const leilaGrossNuevo = Number(leilaLiq.presentismo || 0) + Number(leilaLiq.viatico || 0) + Number(leilaLiq.totalExtras || 0) + leilaTotalComisionesNueva;
+  const leilaNetoNuevo = leilaGrossNuevo - Number(leilaLiq.totalDeductions || 0);
+
+  console.log(`\n${COLAB_ORIGEN} — ANTES: comisiones=$${leilaLiq.totalCommissions} neto=$${leilaLiq.netPay}`);
+  console.log(`${COLAB_ORIGEN} — DESPUÉS: comisiones=$${leilaTotalComisionesNueva} neto=$${leilaNetoNuevo}  (su gasto YA pagado en Finanzas NO se toca)`);
+
+  const nuevasCommissionLinesGiuli = movidas.map(mv => ({
+    ticketId: mv.ticket.id || mv.ticket._docId, ticketDate: mv.target.fecha, clientName: mv.ticket.clientNameSnapshot || mv.target.cliente,
+    service: mv.line.service || mv.line.group || 'Servicio', group: mv.line.group || '', variantId: mv.line.variantId || '',
+    saleAmount: mv.commissionBase, pct: mv.pctGiuli, commissionAmt: mv.commissionAmtGiuli, discountType: mv.line.discountType || 'none',
+  }));
+  const giuliCommissionLinesFinal = [...(giuliLiq ? (giuliLiq.commissionLines || []) : []), ...nuevasCommissionLinesGiuli];
+  const giuliTotalComisiones = giuliCommissionLinesFinal.reduce((s, l) => s + Number(l.commissionAmt || 0), 0);
+  const giuliPresentismo = giuliLiq ? Number(giuliLiq.presentismo || 0) : 0;
+  const giuliViatico = giuliLiq ? Number(giuliLiq.viatico || 0) : 0;
+  const giuliTotalExtras = giuliLiq ? Number(giuliLiq.totalExtras || 0) : 0;
+  const giuliTotalDeductions = giuliLiq ? Number(giuliLiq.totalDeductions || 0) : 0;
+  const giuliGross = giuliPresentismo + giuliViatico + giuliTotalExtras + giuliTotalComisiones;
+  const giuliNeto = giuliGross - giuliTotalDeductions;
+
+  console.log(`\n${COLAB_DESTINO} — DESPUÉS: comisiones totales=$${giuliTotalComisiones} (de las cuales $${nuevasCommissionLinesGiuli.reduce((s, l) => s + l.commissionAmt, 0)} son las movidas) neto=$${giuliNeto} · se marcaría PAGADA y generaría un gasto nuevo en Finanzas por ese neto.`);
+
+  if (!APPLY) { console.log(`\nSIMULACIÓN: no se escribió nada. Para aplicar, MODE=transferir-comision-oct-apply`); return; }
+
+  // ── Backup ANTES de tocar nada ──
+  const backup = {
+    guardadoEl: new Date().toISOString(),
+    leilaLiqDocId: leilaLiq._docId,
+    leilaLiq: JSON.parse(JSON.stringify(leilaLiq)),
+    giuliLiqExistiaAntes: !!giuliLiq,
+    giuliLiqPrevio: giuliLiq ? JSON.parse(JSON.stringify(giuliLiq)) : null,
+    tickets: [...new Map(movidas.map(mv => [mv.ticket._docId, mv.ticket])).values()].map(t => ({ docId: t._docId, lines: JSON.parse(JSON.stringify(t.lines || [])) })),
+  };
+  await BACKUP_DOC_LG.set(backup, { merge: false });
+  console.log('\nBackup guardado en appState/backup_leila_giuli_oct2026.');
+
+  // Tickets: cambiar collaboratorId SOLO en la línea correspondiente.
+  const porTicket = new Map();
+  movidas.forEach(mv => { if (!porTicket.has(mv.ticket._docId)) porTicket.set(mv.ticket._docId, mv.ticket); });
+  for (const [docId, ticket] of porTicket) {
+    const nuevasLines = (ticket.lines || []).map(l => {
+      const esMovida = movidas.some(mv => mv.ticket._docId === docId && mv.line === l);
+      return esMovida ? { ...l, collaboratorId: giuli.id } : l;
+    });
+    await db.collection('salesTickets').doc(docId).update({ lines: nuevasLines });
+  }
+  console.log(`Tickets actualizados: ${porTicket.size}.`);
+
+  // Liquidación de Leila
+  await db.collection('financeLiquidations').doc(leilaLiq._docId).set({
+    commissionLines: leilaCommissionLinesNuevas, totalCommissions: leilaTotalComisionesNueva,
+    grossPay: leilaGrossNuevo, netPay: leilaNetoNuevo,
+  }, { merge: true });
+  console.log(`Liquidación de ${COLAB_ORIGEN} actualizada (id=${leilaLiq._docId}).`);
+
+  // Liquidación de Giuli (crear o actualizar)
+  const ahoraIso = new Date().toISOString();
+  let giuliLiqId, giuliLiqDocId;
+  if (giuliLiq) {
+    giuliLiqId = giuliLiq.id; giuliLiqDocId = giuliLiq._docId;
+    await db.collection('financeLiquidations').doc(giuliLiqDocId).set({
+      commissionLines: giuliCommissionLinesFinal, totalCommissions: giuliTotalComisiones,
+      grossPay: giuliGross, netPay: giuliNeto, status: 'paid', paidAt: ahoraIso, paymentMethod: PAY_METHOD,
+    }, { merge: true });
+  } else {
+    giuliLiqId = 'liq' + Date.now();
+    giuliLiqDocId = docIdLG(giuliLiqId);
+    const nuevaLiq = {
+      id: giuliLiqId, collaboratorId: giuli.id, collaboratorName: `${giuli.first || ''} ${giuli.last || ''}`.trim(),
+      period: { type: 'monthly', from: leilaLiq.period.from, to: leilaLiq.period.to, label: PERIOD_LABEL_LG },
+      presentismo: 0, viatico: 0, extras: [], totalExtras: 0,
+      commissionLines: giuliCommissionLinesFinal, totalCommissions: giuliTotalComisiones,
+      deductionRefs: [], deductions: [], totalDeductions: 0,
+      grossPay: giuliGross, netPay: giuliNeto, status: 'paid', paidAt: ahoraIso, paymentMethod: PAY_METHOD,
+      createdAt: ahoraIso,
+    };
+    await db.collection('financeLiquidations').doc(giuliLiqDocId).set(nuevaLiq);
+  }
+  console.log(`Liquidación de ${COLAB_DESTINO} ${giuliLiq ? 'actualizada' : 'creada'} (id=${giuliLiqId}).`);
+
+  // Gasto de Finanzas para Giuli
+  const expId = 'exp' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-6);
+  const expDocId = docIdLG(expId);
+  const exp = { id: expId, date: ahoraIso.slice(0, 10), category: 'salaries', description: `Sueldo ${giuli.first || ''} ${giuli.last || ''} · ${PERIOD_LABEL_LG} (comisión transferida)`.trim(), amount: giuliNeto, paymentMethod: PAY_METHOD };
+  await db.collection('financeExpenses').doc(expDocId).set(exp);
+  await db.collection('financeLiquidations').doc(giuliLiqDocId).set({ expenseId: expId }, { merge: true });
+  console.log(`Gasto de Finanzas creado para ${COLAB_DESTINO}: id=${expId} monto=$${giuliNeto}.`);
+
+  // Completar el backup con las referencias que hacen falta para poder revertir.
+  await BACKUP_DOC_LG.set({ giuliLiqDocId, giuliExpenseDocIdCreado: expDocId }, { merge: true });
+  console.log('\nLISTO. Backup actualizado con las referencias para poder revertir con MODE=revertir-comision-oct-apply cuando lo pidas.');
+}
+
+async function revertirComisionOct() {
+  const APPLY = MODE.endsWith('-apply');
+  console.log(`=== ${APPLY ? 'APLICAR' : 'SIMULACIÓN'} — revertir transferencia de comisión ${COLAB_ORIGEN} ← ${COLAB_DESTINO} ===\n`);
+
+  const snap = await BACKUP_DOC_LG.get();
+  if (!snap.exists) { console.log('No hay backup guardado (appState/backup_leila_giuli_oct2026). No hay nada que revertir, o ya se revirtió antes.'); return; }
+  const backup = snap.data();
+  if (backup.revertidoEl) { console.log('Este backup YA se usó para revertir, el', backup.revertidoEl, '. No se hace nada de nuevo.'); return; }
+  if (!backup.giuliLiqDocId || !backup.giuliExpenseDocIdCreado) { console.log('El backup está incompleto (faltan las referencias de Giuli) — no se puede revertir con seguridad. Avisame.'); return; }
+
+  console.log('Backup guardado el:', backup.guardadoEl);
+  console.log('\nSE RESTAURARÍA:');
+  console.log(`  · liquidación de ${COLAB_ORIGEN} (id=${backup.leilaLiq.id}) a su estado anterior: comisiones=$${backup.leilaLiq.totalCommissions} neto=$${backup.leilaLiq.netPay}`);
+  if (backup.giuliLiqExistiaAntes) {
+    console.log(`  · liquidación de ${COLAB_DESTINO} (id=${backup.giuliLiqPrevio.id}) a su estado anterior: comisiones=$${backup.giuliLiqPrevio.totalCommissions} neto=$${backup.giuliLiqPrevio.netPay}`);
+  } else {
+    console.log(`  · liquidación de ${COLAB_DESTINO} de ${PERIOD_LABEL_LG}: NO EXISTÍA antes → se borra (doc=${backup.giuliLiqDocId})`);
+  }
+  console.log(`  · gasto de Finanzas creado para ${COLAB_DESTINO} → se borra (doc=${backup.giuliExpenseDocIdCreado})`);
+  console.log(`  · ${backup.tickets.length} ticket(s): sus líneas vuelven a collaboratorId de ${COLAB_ORIGEN}`);
+
+  if (!APPLY) { console.log('\nSIMULACIÓN: no se escribió nada. Para aplicar, MODE=revertir-comision-oct-apply'); return; }
+
+  for (const t of backup.tickets) {
+    await db.collection('salesTickets').doc(t.docId).update({ lines: t.lines });
+  }
+  console.log(`\nTickets restaurados: ${backup.tickets.length}.`);
+
+  await db.collection('financeLiquidations').doc(backup.leilaLiqDocId).set(backup.leilaLiq, { merge: false });
+  console.log(`Liquidación de ${COLAB_ORIGEN} restaurada.`);
+
+  if (backup.giuliLiqExistiaAntes) {
+    await db.collection('financeLiquidations').doc(backup.giuliLiqDocId).set(backup.giuliLiqPrevio, { merge: false });
+    console.log(`Liquidación de ${COLAB_DESTINO} restaurada a su estado anterior.`);
+  } else {
+    await db.collection('financeLiquidations').doc(backup.giuliLiqDocId).delete();
+    console.log(`Liquidación de ${COLAB_DESTINO} de ${PERIOD_LABEL_LG} borrada (no existía antes).`);
+  }
+
+  await db.collection('financeExpenses').doc(backup.giuliExpenseDocIdCreado).delete();
+  console.log(`Gasto de Finanzas de ${COLAB_DESTINO} borrado.`);
+
+  await BACKUP_DOC_LG.set({ revertidoEl: new Date().toISOString() }, { merge: true });
+  console.log('\nLISTO. Todo restaurado a como estaba antes de la transferencia.');
+}
+
 // audit-caja: SOLO LECTURA. Reproduce EXACTAMENTE cashExpectedAmount() de la
 // app sobre la sesión de caja abierta, y muestra de dónde sale cada peso:
 //   apertura + cobros en efectivo desde openedAt − retiros − gastos en efectivo
@@ -1915,6 +2205,8 @@ async function auditBorradosHoy() {
   if (MODE === 'seed-retention-guards' || MODE === 'seed-retention-guards-apply') { await seedRetentionGuards(); return; }
   if (MODE === 'inspect-liq-finance') { await inspectLiqFinance(); return; }
   if (MODE === 'fix-liq-expenses' || MODE === 'fix-liq-expenses-apply') { await fixLiqExpenses(); return; }
+  if (MODE === 'transferir-comision-oct' || MODE === 'transferir-comision-oct-apply') { await transferirComisionOct(); return; }
+  if (MODE === 'revertir-comision-oct' || MODE === 'revertir-comision-oct-apply') { await revertirComisionOct(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'audit-caja') { await auditCaja(); return; }
   if (MODE === 'audit-fechas') { await auditFechas(); return; }
