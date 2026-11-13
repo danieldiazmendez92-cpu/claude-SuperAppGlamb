@@ -756,6 +756,68 @@ async function revertirComisionOct() {
   console.log('\nLISTO. Todo restaurado a como estaba antes de la transferencia.');
 }
 
+// diag-cobro-cliente: SOLO LECTURA. Compara lo que la agenda tiene para una
+// clienta en una fecha contra lo que Caja armaría al elegir "Turno en agenda"
+// (réplica de selectSaleAppointment). Env: DIAG_CLIENTE, DIAG_FECHA (YYYY-MM-DD AR).
+async function diagCobroCliente() {
+  const CLIENTE = (process.env.DIAG_CLIENTE || 'Agatha Asencio').trim();
+  const FECHA = process.env.DIAG_FECHA || new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);
+  const norm = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  console.log(`=== DIAGNÓSTICO (solo lectura) — "${CLIENTE}" el ${FECHA} ===\n`);
+
+  const [catSnap, clientsSnap, collabsSnap] = await Promise.all([
+    db.collection('appState').doc('catalog').get(), db.collection('clients').get(), db.collection('collaborators').get(),
+  ]);
+  const catalog = (catSnap.exists ? (catSnap.data().catalog || catSnap.data()) : {}) || {};
+  const variants = {};
+  (catalog.groups || []).forEach(g => (g.services || []).forEach(s => (s.variants || []).forEach(v => { variants[v.id] = `${v.name} (${g.name}) $${v.price}`; })));
+  const addons = {};
+  (catalog.additionals || []).forEach(a => { addons[a.id] = `${a.name} $${a.price}`; });
+  const firstG = (catalog.groups || [])[0], firstV = firstG && firstG.services && firstG.services[0] && firstG.services[0].variants && firstG.services[0].variants[0];
+  console.log('Primera variante del catálogo (la que el selector muestra si no encuentra el id):', firstV ? `${firstV.name} (${firstG.name}) id=${firstV.id}` : '—');
+
+  const colab = {};
+  collabsSnap.docs.forEach(d => { const c = d.data(); colab[d.id] = `${c.first || ''} ${c.last || ''}`.trim(); });
+  const partes = norm(CLIENTE).split(' ').filter(Boolean);
+  const matches = clientsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => { const f = norm(`${c.first || ''} ${c.last || ''}`); return partes.every(p => f.includes(p)); });
+  if (!matches.length) {
+    console.log('No encontré la clienta. Coincidencias parciales:');
+    clientsSnap.docs.map(d => ({ id: d.id, ...d.data() })).filter(c => { const f = norm(`${c.first || ''} ${c.last || ''}`); return partes.some(p => f.includes(p)); }).slice(0, 15).forEach(c => console.log(`  · ${c.first} ${c.last} (id=${c.id})`));
+    return;
+  }
+  for (const cl of matches) {
+    console.log(`\n##### CLIENTA: ${cl.first} ${cl.last} (id=${cl.id})`);
+    const appts = (await db.collection('appointments').where('clientId', '==', cl.id).get()).docs.map(d => d.data());
+    const hoy = appts.filter(a => a.date === FECHA).sort((a, b) => String(a.start).localeCompare(String(b.start)));
+    console.log(`\n-- TURNOS DE ESE DÍA EN LA AGENDA (${hoy.length}) --`);
+    hoy.forEach(a => {
+      const res = a.isAdditional ? (addons[a.variantId] || 'ADICIONAL NO ENCONTRADO EN CATÁLOGO') : (variants[a.variantId] || 'VARIANTE NO EXISTE EN CATÁLOGO ACTUAL');
+      console.log(`  ${a.start}-${a.end} · ${colab[a.memberId] || a.memberId} · service="${a.service}" group="${a.group}" · variantId=${a.variantId || '—'} → ${res} · adicional=${!!a.isAdditional} · estado=${a.status} · precio=${a.price ?? '—'} · bookingId=${a.bookingId || '—'} · id=${a.id}`);
+    });
+
+    const pend = (await db.collection('pendingCharges').where('clientId', '==', cl.id).get()).docs.map(d => d.data());
+    console.log(`\n-- COBROS PENDIENTES DE LA CLIENTA (todos los estados: ${pend.length}) --`);
+    pend.sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))).forEach(p => {
+      console.log(`  estado=${p.status} · ${colab[p.collaboratorId] || p.collaboratorId} · service="${p.service}" variantId=${p.variantId || '—'} → ${variants[p.variantId] || '(sin variante resoluble)'} · $${p.finalPrice} · creado=${String(p.createdAt || '').slice(0, 16)} · appointmentId=${p.appointmentId || '—'} · reservationId=${p.reservationId || '—'} · ticketId=${p.ticketId || '—'} · id=${p.id}`);
+    });
+
+    // Réplica de selectSaleAppointment para el primer turno no-adicional del día.
+    const activos = hoy.filter(a => !['cancelled', 'cancelado', 'voided'].includes(a.status));
+    const principal = activos.find(a => !a.isAdditional);
+    if (!principal) { console.log('\n(no hay turno principal activo ese día)'); continue; }
+    const rKey = principal.bookingId || principal.id;
+    const related = activos.filter(a => (a.bookingId || a.id) === rKey && !a.isAdditional);
+    const clientPending = pend.filter(p => p.status === 'pending' && (p.appointmentId === principal.id || p.reservationId === rKey || p.clientId === cl.id));
+    console.log(`\n-- LO QUE CAJA ARMARÍA HOY (réplica del código actual) --`);
+    related.forEach(line => {
+      const hasPending = clientPending.find(p => p.collaboratorId === line.memberId);
+      if (hasPending) console.log(`  REEMPLAZADA por pendiente: "${hasPending.service}" $${hasPending.finalPrice} (id=${hasPending.id})  ← en vez de "${line.service}"`);
+      else console.log(`  del turno: "${line.service}" → selector muestra: ${variants[line.variantId] || (firstV ? 'PRIMERA VARIANTE: ' + firstV.name : '?')}`);
+    });
+    clientPending.filter(p => !related.some(r => r.memberId === p.collaboratorId)).forEach(p => console.log(`  + pendiente extra: "${p.service}" $${p.finalPrice}`));
+  }
+}
+
 // audit-caja: SOLO LECTURA. Reproduce EXACTAMENTE cashExpectedAmount() de la
 // app sobre la sesión de caja abierta, y muestra de dónde sale cada peso:
 //   apertura + cobros en efectivo desde openedAt − retiros − gastos en efectivo
@@ -2199,6 +2261,7 @@ async function auditBorradosHoy() {
   if (MODE === 'fix-liq-expenses' || MODE === 'fix-liq-expenses-apply') { await fixLiqExpenses(); return; }
   if (MODE === 'transferir-comision-oct' || MODE === 'transferir-comision-oct-apply') { await transferirComisionOct(); return; }
   if (MODE === 'revertir-comision-oct' || MODE === 'revertir-comision-oct-apply') { await revertirComisionOct(); return; }
+  if (MODE === 'diag-cobro-cliente') { await diagCobroCliente(); return; }
   if (MODE === 'inspect-caja') { await inspectCaja(); return; }
   if (MODE === 'audit-caja') { await auditCaja(); return; }
   if (MODE === 'audit-fechas') { await auditFechas(); return; }
