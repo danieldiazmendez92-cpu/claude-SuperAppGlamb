@@ -7803,6 +7803,28 @@
       }
       updateSaleSummary();
     }
+    // Arma las líneas de venta de un turno combinando agenda y cobros pendientes.
+    // Un pendiente de ESTA reserva es lo que ya se guardó en Caja para esta
+    // visita, así que reemplaza a la línea de agenda que le corresponde, pero
+    // cada pendiente se usa UNA sola vez (primero por servicio, después por
+    // colaboradora). Antes se buscaba solo por colaboradora y sin consumirlo:
+    // con 3 servicios de la misma profesional, el mismo pendiente salía 3 veces
+    // y los otros se perdían. Deudas de otras visitas nunca pisan una línea del
+    // turno: se suman al final.
+    function planSaleLinesFromAppointment(related, clientPending, rKey){
+      const relatedIds = new Set(related.map(r=>r.id));
+      const own = clientPending.filter(p=>p.reservationId===rKey || relatedIds.has(p.appointmentId));
+      const others = clientPending.filter(p=>!own.includes(p));
+      const free = [...own];
+      const take = pred => { const i = free.findIndex(pred); return i<0 ? null : free.splice(i,1)[0]; };
+      const sameService = (p,l) => l.variantId ? p.variantId===l.variantId : p.service===l.service;
+      const matched = related.map(l=>take(p=>p.collaboratorId===l.memberId && sameService(p,l)));
+      related.forEach((l,i)=>{ if(!matched[i]) matched[i] = take(p=>p.collaboratorId===l.memberId); });
+      return [
+        ...related.map((line,i)=>({line, pending:matched[i]})),
+        ...[...free, ...others].map(pending=>({line:null, pending})),
+      ];
+    }
     function selectSaleAppointment(id){
       const appt = state.appointments.find(a=>a.id===id);
       if(!appt) return;
@@ -7826,15 +7848,11 @@
         const deposit = committedHere > 0 ? committedHere : (clientFreeDeposit(c.id) || apptDeposit);
         if($('reservationDeposit')) $('reservationDeposit').value = deposit;
         updateSaleDepositNote(c.id, thisKey);
-        // Merge pending charges into the sale lines
-        const pendingMemberIds = new Set(clientPending.map(p=>p.collaboratorId));
-        related.forEach(line=>{
-          const hasPending = clientPending.find(p=>p.collaboratorId===line.memberId);
-          if(hasPending){
-            addSaleLine({collaboratorId:hasPending.collaboratorId, group:hasPending.group, service:hasPending.variantId||hasPending.service, finalPrice:hasPending.finalPrice});
-          } else {
-            addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
-          }
+        const plan = planSaleLinesFromAppointment(related, clientPending, rKey);
+        plan.forEach(({pending, line})=>{
+          if(pending) addSaleLine({collaboratorId:pending.collaboratorId, group:pending.group, service:pending.variantId||pending.service, finalPrice:pending.finalPrice});
+          else addSaleLine({collaboratorId:line.memberId, group:line.group, service:line.variantId||line.service, finalPrice:currentApptPrice(line) || estimateAmount(line)});
+          if(!line) return;
           const lineAdds = additionals.filter(a=>a.memberId===line.memberId);
           if(lineAdds.length){
             const saleLineEl = $('saleLines').lastElementChild;
@@ -7843,10 +7861,6 @@
               if(chip){ chip.classList.add('selected'); saleLineEl.querySelector('.sale-extras')?.classList.add('open'); }
             });
           }
-        });
-        // Add remaining pending lines not matched to an appointment line
-        clientPending.filter(p=>!related.some(r=>r.memberId===p.collaboratorId)).forEach(p=>{
-          addSaleLine({collaboratorId:p.collaboratorId, group:p.group, service:p.variantId||p.service, finalPrice:p.finalPrice});
         });
         // Quedan anotados como "en cobro"; se marcan cobrados recién al registrar
         // la venta, para que un formulario abandonado no borre el saldo.
